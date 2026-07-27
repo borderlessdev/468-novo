@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function ownsOrAdmin() {
+      return isAdmin() || resource.data.ownerId == request.auth.uid;
+    }
+
+    function creatingOwnDoc() {
+      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    function unchangedOwnerId() {
+      return !('ownerId' in request.resource.data)
+        || request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    function validVisitStatus(status) {
+      return status in ['planejamento', 'em_andamento', 'concluida', 'cancelada'];
+    }
+
+    function validTaskStatus(status) {
+      return status in ['backlog', 'in_progress', 'completed'];
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.name is string
+        && request.resource.data.role == 'user';
+
+      allow update: if isSignedIn()
+        && (
+          (
+            request.auth.uid == userId
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.role == resource.data.role
+          )
+          || isAdmin()
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /visits/{visitId} {
+      allow read: if ownsOrAdmin();
+      allow create: if creatingOwnDoc()
+        && request.resource.data.title is string
+        && request.resource.data.startDate is string
+        && request.resource.data.endDate is string
+        && validVisitStatus(request.resource.data.status);
+      allow update: if ownsOrAdmin() && unchangedOwnerId();
+      allow delete: if ownsOrAdmin();
+    }
+
+    match /visitors/{visitorId} {
+      allow read: if ownsOrAdmin();
+      allow create: if creatingOwnDoc()
+        && request.resource.data.name is string
+        && request.resource.data.document is string;
+      allow update: if ownsOrAdmin() && unchangedOwnerId();
+      allow delete: if ownsOrAdmin();
+    }
+
+    match /visitVisitors/{id} {
+      allow read: if ownsOrAdmin();
+      allow create: if creatingOwnDoc()
+        && request.resource.data.visitId is string
+        && request.resource.data.visitorId is string;
+      allow update: if false;
+      allow delete: if ownsOrAdmin();
+    }
+
+    match /activities/{activityId} {
+      allow read: if ownsOrAdmin();
+      allow create: if creatingOwnDoc()
+        && request.resource.data.visitId is string
+        && request.resource.data.title is string
+        && request.resource.data.startTime is string
+        && request.resource.data.endTime is string;
+      allow update: if ownsOrAdmin() && unchangedOwnerId();
+      allow delete: if ownsOrAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if ownsOrAdmin();
+      allow create: if creatingOwnDoc()
+        && request.resource.data.visitId is string
+        && request.resource.data.title is string
+        && validTaskStatus(request.resource.data.status)
+        && request.resource.data.order is number;
+      allow update: if ownsOrAdmin() && unchangedOwnerId();
+      allow delete: if ownsOrAdmin();
+    }
+
+    match /financeItems/{itemId} {
+      allow read: if ownsOrAdmin();
+      allow create: if creatingOwnDoc()
+        && request.resource.data.visitId is string
+        && request.resource.data.serviceName is string
+        && request.resource.data.nfReceived is bool;
+      allow update: if ownsOrAdmin() && unchangedOwnerId();
+      allow delete: if ownsOrAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
