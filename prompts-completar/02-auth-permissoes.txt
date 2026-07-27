@@ -1,0 +1,53 @@
+PROMPT 02 — Autenticação, usuários e permissões
+================================================
+STATUS: [x] FEITO (MVP) — pendente: convite por e-mail e audit log [ROBUSTA]
+
+Cole no Cursor (Agent mode).
+ANTES: confirme a matriz de perfis em REQUISITOS-ACESSOS.txt (decisão do cliente).
+
+---
+
+Você está no Promoter Experience (Firebase Auth + Firestore).
+
+Estado atual:
+- Roles: apenas 'user' | 'admin' (admin via custom claim admin:true).
+- Isolamento por ownerId; admin vê tudo.
+- Não existem perfis Equipe e Cliente.
+- teamMemberIds existe em Visit mas sempre [].
+
+Objetivo MVP:
+1. [x] Estender UserRole: 'user' | 'team' | 'client' | 'admin'.
+2. [x] Atualizar firestore.rules:
+   - [x] Admin: acesso total
+   - [x] Equipe: acesso às visitas em teamMemberIds (e filhos)
+   - [x] Cliente: leitura das visitas em clientUserIds
+3. [x] Queries nos services respeitam perfil (listVisits por role).
+4. [x] Gate de UI: menu/ações conforme perfil (AppSidebar + canWrite).
+5. [x] Associar equipe/clientes na edição da visita (UIDs).
+6. [x] users.role espelho; claim admin continua fonte de verdade.
+7. [x] README documenta como promover admin/equipe/cliente.
+
+[ROBUSTA — só se sobrar tempo e estiver explícito]
+- [ ] Convite por e-mail
+- [ ] Log básico de atividades do usuário
+
+Restrições:
+- Não inventar permissões sem a matriz acordada; se não houver matriz no chat, PARE e peça.
+- Não remover isolamento de dados de forma insegura.
+- npm run build deve passar.
+
+Entregáveis:
+- Rules + types + AuthContext + guards de rota/UI.
+- Instruções curtas de como testar com 3 usuários.
+
+---
+
+Checklist manual:
+[ ] user comum só vê o que deve
+[ ] admin vê tudo
+[ ] equipe/cliente conforme matriz
+[x] rota privada ainda redireciona sem login (já existia)
+
+Notas:
+- Implementado com matriz padrão: client = leitura; team/user = escrita; admin = tudo.
+- Ainda falta setar roles/claims nas contas reais (ver REQUISITOS-ACESSOS).

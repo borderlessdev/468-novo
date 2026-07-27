@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'admin'
+export type UserRole = 'user' | 'team' | 'client' | 'admin'
 
 export type VisitStatus =
   | 'planejamento'
@@ -31,6 +31,7 @@ export interface Visit {
   pvNumber?: string
   progress: number
   teamMemberIds: string[]
+  clientUserIds: string[]
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -43,9 +44,11 @@ export interface Visitor {
   company?: string
   role?: string
   country?: string
+  language?: string
   weightKg?: number
   shoeSize?: number
   dietaryRestriction?: string
+  mobilityReduced?: boolean
   notes?: string
   ownerId: string
   createdAt?: unknown
@@ -83,6 +86,7 @@ export interface Task {
   status: TaskStatus
   order: number
   dueDate?: string
+  assigneeName?: string
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -99,7 +103,28 @@ export interface FinanceItem {
   winningCompany?: string
   nfReceived: boolean
   nfDueDate?: string
+  attachmentPath?: string
+  attachmentName?: string
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
+}
+
+export type DocumentCategory =
+  | 'contrato'
+  | 'boarding'
+  | 'briefing'
+  | 'comprovante'
+  | 'outro'
+
+export interface VisitDocument {
+  id: string
+  visitId: string
+  name: string
+  category: DocumentCategory
+  storagePath: string
+  contentType: string
+  size: number
+  ownerId: string
+  createdAt?: unknown
 }

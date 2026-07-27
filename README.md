@@ -16,7 +16,9 @@ Aplicação web de gestão de visitas corporativas (React + Vite + TypeScript + 
 
 Dados operacionais são **por dono** (`ownerId`). Usuário comum só acessa os próprios documentos. Administradores (Custom Claim `admin: true`) acessam tudo.
 
-Coleções: `users`, `visits`, `visitors`, `visitVisitors`, `activities`, `tasks`, `financeItems`.
+Coleções: `users`, `visits`, `visitors`, `visitVisitors`, `activities`, `tasks`, `financeItems`, `documents`.
+
+Arquivos de visita ficam no Firebase Storage (`visits/{visitId}/...`).
 
 ## Instalação
 
@@ -47,6 +49,7 @@ firebase login
 firebase use borderless-e4a6a
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
+firebase deploy --only storage
 npm run build
 firebase deploy --only hosting
 # ou tudo do Firestore:
@@ -55,14 +58,22 @@ firebase deploy --only firestore
 
 ## Admin (Custom Claims)
 
-As regras usam `request.auth.token.admin == true` como fonte de verdade. O campo `users.role` é espelho informativo e **não** pode ser elevado pelo próprio usuário.
+As regras usam `request.auth.token.admin == true` como fonte de verdade. O campo `users.role` espelha o perfil operacional e **não** pode ser elevado pelo próprio usuário no cadastro.
 
-Exemplo com Admin SDK (Node):
+Perfis (`users.role`):
+- `user` — operador/dono das visitas (padrão)
+- `team` — equipe convidada via `teamMemberIds` na visita
+- `client` — cliente com leitura das visitas em `clientUserIds`
+
+Para promover perfil ou admin (Admin SDK):
 
 ```js
 await admin.auth().setCustomUserClaims(uid, { admin: true })
 await admin.firestore().doc(`users/${uid}`).update({ role: 'admin' })
+// ou role: 'team' | 'client'
 ```
+
+Na visita, informe UIDs em **Equipe** e **Clientes** (tela de detalhe) para liberar acesso.
 
 Depois o usuário precisa renovar o token (logout/login ou `getIdToken(true)`).
 
@@ -78,6 +89,8 @@ Depois o usuário precisa renovar o token (logout/login ou `getIdToken(true)`).
 8. Adicione linhas no Financeiro e confira o total.
 9. Exporte CSV/PDF em Relatórios.
 10. Com um segundo usuário, confirme isolamento por `ownerId`. Com admin (claim), confirme visão global.
+11. Abra uma visita pelo link na listagem; edite dados, vincule visitantes e faça upload de documento (Storage habilitado).
+12. Edite atividades, tarefas e linhas financeiras; confira progresso da visita após concluir tarefas.
 
 ## Ciclo de medição
 

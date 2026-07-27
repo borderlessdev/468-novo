@@ -25,17 +25,18 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { activitySchema, type ActivityInput } from '@/lib/validations'
-import { formatDate } from '@/lib/utils'
+import { activitiesOverlap, formatDate } from '@/lib/utils'
 import { listVisits } from '@/services/visits'
 import {
   createActivity,
   deleteActivity,
   listActivities,
+  updateActivity,
 } from '@/services/activities'
 import type { Activity, Visit } from '@/types'
 
 export function AgendaPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role, canWrite } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
@@ -43,6 +44,7 @@ export function AgendaPage() {
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [dayFilter, setDayFilter] = useState('')
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Activity | null>(null)
   const [saving, setSaving] = useState(false)
 
   const visitId = searchParams.get('visita') ?? ''
@@ -66,7 +68,7 @@ export function AgendaPage() {
     void (async () => {
       setLoading(true)
       try {
-        setVisits(await listVisits(user.uid, isAdmin))
+        setVisits(await listVisits(user.uid, isAdmin, role))
       } finally {
         setLoading(false)
       }
@@ -100,32 +102,92 @@ export function AgendaPage() {
 
   const selectedVisit = visits.find((v) => v.id === visitId)
 
+  const openCreate = () => {
+    setEditing(null)
+    form.reset({
+      title: '',
+      description: '',
+      location: '',
+      date: '',
+      startTime: '',
+      endTime: '',
+      responsibleNames: '',
+      visitorNames: '',
+    })
+    setOpen(true)
+  }
+
+  const openEdit = (activity: Activity) => {
+    setEditing(activity)
+    form.reset({
+      title: activity.title,
+      description: activity.description ?? '',
+      location: activity.location ?? '',
+      date: activity.date,
+      startTime: activity.startTime.slice(11, 16) || activity.startTime,
+      endTime: activity.endTime.slice(11, 16) || activity.endTime,
+      responsibleNames: activity.responsibleNames.join(', '),
+      visitorNames: activity.visitorNames.join(', '),
+    })
+    setOpen(true)
+  }
+
+  const checkConflict = (candidate: ActivityInput, excludeId?: string) => {
+    const startTime = `${candidate.date}T${candidate.startTime}:00`
+    const endTime = `${candidate.date}T${candidate.endTime}:00`
+    const conflict = activities.find(
+      (a) =>
+        a.id !== excludeId &&
+        activitiesOverlap(
+          { date: candidate.date, startTime, endTime },
+          { date: a.date, startTime: a.startTime, endTime: a.endTime },
+        ),
+    )
+    if (conflict) {
+      toast.warning(`Conflito de horário com "${conflict.title}"`)
+      return true
+    }
+    return false
+  }
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!user || !visitId) return
+    if (values.endTime <= values.startTime) {
+      toast.error('Horário fim deve ser após o início')
+      return
+    }
+    if (checkConflict(values, editing?.id)) return
+
     setSaving(true)
+    const payload = {
+      title: values.title,
+      description: values.description,
+      location: values.location,
+      date: values.date,
+      startTime: `${values.date}T${values.startTime}:00`,
+      endTime: `${values.date}T${values.endTime}:00`,
+      responsibleNames: values.responsibleNames
+        ? values.responsibleNames.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
+      visitorNames: values.visitorNames
+        ? values.visitorNames.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
+    }
     try {
-      await createActivity(user.uid, {
-        visitId,
-        title: values.title,
-        description: values.description,
-        location: values.location,
-        date: values.date,
-        startTime: `${values.date}T${values.startTime}:00`,
-        endTime: `${values.date}T${values.endTime}:00`,
-        responsibleNames: values.responsibleNames
-          ? values.responsibleNames.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-        visitorNames: values.visitorNames
-          ? values.visitorNames.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-      })
-      toast.success('Atividade criada')
+      if (editing) {
+        await updateActivity(editing.id, payload)
+        toast.success('Atividade atualizada')
+      } else {
+        await createActivity(user.uid, { visitId, ...payload })
+        toast.success('Atividade criada')
+      }
       setOpen(false)
+      setEditing(null)
       form.reset()
       await loadActivities()
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível criar a atividade')
+      toast.error('Não foi possível salvar a atividade')
     } finally {
       setSaving(false)
     }
@@ -173,7 +235,7 @@ export function AgendaPage() {
                   className="w-full sm:w-44"
                 />
               </div>
-              <Button disabled={!visitId} onClick={() => setOpen(true)}>
+              <Button disabled={!visitId || !canWrite} onClick={openCreate}>
                 <Plus className="h-4 w-4" />
                 Nova atividade
               </Button>
@@ -202,10 +264,12 @@ export function AgendaPage() {
           title="Nenhuma atividade"
           description="Crie a primeira atividade para esta visita."
           action={
-            <Button onClick={() => setOpen(true)}>
+            canWrite ? (
+            <Button onClick={openCreate}>
               <Plus className="h-4 w-4" />
               Nova atividade
             </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -260,6 +324,16 @@ export function AgendaPage() {
                         {activity.location}
                       </div>
                     ) : null}
+                    {canWrite ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEdit(activity)}
+                    >
+                      Editar
+                    </Button>
+                    ) : null}
+                    {canWrite ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -273,6 +347,7 @@ export function AgendaPage() {
                     >
                       Excluir
                     </Button>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
@@ -281,10 +356,16 @@ export function AgendaPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          setOpen(value)
+          if (!value) setEditing(null)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nova atividade</DialogTitle>
+            <DialogTitle>{editing ? 'Editar atividade' : 'Nova atividade'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">

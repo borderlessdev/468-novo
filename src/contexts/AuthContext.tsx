@@ -17,8 +17,9 @@ import {
   type User,
 } from 'firebase/auth'
 import { auth, initAnalytics } from '@/lib/firebase'
+import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserProfile } from '@/services/users'
-import type { UserProfile } from '@/types'
+import type { UserProfile, UserRole } from '@/types'
 import { getAuthErrorMessage } from '@/lib/utils'
 
 interface AuthContextValue {
@@ -26,6 +27,9 @@ interface AuthContextValue {
   profile: UserProfile | null
   loading: boolean
   isAdmin: boolean
+  role: UserRole
+  isClient: boolean
+  canWrite: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -147,12 +151,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProfile, user],
   )
 
+  const role: UserRole = isAdmin ? 'admin' : (profile?.role ?? 'user')
+  const isClient = role === 'client'
+  const canWrite = canWriteOperations(role, isAdmin)
+
   const value = useMemo(
     () => ({
       user,
       profile,
       loading,
       isAdmin,
+      role,
+      isClient,
+      canWrite,
       login,
       register,
       logout,
@@ -165,6 +176,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       isAdmin,
+      role,
+      isClient,
+      canWrite,
       login,
       register,
       logout,

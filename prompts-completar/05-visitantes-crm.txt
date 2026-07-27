@@ -1,0 +1,46 @@
+PROMPT 05 — Gestão de visitantes e CRM
+=======================================
+STATUS: [x] FEITO (MVP) — pendente: brindes/busca avançada [ROBUSTA]
+
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promoter Experience. Módulo Visitantes.
+
+Estado atual:
+- CRUD de visitantes na VisitorsPage.
+- Campos: name, document, company, role, country, weightKg, shoeSize, dietaryRestriction; notes existe no tipo mas não no form.
+- visitVisitors liga visitante↔visita na criação; unlinkVisitVisitor sem UI.
+- Sem tela de histórico de visitas do visitante.
+- Faltam no modelo do escopo: mobilidade reduzida, idioma.
+
+Objetivo MVP:
+1. [x] Form: notes, dietaryRestriction, mobilityReduced, language.
+2. [x] Histórico de visitas no dialog de edição (visitVisitors → visits).
+3. [x] Na visita (detalhe), vincular/desvincular visitantes.
+4. [x] Busca mantida (nome/documento/empresa).
+5. [x] Validação Zod alinhada.
+
+[ROBUSTA — não fazer agora]
+- [ ] Controle de brindes
+- [ ] Busca inteligente avançada
+- [ ] Observações internas separadas de notes
+
+Restrições:
+- Migrar com cuidado: campos novos opcionais para não quebrar docs antigos.
+- npm run build deve passar.
+
+Entregáveis:
+- Form completo MVP + vínculo na visita + histórico simples do visitante.
+
+---
+
+Checklist manual:
+[ ] Criar/editar visitante com novos campos
+[ ] Ver visitas do visitante
+[ ] Vincular/desvincular na visita
+[ ] Busca ainda funciona
+
+Notas:
+- listVisitIdsForVisitor em visitVisitors.ts

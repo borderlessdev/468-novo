@@ -107,13 +107,36 @@
       ]
     },
     {
+      "collectionGroup": "visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "teamMemberIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientUserIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "visitVisitors",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "ownerId", "order": "ASCENDING" },
-        { "fieldPath": "visitId", "order": "ASCENDING" }
+        { "fieldPath": "visitorId", "order": "ASCENDING" }
       ]
-    }
+    },
+    {
+      "collectionGroup": "visitVisitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visitorId", "order": "ASCENDING" }
+      ]
+    },
   ],
   "fieldOverrides": []
 }

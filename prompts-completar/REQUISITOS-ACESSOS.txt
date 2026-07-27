@@ -1,0 +1,124 @@
+REQUISITOS DE ACESSOS, CHAVES E DECISÕES
+========================================
+
+Para completar o projeto de ponta a ponta, preciso (ou a equipe precisa ter pronto) o seguinte.
+
+STATUS (código vs externo)
+--------------------------
+[x] Código MVP principal implementado (visitas, agenda, CRM, tarefas, financeiro, docs, perfis)
+[ ] Acessos/deploy Firebase ainda necessários para uso real
+[ ] Provedor de e-mail ainda necessário para envio automático
+
+--------------------------------------------------------------------------------
+1) FIREBASE (obrigatório)
+--------------------------------------------------------------------------------
+Projeto atual: borderless-e4a6a
+
+Preciso que alguém com acesso de Owner/Editor no Firebase Console confirme:
+
+[ ] Acesso ao Console Firebase do projeto borderless-e4a6a
+[x] Firebase Authentication habilitado (Email/Password) — já em uso no app
+[ ] Firestore em modo produção (ou regras já deployadas) — rules novas no repo, deploy pendente
+[ ] Firebase Storage HABILITADO + rules deployadas — código pronto; enable/deploy pendente
+[ ] Firebase Hosting com permissão de deploy
+[ ] Conta com firebase-tools logado (firebase login)
+[ ] Service Account JSON (Admin SDK) para:
+    - setar custom claims (admin)
+    - scripts de seed / convite
+    - (se usar) Cloud Functions
+    NÃO commitar esse JSON no git.
+
+Arquivos locais esperados:
+- [~] .env preenchido (base: .env.example) — confirmar no ambiente de cada dev
+- (opcional) service-account.json em pasta ignorada pelo git
+
+--------------------------------------------------------------------------------
+2) E-MAIL TRANSACIONAL (obrigatório para MVP de comunicação)
+--------------------------------------------------------------------------------
+Hoje: reset de senha Firebase + resumo da visita via mailto: (paliativo).
+Para envio automático real, escolher UMA opção:
+
+Opção A — Firebase Extension "Trigger Email" + provedor SMTP
+Opção B — Cloud Function + SendGrid / Resend / Amazon SES / Mailgun
+Opção C — Integração com API do provedor que o cliente já usa
+
+Preciso que vocês definam:
+[ ] Qual provedor de e-mail usar
+[ ] API Key / SMTP host, user, password
+[ ] Domínio remetente verificado (ex.: noreply@promover.experience)
+[ ] Lista de e-mails de teste autorizados
+
+Sem isso, o módulo 09 fica em mailto (UI pronta, sem envio server-side).
+
+--------------------------------------------------------------------------------
+3) PERFIS E REGRAS DE NEGÓCIO (obrigatório — decisão, não chave)
+--------------------------------------------------------------------------------
+IMPLEMENTADO no código com matriz padrão:
+- admin (claim) — acesso total
+- user — dono das visitas (escrita)
+- team — escrita nas visitas em teamMemberIds
+- client — leitura nas visitas em clientUserIds
+
+Preciso que confirmem (ou peçam ajuste):
+[x] Nomes finais dos perfis (Admin / Equipe / Cliente) — adotados como admin/team/client
+[x] Matriz padrão aplicada (client leitura; team/user escrita)
+[x] Cliente via clientUserIds na visita
+[x] Equipe via teamMemberIds por visita
+[ ] Quem cria usuários: só Admin? convite por e-mail? — convite ainda não implementado
+
+--------------------------------------------------------------------------------
+4) FINANCEIRO — MODELO DE DADOS (decisão)
+--------------------------------------------------------------------------------
+[x] Mantido modelo atual de orçamentos/NF + anexos de comprovante (opção A)
+[ ] OU migrar para despesas operacionais (categoria + comprovante)? — não feito
+[ ] OU os dois (abas: Orçamentos | Despesas)? — não feito
+
+Categorias padrão desejadas (se despesas):
+[ ] lista (ex.: transporte, hotel, alimentação, brinde, outros) — N/A enquanto opção A
+
+--------------------------------------------------------------------------------
+5) DOCUMENTOS / STORAGE (obrigatório para módulo 08)
+--------------------------------------------------------------------------------
+[x] Código: upload/list/delete + storage.rules no repo
+[ ] Firebase Storage habilitado + regras de Storage deployadas
+[x] Tipos permitidos no código: PDF, JPG, PNG, WEBP
+[x] Tamanho máximo: 10 MB
+[x] Categorias: contrato, boarding, briefing, comprovante, outro
+[x] Quem pode baixar: autenticado com acesso à visita (rules)
+
+--------------------------------------------------------------------------------
+6) AMBIENTES E DOMÍNIO (para deploy final)
+--------------------------------------------------------------------------------
+[ ] Ambiente de homologação separado? (outro projeto Firebase ou só Hosting preview)
+[ ] Domínio final de produção (ex.: app.promover.experience)
+[ ] DNS / acesso ao provedor de domínio, se for apontar Hosting custom domain
+[ ] Contas de teste: 1 admin, 1 equipe, 1 cliente (e-mails reais)
+
+--------------------------------------------------------------------------------
+7) CONTEÚDO / COPY / BRANDING (opcional mas útil)
+--------------------------------------------------------------------------------
+[ ] Logo oficial e cores (se forem diferentes do que já está)
+[ ] Texto padrão do e-mail de resumo da visita
+[x] Checklist padrão de tarefas (DEFAULT_CHECKLIST em constants)
+
+--------------------------------------------------------------------------------
+8) O QUE NÃO PRECISO AGORA
+--------------------------------------------------------------------------------
+- Chave de OpenAI / outras IAs (não está no escopo)
+- Stripe / pagamentos (não está no escopo)
+- Push notifications mobile nativo (app é web)
+- Acesso ao Figma (só se quiserem fidelidade pixel-perfect; dá para fechar MVP sem)
+
+--------------------------------------------------------------------------------
+RESUMO DO QUE AINDA BLOQUEIA O FECHAMENTO
+--------------------------------------------------------------------------------
+Já desbloqueado no código:
+1. [x] 3 perfis + matriz padrão
+2. [x] Modelo financeiro opção A + comprovante
+3. [x] Módulo documentos no código
+
+Ainda bloqueante externo:
+1. Storage habilitado + deploy de rules/indexes
+2. Provedor de e-mail + credenciais (envio automático)
+3. Contas de teste e quem será admin (UID para setar claim)
+4. Deploy hosting (+ domínio se houver)

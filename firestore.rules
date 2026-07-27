@@ -6,12 +6,27 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(ownerId) {
-      return isSignedIn() && request.auth.uid == ownerId;
-    }
-
     function isAdmin() {
       return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function visitData(visitId) {
+      return get(/databases/$(database)/documents/visits/$(visitId)).data;
+    }
+
+    function canReadVisit(visitId) {
+      let visit = visitData(visitId);
+      return isAdmin()
+        || visit.ownerId == request.auth.uid
+        || request.auth.uid in visit.teamMemberIds
+        || request.auth.uid in visit.clientUserIds;
+    }
+
+    function canWriteVisit(visitId) {
+      let visit = visitData(visitId);
+      return isAdmin()
+        || visit.ownerId == request.auth.uid
+        || request.auth.uid in visit.teamMemberIds;
     }
 
     function ownsOrAdmin() {
@@ -33,6 +48,22 @@ service cloud.firestore {
 
     function validTaskStatus(status) {
       return status in ['backlog', 'in_progress', 'completed'];
+    }
+
+    function canReadChild() {
+      return isAdmin()
+        || resource.data.ownerId == request.auth.uid
+        || canReadVisit(resource.data.visitId);
+    }
+
+    function canWriteChild() {
+      return isAdmin()
+        || resource.data.ownerId == request.auth.uid
+        || canWriteVisit(resource.data.visitId);
+    }
+
+    function canCreateChild() {
+      return creatingOwnDoc() && canWriteVisit(request.resource.data.visitId);
     }
 
     match /users/{userId} {
@@ -59,14 +90,22 @@ service cloud.firestore {
     }
 
     match /visits/{visitId} {
-      allow read: if ownsOrAdmin();
+      allow read: if isAdmin()
+        || resource.data.ownerId == request.auth.uid
+        || request.auth.uid in resource.data.teamMemberIds
+        || request.auth.uid in resource.data.clientUserIds;
+
       allow create: if creatingOwnDoc()
         && request.resource.data.title is string
         && request.resource.data.startDate is string
         && request.resource.data.endDate is string
         && validVisitStatus(request.resource.data.status);
-      allow update: if ownsOrAdmin() && unchangedOwnerId();
-      allow delete: if ownsOrAdmin();
+
+      allow update: if isAdmin()
+        || (resource.data.ownerId == request.auth.uid && unchangedOwnerId())
+        || (request.auth.uid in resource.data.teamMemberIds && unchangedOwnerId());
+
+      allow delete: if isAdmin() || resource.data.ownerId == request.auth.uid;
     }
 
     match /visitors/{visitorId} {
@@ -79,44 +118,54 @@ service cloud.firestore {
     }
 
     match /visitVisitors/{id} {
-      allow read: if ownsOrAdmin();
-      allow create: if creatingOwnDoc()
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
         && request.resource.data.visitId is string
         && request.resource.data.visitorId is string;
       allow update: if false;
-      allow delete: if ownsOrAdmin();
+      allow delete: if canWriteChild();
     }
 
     match /activities/{activityId} {
-      allow read: if ownsOrAdmin();
-      allow create: if creatingOwnDoc()
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
         && request.resource.data.visitId is string
         && request.resource.data.title is string
         && request.resource.data.startTime is string
         && request.resource.data.endTime is string;
-      allow update: if ownsOrAdmin() && unchangedOwnerId();
-      allow delete: if ownsOrAdmin();
+      allow update: if canWriteChild() && unchangedOwnerId();
+      allow delete: if canWriteChild();
     }
 
     match /tasks/{taskId} {
-      allow read: if ownsOrAdmin();
-      allow create: if creatingOwnDoc()
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
         && request.resource.data.visitId is string
         && request.resource.data.title is string
         && validTaskStatus(request.resource.data.status)
         && request.resource.data.order is number;
-      allow update: if ownsOrAdmin() && unchangedOwnerId();
-      allow delete: if ownsOrAdmin();
+      allow update: if canWriteChild() && unchangedOwnerId();
+      allow delete: if canWriteChild();
     }
 
     match /financeItems/{itemId} {
-      allow read: if ownsOrAdmin();
-      allow create: if creatingOwnDoc()
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
         && request.resource.data.visitId is string
         && request.resource.data.serviceName is string
         && request.resource.data.nfReceived is bool;
-      allow update: if ownsOrAdmin() && unchangedOwnerId();
-      allow delete: if ownsOrAdmin();
+      allow update: if canWriteChild() && unchangedOwnerId();
+      allow delete: if canWriteChild();
+    }
+
+    match /documents/{docId} {
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
+        && request.resource.data.visitId is string
+        && request.resource.data.name is string
+        && request.resource.data.storagePath is string;
+      allow update: if false;
+      allow delete: if canWriteChild();
     }
 
     match /{document=**} {

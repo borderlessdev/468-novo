@@ -43,6 +43,26 @@ export function getAuthErrorMessage(code: string): string {
   return map[code] ?? 'Ocorreu um erro. Tente novamente.'
 }
 
+export function calculateVisitProgress(
+  tasks: { status: string }[],
+): number {
+  if (tasks.length === 0) return 0
+  const completed = tasks.filter((t) => t.status === 'completed').length
+  return Math.round((completed / tasks.length) * 100)
+}
+
+export function activitiesOverlap(
+  a: { date: string; startTime: string; endTime: string },
+  b: { date: string; startTime: string; endTime: string },
+): boolean {
+  if (a.date !== b.date) return false
+  const aStart = a.startTime.slice(11) || a.startTime
+  const aEnd = a.endTime.slice(11) || a.endTime
+  const bStart = b.startTime.slice(11) || b.startTime
+  const bEnd = b.endTime.slice(11) || b.endTime
+  return aStart < bEnd && bStart < aEnd
+}
+
 export function downloadCsv(filename: string, rows: string[][]) {
   const content = rows
     .map((row) =>

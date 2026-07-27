@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   CalendarDays,
   Clock3,
@@ -30,7 +31,7 @@ function formatCycleLabel(startIso: string, endIso: string) {
 }
 
 export function DashboardPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role } = useAuth()
   const defaultCycle = useMemo(() => getCurrentCycle(), [])
   const [cycleStart, setCycleStart] = useState(defaultCycle.startIso)
   const [cycleEnd, setCycleEnd] = useState(defaultCycle.endIso)
@@ -54,7 +55,7 @@ export function DashboardPage() {
     setLoading(true)
     try {
       const [visitsData, tasksData, financeData] = await Promise.all([
-        listVisits(user.uid, isAdmin),
+        listVisits(user.uid, isAdmin, role),
         listPendingTasks(user.uid, isAdmin),
         listFinanceItemsByOwner(user.uid, isAdmin),
       ])
@@ -66,7 +67,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin])
+  }, [user, isAdmin, role])
 
   useEffect(() => {
     void load()
@@ -226,9 +227,10 @@ export function DashboardPage() {
               />
             ) : (
               upcoming.map((visit) => (
-                <div
+                <Link
                   key={visit.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+                  to={`/visitas/${visit.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40"
                 >
                   <div>
                     <p className="font-medium">{visit.title}</p>
@@ -238,7 +240,7 @@ export function DashboardPage() {
                     </p>
                   </div>
                   <VisitStatusBadge status={visit.status} />
-                </div>
+                </Link>
               ))
             )}
           </CardContent>

@@ -10,7 +10,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
-  const { profile } = useAuth()
+  const { profile, canWrite } = useAuth()
   const { setOpen } = useVisitDialog()
   const initials = (profile?.name ?? 'U')
     .split(' ')
@@ -43,10 +43,12 @@ export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <Button onClick={() => setOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Nova Visita</span>
-        </Button>
+        {canWrite ? (
+          <Button onClick={() => setOpen(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nova Visita</span>
+          </Button>
+        ) : null}
         <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
           <Bell className="h-5 w-5" />
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />

@@ -1,0 +1,47 @@
+PROMPT 06 — Tarefas e planejamento operacional
+===============================================
+STATUS: [x] FEITO (MVP)
+
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promoter Experience. Módulo Planejamento (Kanban).
+
+Estado atual:
+- PlanningPage com dnd-kit: backlog | in_progress | completed.
+- Criação de tarefas; checklist padrão na criação da visita.
+- deleteTask existe sem UI; sem edição de título.
+- Task NÃO tem assignee/responsável.
+- Filtros por responsável inexistentes.
+
+Objetivo MVP:
+1. [x] Campo assigneeName em Task.
+2. [x] Criar/editar com responsável (texto livre).
+3. [x] UI: editar título/prazo/responsável; excluir com confirmação.
+4. [x] Filtro por responsável.
+5. [x] Detalhe da visita: resumo de tarefas pendentes + link /planejamento?visita=.
+6. [x] Drag-and-drop atualizando Firestore (+ sync de progress).
+
+[ROBUSTA — não fazer agora]
+- [ ] Dependência entre tarefas
+- [ ] Notificações automáticas
+- [ ] Histórico de alterações da tarefa
+
+Restrições:
+- Não remover o Kanban que já funciona.
+- npm run build deve passar.
+
+Entregáveis:
+- CRUD completo de tarefa na UI + responsável + filtros.
+
+---
+
+Checklist manual:
+[ ] Criar tarefa com responsável e prazo
+[ ] Editar / excluir
+[ ] Arrastar entre colunas persiste
+[ ] Filtro por responsável
+
+Notas:
+- Cliente não edita/arrasta (canWrite).

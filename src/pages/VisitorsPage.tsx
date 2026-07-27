@@ -3,11 +3,14 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Plus, Search, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
@@ -18,6 +21,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
+import { listVisitIdsForVisitor } from '@/services/visitVisitors'
+import { getVisit } from '@/services/visits'
 import type { Visitor } from '@/types'
 
 export function VisitorsPage() {
@@ -27,6 +32,7 @@ export function VisitorsPage() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Visitor | null>(null)
+  const [visitHistory, setVisitHistory] = useState<{ id: string; title: string }[]>([])
   const [saving, setSaving] = useState(false)
 
   const form = useForm<VisitorInput>({
@@ -41,6 +47,8 @@ export function VisitorsPage() {
       shoeSize: '',
       dietaryRestriction: '',
       notes: '',
+      language: '',
+      mobilityReduced: false,
     },
   })
 
@@ -74,6 +82,7 @@ export function VisitorsPage() {
 
   const openCreate = () => {
     setEditing(null)
+    setVisitHistory([])
     form.reset({
       name: '',
       document: '',
@@ -84,11 +93,13 @@ export function VisitorsPage() {
       shoeSize: '',
       dietaryRestriction: '',
       notes: '',
+      language: '',
+      mobilityReduced: false,
     })
     setOpen(true)
   }
 
-  const openEdit = (visitor: Visitor) => {
+  const openEdit = async (visitor: Visitor) => {
     setEditing(visitor)
     form.reset({
       name: visitor.name,
@@ -100,8 +111,23 @@ export function VisitorsPage() {
       shoeSize: visitor.shoeSize != null ? String(visitor.shoeSize) : '',
       dietaryRestriction: visitor.dietaryRestriction ?? '',
       notes: visitor.notes ?? '',
+      language: visitor.language ?? '',
+      mobilityReduced: visitor.mobilityReduced ?? false,
     })
     setOpen(true)
+    if (user) {
+      try {
+        const ids = await listVisitIdsForVisitor(visitor.id, user.uid, isAdmin)
+        const visits = await Promise.all(ids.map((id) => getVisit(id)))
+        setVisitHistory(
+          visits
+            .filter(Boolean)
+            .map((v) => ({ id: v!.id, title: v!.title })),
+        )
+      } catch {
+        setVisitHistory([])
+      }
+    }
   }
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -116,6 +142,8 @@ export function VisitorsPage() {
       weightKg: parseOptionalNumber(values.weightKg),
       shoeSize: parseOptionalNumber(values.shoeSize),
       dietaryRestriction: values.dietaryRestriction,
+      language: values.language,
+      mobilityReduced: values.mobilityReduced,
       notes: values.notes,
     }
     try {
@@ -228,7 +256,7 @@ export function VisitorsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => openEdit(visitor)}
+                            onClick={() => void openEdit(visitor)}
                           >
                             Editar
                           </Button>
@@ -290,6 +318,37 @@ export function VisitorsPage() {
               <Label>Restrição alimentar</Label>
               <Input {...form.register('dietaryRestriction')} />
             </div>
+            <div className="space-y-2">
+              <Label>Idioma</Label>
+              <Input {...form.register('language')} placeholder="Português, Inglês..." />
+            </div>
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <Checkbox
+                checked={form.watch('mobilityReduced')}
+                onCheckedChange={(checked) =>
+                  form.setValue('mobilityReduced', checked === true)
+                }
+              />
+              Mobilidade reduzida
+            </label>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Observações</Label>
+              <Textarea {...form.register('notes')} rows={3} />
+            </div>
+            {editing && visitHistory.length > 0 ? (
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Histórico de visitas</Label>
+                <ul className="space-y-1 rounded-lg border p-3 text-sm">
+                  {visitHistory.map((visit) => (
+                    <li key={visit.id}>
+                      <Link to={`/visitas/${visit.id}`} className="text-primary hover:underline">
+                        {visit.title}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar

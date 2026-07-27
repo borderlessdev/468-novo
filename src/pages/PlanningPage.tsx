@@ -44,8 +44,9 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { taskSchema, type TaskInput } from '@/lib/validations'
 import { formatDateShort } from '@/lib/utils'
-import { listVisits } from '@/services/visits'
-import { createTask, listTasks, updateTask } from '@/services/tasks'
+import { calculateVisitProgress } from '@/lib/utils'
+import { listVisits, syncVisitProgress } from '@/services/visits'
+import { createTask, deleteTask, listTasks, updateTask } from '@/services/tasks'
 import type { Task, TaskStatus, Visit } from '@/types'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
@@ -54,7 +55,17 @@ const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'completed', label: 'Concluídas' },
 ]
 
-function SortableTaskCard({ task }: { task: Task }) {
+function SortableTaskCard({
+  task,
+  onEdit,
+  onDelete,
+  canWrite,
+}: {
+  task: Task
+  onEdit: (task: Task) => void
+  onDelete: (id: string) => void
+  canWrite: boolean
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, data: { type: 'task', status: task.status } })
 
@@ -78,11 +89,29 @@ function SortableTaskCard({ task }: { task: Task }) {
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{task.title}</p>
+          {task.assigneeName ? (
+            <p className="mt-1 text-xs text-muted-foreground">Resp.: {task.assigneeName}</p>
+          ) : null}
           {task.dueDate ? (
             <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
               {formatDateShort(task.dueDate)}
             </p>
+          ) : null}
+          {canWrite ? (
+          <div className="mt-2 flex gap-1">
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onEdit(task)}>
+              Editar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2"
+              onClick={() => onDelete(task.id)}
+            >
+              Excluir
+            </Button>
+          </div>
           ) : null}
         </div>
       </div>
@@ -94,10 +123,16 @@ function KanbanColumn({
   id,
   label,
   tasks,
+  onEdit,
+  onDelete,
+  canWrite,
 }: {
   id: TaskStatus
   label: string
   tasks: Task[]
+  onEdit: (task: Task) => void
+  onDelete: (id: string) => void
+  canWrite: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
@@ -120,7 +155,15 @@ function KanbanColumn({
                 Nenhuma tarefa neste status.
               </p>
             ) : (
-              tasks.map((task) => <SortableTaskCard key={task.id} task={task} />)
+              tasks.map((task) => (
+                <SortableTaskCard
+                  key={task.id}
+                  task={task}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  canWrite={canWrite}
+                />
+              ))
             )}
           </div>
         </SortableContext>
@@ -130,22 +173,30 @@ function KanbanColumn({
 }
 
 export function PlanningPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role, canWrite } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Task | null>(null)
   const [saving, setSaving] = useState(false)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
+  const [assigneeFilter, setAssigneeFilter] = useState('todos')
 
   const visitId = searchParams.get('visita') ?? ''
   const selectedVisit = visits.find((v) => v.id === visitId)
 
   const form = useForm<TaskInput>({
     resolver: zodResolver(taskSchema),
-    defaultValues: { title: '', dueDate: '', status: 'backlog' },
+    defaultValues: { title: '', dueDate: '', assigneeName: '', status: 'backlog' },
   })
+
+  const refreshProgress = useCallback(async () => {
+    if (!visitId || !user) return
+    const all = await listTasks(visitId, user.uid, isAdmin)
+    await syncVisitProgress(visitId, calculateVisitProgress(all))
+  }, [visitId, user, isAdmin])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -156,7 +207,7 @@ export function PlanningPage() {
     void (async () => {
       setLoading(true)
       try {
-        setVisits(await listVisits(user.uid, isAdmin))
+        setVisits(await listVisits(user.uid, isAdmin, role))
       } finally {
         setLoading(false)
       }
@@ -180,15 +231,26 @@ export function PlanningPage() {
     void loadTasks()
   }, [loadTasks])
 
+  const filteredTasks = useMemo(() => {
+    if (assigneeFilter === 'todos') return tasks
+    if (assigneeFilter === '_none') return tasks.filter((t) => !t.assigneeName)
+    return tasks.filter((t) => t.assigneeName === assigneeFilter)
+  }, [tasks, assigneeFilter])
+
+  const assigneeOptions = useMemo(() => {
+    const names = new Set(tasks.map((t) => t.assigneeName).filter(Boolean) as string[])
+    return Array.from(names).sort()
+  }, [tasks])
+
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
       backlog: [],
       in_progress: [],
       completed: [],
     }
-    tasks.forEach((task) => map[task.status].push(task))
+    filteredTasks.forEach((task) => map[task.status].push(task))
     return map
-  }, [tasks])
+  }, [filteredTasks])
 
   const resolveStatus = (overId: string | number): TaskStatus | null => {
     if (COLUMNS.some((c) => c.id === overId)) return overId as TaskStatus
@@ -201,6 +263,7 @@ export function PlanningPage() {
   }
 
   const onDragEnd = async (event: DragEndEvent) => {
+    if (!canWrite) return
     setActiveTask(null)
     const { active, over } = event
     if (!over) return
@@ -216,6 +279,7 @@ export function PlanningPage() {
     )
     try {
       await updateTask(task.id, { status: newStatus })
+      await refreshProgress()
     } catch (error) {
       console.error(error)
       toast.error('Falha ao mover tarefa')
@@ -223,24 +287,67 @@ export function PlanningPage() {
     }
   }
 
+  const openCreate = () => {
+    setEditing(null)
+    form.reset({ title: '', dueDate: '', assigneeName: '', status: 'backlog' })
+    setOpen(true)
+  }
+
+  const openEdit = (task: Task) => {
+    setEditing(task)
+    form.reset({
+      title: task.title,
+      dueDate: task.dueDate ?? '',
+      assigneeName: task.assigneeName ?? '',
+      status: task.status,
+    })
+    setOpen(true)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Excluir esta tarefa?')) return
+    try {
+      await deleteTask(id)
+      toast.success('Tarefa excluída')
+      await loadTasks()
+      await refreshProgress()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível excluir')
+    }
+  }
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!user || !visitId) return
     setSaving(true)
     try {
-      await createTask(user.uid, {
-        visitId,
-        title: values.title,
-        status: values.status,
-        order: grouped[values.status].length,
-        dueDate: values.dueDate || undefined,
-      })
-      toast.success('Tarefa criada')
+      if (editing) {
+        await updateTask(editing.id, {
+          title: values.title,
+          dueDate: values.dueDate || undefined,
+          assigneeName: values.assigneeName || undefined,
+          status: values.status,
+        })
+        toast.success('Tarefa atualizada')
+      } else {
+        await createTask(user.uid, {
+          visitId,
+          title: values.title,
+          status: values.status,
+          order: grouped[values.status].length,
+          dueDate: values.dueDate || undefined,
+          assigneeName: values.assigneeName || undefined,
+        })
+        toast.success('Tarefa criada')
+      }
       setOpen(false)
-      form.reset({ title: '', dueDate: '', status: 'backlog' })
+      setEditing(null)
+      form.reset({ title: '', dueDate: '', assigneeName: '', status: 'backlog' })
       await loadTasks()
+      await refreshProgress()
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível criar a tarefa')
+      toast.error('Não foi possível salvar a tarefa')
     } finally {
       setSaving(false)
     }
@@ -278,10 +385,26 @@ export function PlanningPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button disabled={!visitId} onClick={() => setOpen(true)}>
+            <Button disabled={!visitId || !canWrite} onClick={openCreate}>
               <Plus className="h-4 w-4" />
               Nova tarefa
             </Button>
+            {visitId ? (
+              <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos responsáveis</SelectItem>
+                  <SelectItem value="_none">Sem responsável</SelectItem>
+                  {assigneeOptions.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
           </div>
         }
       />
@@ -327,6 +450,9 @@ export function PlanningPage() {
                 id={column.id}
                 label={column.label}
                 tasks={grouped[column.id]}
+                onEdit={openEdit}
+                onDelete={(id) => void handleDelete(id)}
+                canWrite={canWrite}
               />
             ))}
           </div>
@@ -340,15 +466,25 @@ export function PlanningPage() {
         </DndContext>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          setOpen(value)
+          if (!value) setEditing(null)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nova tarefa</DialogTitle>
+            <DialogTitle>{editing ? 'Editar tarefa' : 'Nova tarefa'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={onSubmit} className="space-y-3">
             <div className="space-y-2">
               <Label>Título *</Label>
               <Input {...form.register('title')} />
+            </div>
+            <div className="space-y-2">
+              <Label>Responsável</Label>
+              <Input {...form.register('assigneeName')} placeholder="Nome do responsável" />
             </div>
             <div className="space-y-2">
               <Label>Prazo</Label>

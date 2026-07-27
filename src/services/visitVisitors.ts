@@ -53,6 +53,19 @@ export async function linkVisitorToVisit(
   return ref.id
 }
 
+export async function listVisitIdsForVisitor(
+  visitorId: string,
+  ownerId: string,
+  isAdmin: boolean,
+): Promise<string[]> {
+  const constraints = isAdmin
+    ? [where('visitorId', '==', visitorId)]
+    : [where('ownerId', '==', ownerId), where('visitorId', '==', visitorId)]
+
+  const snap = await getDocs(query(col, ...constraints))
+  return snap.docs.map((d) => String(d.data().visitId))
+}
+
 export async function unlinkVisitVisitor(id: string): Promise<void> {
   await deleteDoc(doc(col, id))
 }

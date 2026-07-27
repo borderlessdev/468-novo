@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Paperclip } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,17 +31,22 @@ import { listVisits } from '@/services/visits'
 import {
   createFinanceItem,
   deleteFinanceItem,
+  getFinanceAttachmentUrl,
   listFinanceItems,
+  removeFinanceAttachment,
+  updateFinanceItem,
+  uploadFinanceAttachment,
 } from '@/services/finance'
 import type { FinanceItem, Visit } from '@/types'
 
 export function FinancePage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role, canWrite } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [items, setItems] = useState<FinanceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<FinanceItem | null>(null)
   const [saving, setSaving] = useState(false)
 
   const visitId = searchParams.get('visita') ?? ''
@@ -66,7 +71,7 @@ export function FinancePage() {
     void (async () => {
       setLoading(true)
       try {
-        setVisits(await listVisits(user.uid, isAdmin))
+        setVisits(await listVisits(user.uid, isAdmin, role))
       } finally {
         setLoading(false)
       }
@@ -95,23 +100,59 @@ export function FinancePage() {
     [items],
   )
 
+  const openCreate = () => {
+    setEditing(null)
+    form.reset({
+      serviceName: '',
+      budget1: '',
+      budget2: '',
+      budget3: '',
+      serviceValue: '',
+      winningCompany: '',
+      nfReceived: false,
+      nfDueDate: '',
+    })
+    setOpen(true)
+  }
+
+  const openEdit = (item: FinanceItem) => {
+    setEditing(item)
+    form.reset({
+      serviceName: item.serviceName,
+      budget1: item.budget1 != null ? String(item.budget1) : '',
+      budget2: item.budget2 != null ? String(item.budget2) : '',
+      budget3: item.budget3 != null ? String(item.budget3) : '',
+      serviceValue: item.serviceValue != null ? String(item.serviceValue) : '',
+      winningCompany: item.winningCompany ?? '',
+      nfReceived: item.nfReceived,
+      nfDueDate: item.nfDueDate ?? '',
+    })
+    setOpen(true)
+  }
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!user || !visitId) return
     setSaving(true)
+    const payload = {
+      serviceName: values.serviceName,
+      budget1: parseOptionalNumber(values.budget1),
+      budget2: parseOptionalNumber(values.budget2),
+      budget3: parseOptionalNumber(values.budget3),
+      serviceValue: parseOptionalNumber(values.serviceValue),
+      winningCompany: values.winningCompany,
+      nfReceived: values.nfReceived,
+      nfDueDate: values.nfDueDate || undefined,
+    }
     try {
-      await createFinanceItem(user.uid, {
-        visitId,
-        serviceName: values.serviceName,
-        budget1: parseOptionalNumber(values.budget1),
-        budget2: parseOptionalNumber(values.budget2),
-        budget3: parseOptionalNumber(values.budget3),
-        serviceValue: parseOptionalNumber(values.serviceValue),
-        winningCompany: values.winningCompany,
-        nfReceived: values.nfReceived,
-        nfDueDate: values.nfDueDate || undefined,
-      })
-      toast.success('Linha adicionada')
+      if (editing) {
+        await updateFinanceItem(editing.id, payload)
+        toast.success('Linha atualizada')
+      } else {
+        await createFinanceItem(user.uid, { visitId, ...payload })
+        toast.success('Linha adicionada')
+      }
       setOpen(false)
+      setEditing(null)
       form.reset({
         serviceName: '',
         budget1: '',
@@ -163,7 +204,7 @@ export function FinancePage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button disabled={!visitId} onClick={() => setOpen(true)}>
+            <Button disabled={!visitId || !canWrite} onClick={openCreate}>
               <Plus className="h-4 w-4" />
               Nova linha
             </Button>
@@ -215,6 +256,7 @@ export function FinancePage() {
                     <th className="px-4 py-3 font-medium">Empresa vencedora</th>
                     <th className="px-4 py-3 font-medium">NF recebida</th>
                     <th className="px-4 py-3 font-medium">Venc. pagamento NF</th>
+                    <th className="px-4 py-3 font-medium">Comprovante</th>
                     <th className="px-4 py-3 font-medium">Ações</th>
                   </tr>
                 </thead>
@@ -230,19 +272,94 @@ export function FinancePage() {
                       <td className="px-4 py-3">{item.nfReceived ? 'Sim' : 'Não'}</td>
                       <td className="px-4 py-3">{formatDate(item.nfDueDate)}</td>
                       <td className="px-4 py-3">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => {
-                            void (async () => {
-                              await deleteFinanceItem(item.id)
-                              toast.success('Linha removida')
-                              await loadItems()
-                            })()
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {item.attachmentName ? (
+                          <Button
+                            size="sm"
+                            variant="link"
+                            className="h-auto p-0"
+                            onClick={() => {
+                              void (async () => {
+                                if (!item.attachmentPath) return
+                                const url = await getFinanceAttachmentUrl(item.attachmentPath)
+                                window.open(url, '_blank', 'noopener,noreferrer')
+                              })()
+                            }}
+                          >
+                            {item.attachmentName}
+                          </Button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1">
+                          {canWrite ? (
+                          <>
+                          <label
+                            title="Anexar comprovante"
+                            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md hover:bg-muted"
+                          >
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                void (async () => {
+                                  try {
+                                    await uploadFinanceAttachment(item, file)
+                                    toast.success('Comprovante anexado')
+                                    await loadItems()
+                                  } catch (error) {
+                                    toast.error(
+                                      error instanceof Error ? error.message : 'Falha no upload',
+                                    )
+                                  }
+                                  e.target.value = ''
+                                })()
+                              }}
+                            />
+                            <Paperclip className="h-4 w-4" />
+                          </label>
+                          {item.attachmentPath ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                void (async () => {
+                                  await removeFinanceAttachment(item)
+                                  toast.success('Comprovante removido')
+                                  await loadItems()
+                                })()
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEdit(item)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              void (async () => {
+                                await deleteFinanceItem(item.id)
+                                toast.success('Linha removida')
+                                await loadItems()
+                              })()
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          </>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -253,10 +370,16 @@ export function FinancePage() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          setOpen(value)
+          if (!value) setEditing(null)
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Nova linha financeira</DialogTitle>
+            <DialogTitle>{editing ? 'Editar linha financeira' : 'Nova linha financeira'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">

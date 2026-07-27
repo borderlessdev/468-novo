@@ -1,0 +1,49 @@
+PROMPT 10 — Responsividade, mobile-first, QA e deploy
+======================================================
+STATUS: [~] PARCIAL — README/build ok; QA mobile e deploy real pendentes
+
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promoter Experience. Fase final de polimento e entrega.
+
+Estado atual:
+- Sidebar mobile com drawer; tabelas com overflow.
+- Firebase Hosting configurado (firebase.json).
+- Sem testes automatizados / CI.
+- README tem checklist manual básico.
+
+Objetivo MVP:
+1. [ ] Passagem dedicada ~375px nas telas principais (não feita de forma sistemática).
+2. [~] CTAs principais existem; escondidos para client quando aplicável.
+3. [x] README atualizado com:
+   - [x] checklist de teste ampliado
+   - [x] deploy (rules, indexes, storage, hosting)
+   - [x] como setar admin/perfis
+   - [~] variáveis (.env.example já existia)
+4. [x] Build de produção passando (tsc + vite).
+5. [x] Smoke test documentado no README ("Como testar").
+
+[ROBUSTA — não fazer agora]
+- [ ] Suite e2e completa
+- [ ] Otimizações de performance profundas
+- [ ] Handoff operacional longo
+
+Restrições:
+- Não refatorar design system inteiro; só corrigir o que quebra uso.
+- npm run build deve passar.
+
+Entregáveis:
+- Ajustes mobile críticos + README de aceite/deploy atualizado.
+
+---
+
+Checklist manual (aceitação):
+[ ] Login → criar visita → visitante → agenda → tarefa → despesa/doc → resumo
+[ ] Fluxo ok no celular
+[ ] firebase deploy documentado e testado (se houver acesso)
+[ ] Conta admin / equipe / cliente testadas conforme permissões
+
+Notas:
+- Documentação de deploy pronta; execução real do deploy depende de acesso Firebase.

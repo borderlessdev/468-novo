@@ -37,7 +37,7 @@ import { listVisitVisitors } from '@/services/visitVisitors'
 import type { FinanceItem, Visit, Visitor } from '@/types'
 
 export function ReportsPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role } = useAuth()
   const [visits, setVisits] = useState<Visit[]>([])
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [financeItems, setFinanceItems] = useState<FinanceItem[]>([])
@@ -49,7 +49,7 @@ export function ReportsPage() {
     if (!user) return
     try {
       const [visitsData, visitorsData, financeData] = await Promise.all([
-        listVisits(user.uid, isAdmin),
+        listVisits(user.uid, isAdmin, role),
         listVisitors(user.uid, isAdmin),
         listFinanceItemsByOwner(user.uid, isAdmin),
       ])

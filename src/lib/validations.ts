@@ -33,6 +33,8 @@ export const visitSchema = z.object({
   startWithChecklist: z.boolean(),
 })
 
+export const visitEditSchema = visitSchema.omit({ startWithChecklist: true })
+
 export const visitorSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   document: z.string().min(3, 'Documento obrigatório'),
@@ -42,6 +44,8 @@ export const visitorSchema = z.object({
   weightKg: z.string().optional(),
   shoeSize: z.string().optional(),
   dietaryRestriction: z.string().optional(),
+  language: z.string().optional(),
+  mobilityReduced: z.boolean().optional(),
   notes: z.string().optional(),
 })
 
@@ -65,6 +69,7 @@ export const activitySchema = z.object({
 export const taskSchema = z.object({
   title: z.string().min(2, 'Título obrigatório'),
   dueDate: z.string().optional(),
+  assigneeName: z.string().optional(),
   status: z.enum(['backlog', 'in_progress', 'completed']),
 })
 
@@ -93,6 +98,7 @@ export function parseOptionalNumber(value?: string): number | undefined {
 export type LoginInput = z.infer<typeof loginSchema>
 export type RegisterInput = z.infer<typeof registerSchema>
 export type VisitInput = z.infer<typeof visitSchema>
+export type VisitEditInput = z.infer<typeof visitEditSchema>
 export type VisitorInput = z.infer<typeof visitorSchema>
 export type QuickVisitorInput = z.infer<typeof quickVisitorSchema>
 export type ActivityInput = z.infer<typeof activitySchema>

@@ -12,6 +12,8 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isNavAllowed } from '@/lib/access'
+import type { UserRole } from '@/types'
 
 const icons = {
   LayoutDashboard,
@@ -39,9 +41,11 @@ interface AppSidebarProps {
   open: boolean
   onClose: () => void
   collapsed: boolean
+  role: UserRole
+  isAdmin: boolean
 }
 
-export function AppSidebar({ open, onClose, collapsed }: AppSidebarProps) {
+export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSidebarProps) {
   return (
     <>
       <div
@@ -79,7 +83,9 @@ export function AppSidebar({ open, onClose, collapsed }: AppSidebarProps) {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {items.map((item) => {
+          {items
+            .filter((item) => isNavAllowed(item.to, role, isAdmin))
+            .map((item) => {
             const Icon = icons[item.icon]
             return (
               <NavLink

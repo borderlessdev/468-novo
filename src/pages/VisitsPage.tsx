@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Filter, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/PageHeader'
@@ -23,7 +24,7 @@ import type { Visit, VisitStatus } from '@/types'
 import { MapPin } from 'lucide-react'
 
 export function VisitsPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role, canWrite } = useAuth()
   const { setOpen } = useVisitDialog()
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
@@ -34,13 +35,13 @@ export function VisitsPage() {
     if (!user) return
     setLoading(true)
     try {
-      setVisits(await listVisits(user.uid, isAdmin))
+      setVisits(await listVisits(user.uid, isAdmin, role))
     } catch (error) {
       console.error(error)
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin])
+  }, [user, isAdmin, role])
 
   useEffect(() => {
     void load()
@@ -61,10 +62,12 @@ export function VisitsPage() {
         title="Visitas"
         description="Gerenciar visitas corporativas"
         actions={
+          canWrite ? (
           <Button onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" />
             Nova Visita
           </Button>
+          ) : undefined
         }
       />
 
@@ -141,12 +144,19 @@ export function VisitsPage() {
                 </thead>
                 <tbody>
                   {filtered.map((visit) => (
-                    <tr key={visit.id} className="border-b last:border-0">
+                    <tr key={visit.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3">{visit.state || '—'}</td>
                       <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs">
                         {visit.pvNumber || '—'}
                       </td>
-                      <td className="px-4 py-3 font-medium">{visit.title}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link
+                          to={`/visitas/${visit.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {visit.title}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3">{formatDate(visit.startDate)}</td>
                       <td className="px-4 py-3">{formatDate(visit.endDate)}</td>
                       <td className="px-4 py-3">{visit.city || '—'}</td>

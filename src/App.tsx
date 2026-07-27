@@ -10,6 +10,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { VisitDetailPage } from '@/pages/VisitDetailPage'
 import { VisitsPage } from '@/pages/VisitsPage'
 import { VisitorsPage } from '@/pages/VisitorsPage'
 import { AgendaPage } from '@/pages/AgendaPage'
@@ -33,6 +34,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/visitas" element={<VisitsPage />} />
+              <Route path="/visitas/:id" element={<VisitDetailPage />} />
               <Route path="/agenda" element={<AgendaPage />} />
               <Route path="/visitantes" element={<VisitorsPage />} />
               <Route path="/planejamento" element={<PlanningPage />} />

@@ -1,0 +1,50 @@
+PROMPTS PARA COMPLETAR — PROMOTER EXPERIENCE
+==============================================
+
+Pasta com prompts prontos para colar no Cursor (modo Agent) e ir fechando o MVP.
+
+STATUS GERAL (atualizado neste chat)
+------------------------------------
+[x] 01-backend-revisao.txt          — FEITO
+[x] 02-auth-permissoes.txt          — FEITO (MVP; falta convite/log = Robusta)
+[x] 03-visitas-fluxo-principal.txt  — FEITO (MVP; falta templates/duplicar = Robusta)
+[x] 04-agenda.txt                   — FEITO (MVP; falta calendário/dnd = Robusta)
+[x] 05-visitantes-crm.txt           — FEITO (MVP; falta brindes = Robusta)
+[x] 06-tarefas.txt                  — FEITO (MVP)
+[x] 07-financeiro.txt               — FEITO (opção A: NF + comprovante)
+[x] 08-documentos.txt               — FEITO no código (deploy Storage ainda pendente)
+[~] 09-dashboard-emails.txt         — PARCIAL (resumo via mailto; envio API pendente)
+[~] 10-mobile-qa-deploy.txt         — PARCIAL (README/build ok; QA mobile/deploy real pendente)
+[ ] 11-mvp-ponta-a-ponta.txt        — PENDENTE (homologação/deploy/handoff)
+
+Legenda: [x] feito  [~] parcial  [ ] pendente
+
+Ordem sugerida do que ainda falta
+---------------------------------
+1. Deploy rules/indexes/storage (REQUISITOS-ACESSOS)
+2. Contas de teste admin/equipe/cliente
+3. Provedor de e-mail (fecha 09 de verdade)
+4. QA mobile + aceite (10 + 11)
+
+Arquivo de acessos / chaves
+---------------------------
+Leia também: REQUISITOS-ACESSOS.txt
+
+Como usar cada prompt
+---------------------
+1. Abra o Cursor no repositório 468-novo.
+2. Cole o conteúdo do arquivo .txt no chat (modo Agent).
+3. Anexe ou mencione os arquivos citados no prompt, se pedido.
+4. Valide o checklist no final do prompt antes de ir ao próximo.
+
+Estado atual (resumo)
+---------------------
+- Stack: React 19 + Vite + TypeScript + Firebase (Auth + Firestore + Storage no código)
+- Feito: detalhe/edição de visita, perfis user/team/client/admin, documentos, comprovantes
+  financeiros, agenda com edição/conflito, tarefas com responsável, CRM com histórico
+- Falta crítico externo: deploy Storage/rules, provedor de e-mail, contas de teste, QA/deploy final
+
+Escopo alvo destes prompts
+--------------------------
+Foco no MVP operacional integrado (estimativa ~14 dias úteis).
+Itens marcados como [ROBUSTA] são opcionais e podem ficar para depois.

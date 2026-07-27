@@ -1,0 +1,47 @@
+PROMPT 11 — Fechamento MVP ponta a ponta (orquestração)
+========================================================
+STATUS: [ ] PENDENTE — rodar depois de deploy + contas de teste + (opcional) e-mail
+
+Use DEPOIS dos prompts 01–10.
+Cole no Cursor (Agent mode):
+
+---
+
+Faça uma passagem final no Promoter Experience para fechar o MVP operacional.
+
+1. Compare o estado do código com este escopo MVP mínimo:
+   - [x] Auth + 3 perfis (user/team/client + admin claim) no código
+   - [x] Visita: criar, editar, detalhe, status, equipe
+   - [x] Agenda: CRUD + conflito básico
+   - [x] Visitantes: CRUD + vínculo + histórico simples
+   - [x] Tarefas: Kanban + responsável + edit/delete
+   - [x] Financeiro: opção A (NF) + comprovante no código
+   - [x] Documentos: upload/list/delete por visita no código
+   - [x] Dashboard coerente (links + KPIs)
+   - [~] E-mail de resumo (mailto; API pendente)
+   - [~] Mobile usável no fluxo principal (sem QA formal)
+   - [x] README de deploy/aceite
+
+2. Liste gaps restantes em prioridade P0/P1/P2.
+3. Corrija apenas P0 (bugs que impedem o fluxo feliz).
+4. Não comece itens Robusta.
+5. Entregue um relatório curto em prosa: o que está pronto, o que falta, e o que depende de acesso externo (Storage, e-mail, DNS).
+
+Gaps conhecidos antes do fechamento:
+- P0: deploy firestore.rules + indexes + storage.rules; Storage habilitado
+- P0: contas de teste com roles/claims setados
+- P1: provedor de e-mail para envio real
+- P1: QA mobile ponta a ponta
+- P2: convite usuários, templates visita, calendário agenda [ROBUSTA]
+
+Restrições:
+- Mudanças mínimas e seguras.
+- npm run build deve passar.
+
+---
+
+Checklist do cliente:
+[ ] Homologação com dados reais de teste
+[ ] Admin claim setado
+[ ] Deploy hosting
+[ ] Treinamento rápido / handoff

@@ -1,0 +1,48 @@
+PROMPT 04 — Agenda e programação da visita
+==========================================
+STATUS: [x] FEITO (MVP) — pendente: calendário/dnd/alertas [ROBUSTA]
+
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promoter Experience. Módulo Agenda.
+
+Estado atual:
+- AgendaPage: cria, lista, filtra por dia, exclui atividades.
+- updateActivity existe no service mas não é usado na UI.
+- responsibleNames / visitorNames são strings livres, não IDs.
+- Sem detecção de conflito de horário.
+- Query ?visita= já existe.
+
+Objetivo MVP:
+1. [x] Editar atividade (dialog pré-preenchido usando updateActivity).
+2. [x] No detalhe da visita, link "Agenda" com ?visita=.
+3. [x] Validação: endTime > startTime; toast se houver sobreposição.
+4. [~] Usabilidade mobile: formulários empilhados já existem; sem passagem dedicada 375px.
+5. [ ] Opcional: Select de visitantes da visita (ainda texto livre com vírgula).
+
+[ROBUSTA — não fazer agora]
+- [ ] Vista calendário mensal
+- [ ] Drag-and-drop de horários
+- [ ] Alertas automáticos / push
+
+Restrições:
+- Não mudar o modelo de dados de forma breaking sem necessidade.
+- npm run build deve passar.
+
+Entregáveis:
+- Edição de atividade + validação de conflito básica + UX mobile ok.
+
+---
+
+Checklist manual:
+[ ] Criar atividade
+[ ] Editar atividade
+[ ] Excluir atividade
+[ ] Conflito de horário avisa
+[ ] Filtro por visita funciona no mobile
+
+Notas:
+- Helper activitiesOverlap em src/lib/utils.ts
+- Ações de escrita ocultas para perfil client.

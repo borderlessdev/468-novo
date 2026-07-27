@@ -3,10 +3,12 @@ import { Outlet } from 'react-router-dom'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { NewVisitDialog } from '@/features/visits/NewVisitDialog'
+import { useAuth } from '@/contexts/AuthContext'
 import { VisitDialogProvider } from '@/contexts/VisitDialogContext'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
+  const { role, isAdmin } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -18,6 +20,8 @@ export function AppShell() {
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
           collapsed={collapsed}
+          role={role}
+          isAdmin={isAdmin}
         />
         <div className={cn('flex min-w-0 flex-1 flex-col')}>
           <AppHeader

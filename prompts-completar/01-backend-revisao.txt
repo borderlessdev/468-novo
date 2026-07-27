@@ -1,0 +1,45 @@
+PROMPT 01 — Revisão geral, backend e estrutura de dados
+=======================================================
+STATUS: [x] FEITO
+
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no repositório Promoter Experience (React + Vite + TypeScript + Firebase).
+
+Contexto:
+- Já existem coleções: users, visits, visitors, visitVisitors, activities, tasks, financeItems.
+- Não há mocks de dados na app.
+- Falta Storage/documentos; várias funções de service existem sem UI (updateVisit, deleteVisit, updateActivity, updateFinanceItem, deleteTask, unlinkVisitVisitor).
+- Regras em firestore.rules; índices em firestore.indexes.json.
+
+Objetivo deste passo (MVP):
+1. [x] Auditar src/services/*, src/types/index.ts, firestore.rules e README.
+2. [x] Listar inconsistências entre tipos, rules e UI.
+3. [x] Garantir que create/update/delete dos services principais estão tipados e alinhados às rules.
+4. [x] Preparar a coleção/estrutura futura de documents (tipo Document + rules) — feito + UI no prompt 08.
+5. [x] Services prontos para a UI dos próximos prompts.
+6. [x] README atualizado com o estado real.
+
+Restrições:
+- Não implementar telas novas grandes neste prompt.
+- Não inventar roles Admin/Equipe/Cliente ainda (próximo prompt).
+- Não quebrar o build: npm run build deve passar.
+- Não commitar secrets.
+
+Entregáveis:
+- Diff pequeno e focado.
+- Comentário final com checklist: o que estava ok, o que ajustou, o que ficou pendente para os próximos prompts.
+
+---
+
+Checklist manual depois:
+[x] npm run build
+[x] npm run lint
+[ ] App sobe com npm run dev (validar localmente)
+[ ] Login ainda funciona (validar localmente)
+
+Notas:
+- Coleção documents + storage.rules criados.
+- Tipos estendidos (Visitor, Task, FinanceItem, VisitDocument, clientUserIds).

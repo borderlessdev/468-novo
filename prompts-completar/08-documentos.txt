@@ -1,0 +1,53 @@
+PROMPT 08 — Documentos, comprovantes e arquivos
+================================================
+STATUS: [x] FEITO no código — [ ] deploy Storage/rules no Firebase ainda pendente
+
+Cole no Cursor (Agent mode).
+PRÉ-REQUISITO: Firebase Storage habilitado + regras de Storage.
+
+---
+
+Você está no Promoter Experience.
+
+Estado atual:
+- storageBucket configurado no Firebase, mas NÃO há uso de Storage no código.
+- Não existe rota, service, coleção nem UI de documentos.
+- "document" em Visitor é CPF/passaporte (string), não arquivo.
+
+Objetivo MVP:
+1. [x] Tipo VisitDocument (category, storagePath, contentType, size, ownerId…).
+2. [x] Service documents.ts: upload, list, delete, getDownloadUrl.
+3. [x] firestore.rules + storage.rules (código no repo).
+4. [x] UI no detalhe da visita:
+   - [x] upload (PDF/JPG/PNG)
+   - [x] listar
+   - [x] download/abrir
+   - [x] excluir
+5. [x] Categorias: contrato, boarding, briefing, comprovante, outro.
+6. [x] Validar tamanho máximo (10 MB) e tipos MIME.
+
+[ROBUSTA — não fazer agora]
+- [ ] Versionamento
+- [ ] Preview online sofisticado
+- [ ] Organização tipo biblioteca avançada
+
+Restrições:
+- Se Storage não estiver habilitado, implementar código + instruções de enable no README e não fingir que upload funciona.
+- Não commitar arquivos binários de teste.
+- npm run build deve passar.
+
+Entregáveis:
+- Upload/list/download/delete por visita funcionando em ambiente com Storage.
+
+---
+
+Checklist manual:
+[ ] Upload PDF e imagem (depende de Storage deployado)
+[x] Lista na visita (UI pronta)
+[ ] Download (depende de Storage deployado)
+[ ] Delete remove Storage + Firestore (depende de deploy)
+[ ] Usuário sem permissão não acessa
+
+Notas:
+- Arquivos: src/services/documents.ts, storage.rules, firebase.json
+- Deploy necessário: firebase deploy --only storage,firestore:rules

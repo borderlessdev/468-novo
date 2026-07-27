@@ -1,0 +1,59 @@
+PROMPT 07 — Módulo financeiro da visita
+========================================
+STATUS: [x] FEITO (opção A: manter NF/orçamentos + comprovante)
+
+Cole no Cursor (Agent mode).
+ANTES: confirmar em REQUISITOS-ACESSOS.txt se o modelo é (A) manter NF/orçamentos, (B) despesas+comprovante, ou (C) ambos.
+
+---
+
+Você está no Promoter Experience. Módulo Financeiro.
+
+Estado atual:
+- FinanceItem: serviceName, budget1/2/3, serviceValue, winningCompany, nfReceived, nfDueDate.
+- UI: criar, listar, excluir, total; updateFinanceItem sem UI.
+- Sem upload de comprovantes.
+- Relatórios já usam esses campos (NF, gastos por estado/categoria).
+
+Objetivo MVP (escolha conforme decisão):
+
+Se decisão = A (manter NF):  ← IMPLEMENTADO
+1. [x] UI de edição de linha financeira.
+2. [x] Anexar comprovante/NF (PDF/imagem) via Storage (attachmentPath/attachmentName).
+3. [x] Totais por visita (já existiam; mantidos).
+
+Se decisão = B (despesas):
+1. [ ] Não feito (não migrado para Expense).
+2. [ ] —
+3. [ ] —
+
+Se decisão = C (ambos):
+1. [ ] Não feito (sem aba Despesas).
+
+Em todos os casos:
+- [x] Validar permissões de quem vê/edita (canWrite).
+- [~] Mobile: formulário usável; sem QA dedicado 375px.
+
+[ROBUSTA — não fazer agora]
+- [ ] Categorias personalizadas pelo usuário
+- [ ] Exportação financeira avançada além do que Relatórios já faz
+- [ ] Histórico detalhado de edições
+
+Restrições:
+- Se não houver decisão A/B/C no chat, PARE e pergunte.
+- Storage precisa estar habilitado para anexos; se não estiver, implemente UI + service e deixe claro o bloqueio.
+- npm run build deve passar.
+
+Entregáveis:
+- Fluxo financeiro MVP coerente + (se possível) upload de comprovante.
+
+---
+
+Checklist manual:
+[ ] Criar/editar/excluir linha
+[ ] Total da visita correto
+[ ] Comprovante sobe e abre (se Storage ok / regras deployadas)
+[ ] Relatórios não quebram
+
+Notas:
+- Código de upload pronto; precisa deploy de storage.rules + Storage habilitado.

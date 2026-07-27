@@ -29,6 +29,8 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
     dietaryRestriction: data.dietaryRestriction
       ? String(data.dietaryRestriction)
       : undefined,
+    language: data.language ? String(data.language) : undefined,
+    mobilityReduced: data.mobilityReduced === true,
     notes: data.notes ? String(data.notes) : undefined,
     ownerId: String(data.ownerId ?? ''),
     createdAt: data.createdAt,
@@ -60,6 +62,8 @@ export async function createVisitor(
     weightKg: data.weightKg ?? null,
     shoeSize: data.shoeSize ?? null,
     dietaryRestriction: data.dietaryRestriction ?? null,
+    language: data.language ?? null,
+    mobilityReduced: data.mobilityReduced ?? false,
     notes: data.notes ?? null,
     ownerId,
     createdAt: serverTimestamp(),

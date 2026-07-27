@@ -1,0 +1,56 @@
+PROMPT 03 — Módulo de visitas e fluxo principal
+================================================
+STATUS: [x] FEITO (MVP) — pendente: templates/duplicar/audit [ROBUSTA]
+
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promoter Experience.
+
+Estado atual:
+- NewVisitDialog cria visita + visitantes + checklist de tarefas.
+- VisitsPage lista e filtra; NÃO edita, NÃO exclui, NÃO abre detalhe.
+- Services updateVisit/deleteVisit existem sem UI.
+- progress fica 0; teamMemberIds costuma vir [].
+- Não há rota /visitas/:id.
+
+Objetivo MVP:
+1. [x] Página de detalhe /visitas/:id (hub):
+   - [x] dados principais editáveis
+   - [x] atalhos para agenda, planejamento, financeiro + documentos/visitantes
+2. [x] Editar: título, empresa, objetivo, local, datas, status, equipe/clientes.
+3. [x] Alterar status: planejamento | em_andamento | concluida | cancelada.
+4. [x] Botão excluir visita (com confirmação) respeitando permissões.
+5. [x] Na listagem, clicar na visita abre o detalhe.
+6. [x] Progress calculado a partir das tarefas.
+7. [~] Histórico básico: updatedAt no modelo; lastStatusChangeAt não criado.
+
+[ROBUSTA — não fazer agora a menos que peçam]
+- [ ] Duplicar visita
+- [ ] Templates de visita
+- [ ] Audit log detalhado de alterações
+
+Restrições:
+- Reutilizar componentes/UI existentes (dialog, forms, badges).
+- Manter mobile usável (formulários empilhados).
+- Não quebrar criação atual via NewVisitDialog.
+- npm run build deve passar.
+
+Entregáveis:
+- Rota + página de detalhe + edição/exclusão.
+- Navegação listagem → detalhe.
+
+---
+
+Checklist manual:
+[ ] Criar visita
+[ ] Abrir detalhe
+[ ] Editar e salvar
+[ ] Mudar status
+[ ] Excluir
+[ ] Voltar à lista atualizada
+
+Notas:
+- Arquivo: src/pages/VisitDetailPage.tsx
+- Dashboard também linka para o detalhe.

@@ -9,7 +9,8 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { db, storage } from '@/lib/firebase'
 import type { FinanceItem } from '@/types'
 
 const col = collection(db, 'financeItems')
@@ -26,6 +27,8 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
     winningCompany: data.winningCompany ? String(data.winningCompany) : undefined,
     nfReceived: Boolean(data.nfReceived),
     nfDueDate: data.nfDueDate ? String(data.nfDueDate) : undefined,
+    attachmentPath: data.attachmentPath ? String(data.attachmentPath) : undefined,
+    attachmentName: data.attachmentName ? String(data.attachmentName) : undefined,
     ownerId: String(data.ownerId ?? ''),
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
@@ -72,6 +75,8 @@ export async function createFinanceItem(
     winningCompany: data.winningCompany ?? null,
     nfReceived: data.nfReceived,
     nfDueDate: data.nfDueDate ?? null,
+    attachmentPath: data.attachmentPath ?? null,
+    attachmentName: data.attachmentName ?? null,
     ownerId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -91,4 +96,44 @@ export async function updateFinanceItem(
 
 export async function deleteFinanceItem(id: string): Promise<void> {
   await deleteDoc(doc(col, id))
+}
+
+const FINANCE_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+const FINANCE_MAX_SIZE = 10 * 1024 * 1024
+
+export async function uploadFinanceAttachment(
+  item: FinanceItem,
+  file: File,
+): Promise<void> {
+  if (!FINANCE_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('Use PDF, JPG ou PNG.')
+  }
+  if (file.size > FINANCE_MAX_SIZE) {
+    throw new Error('Arquivo muito grande. Máximo 10 MB.')
+  }
+
+  const storagePath = `visits/${item.visitId}/finance/${item.id}/${file.name}`
+  await uploadBytes(ref(storage, storagePath), file, { contentType: file.type })
+  await updateFinanceItem(item.id, {
+    attachmentPath: storagePath,
+    attachmentName: file.name,
+  })
+}
+
+export async function getFinanceAttachmentUrl(storagePath: string): Promise<string> {
+  return getDownloadURL(ref(storage, storagePath))
+}
+
+export async function removeFinanceAttachment(item: FinanceItem): Promise<void> {
+  if (item.attachmentPath) {
+    try {
+      await deleteObject(ref(storage, item.attachmentPath))
+    } catch {
+      // ignore missing file
+    }
+  }
+  await updateFinanceItem(item.id, {
+    attachmentPath: undefined,
+    attachmentName: undefined,
+  })
 }
