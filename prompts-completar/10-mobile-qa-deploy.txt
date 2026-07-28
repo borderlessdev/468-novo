@@ -1,6 +1,6 @@
 PROMPT 10 — Responsividade, mobile-first, QA e deploy
 ======================================================
-STATUS: [~] PARCIAL — README/build ok; QA mobile e deploy real pendentes
+STATUS: [x] FEITO no código — mobile cards/scroll + README/checklist; deploy real pendente
 
 Cole no Cursor (Agent mode):
 
@@ -9,19 +9,20 @@ Cole no Cursor (Agent mode):
 Você está no Promoter Experience. Fase final de polimento e entrega.
 
 Estado atual:
-- Sidebar mobile com drawer; tabelas com overflow.
+- Sidebar mobile com drawer; tabelas com cards em mobile (Visitas, Visitantes).
+- Kanban com scroll horizontal em telas estreitas.
 - Firebase Hosting configurado (firebase.json).
+- README com checklist de aceite ampliado + scripts deploy.
 - Sem testes automatizados / CI.
-- README tem checklist manual básico.
 
 Objetivo MVP:
-1. [ ] Passagem dedicada ~375px nas telas principais (não feita de forma sistemática).
-2. [~] CTAs principais existem; escondidos para client quando aplicável.
+1. [x] Passagem ~375px: cards em Visitas/Visitantes, Kanban scroll, CTAs empilhados.
+2. [x] CTAs principais existem; escondidos para client quando aplicável.
 3. [x] README atualizado com:
    - [x] checklist de teste ampliado
    - [x] deploy (rules, indexes, storage, hosting)
    - [x] como setar admin/perfis
-   - [~] variáveis (.env.example já existia)
+   - [x] variáveis (.env.example com VITE_EMAIL_MODE)
 4. [x] Build de produção passando (tsc + vite).
 5. [x] Smoke test documentado no README ("Como testar").
 
@@ -46,4 +47,4 @@ Checklist manual (aceitação):
 [ ] Conta admin / equipe / cliente testadas conforme permissões
 
 Notas:
-- Documentação de deploy pronta; execução real do deploy depende de acesso Firebase.
+- Scripts: npm run deploy:rules, deploy:hosting, seed:accounts

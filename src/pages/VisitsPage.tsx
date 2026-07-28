@@ -128,7 +128,39 @@ export function VisitsPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-3 p-4 md:hidden">
+              {filtered.map((visit) => (
+                <Link
+                  key={visit.id}
+                  to={`/visitas/${visit.id}`}
+                  className="block rounded-lg border border-border p-4 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{visit.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatDate(visit.startDate)} — {formatDate(visit.endDate)}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {[visit.state, visit.city].filter(Boolean).join(' · ') || '—'}
+                      </p>
+                      {visit.pvNumber ? (
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                          PV: {visit.pvNumber}
+                        </p>
+                      ) : null}
+                    </div>
+                    <VisitStatusBadge status={visit.status} />
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Progress value={visit.progress} className="flex-1" />
+                    <span className="text-xs text-muted-foreground">{visit.progress}%</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-sm">
                 <thead className="border-b bg-muted/40 text-left text-muted-foreground">
                   <tr>
@@ -173,6 +205,7 @@ export function VisitsPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

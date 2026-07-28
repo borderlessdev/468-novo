@@ -168,6 +168,15 @@ service cloud.firestore {
       allow delete: if canWriteChild();
     }
 
+    // Firebase Extension "Trigger Email" — fila de envio (SMTP/SendGrid/etc.)
+    match /mail/{mailId} {
+      allow create: if isSignedIn()
+        && request.resource.data.to is list
+        && request.resource.data.message.subject is string
+        && request.resource.data.message.text is string;
+      allow read, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

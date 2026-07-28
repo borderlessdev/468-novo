@@ -62,6 +62,7 @@ import {
   unlinkVisitVisitor,
 } from '@/services/visitVisitors'
 import { deleteVisit, getVisit, syncVisitProgress, updateVisit } from '@/services/visits'
+import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
 import type { DocumentCategory, Visitor, Visit, VisitDocument } from '@/types'
 
 const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
@@ -91,6 +92,7 @@ export function VisitDetailPage() {
   const [visitorSearch, setVisitorSearch] = useState('')
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailTo, setEmailTo] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
   const [teamIdsInput, setTeamIdsInput] = useState('')
   const [clientIdsInput, setClientIdsInput] = useState('')
 
@@ -301,16 +303,28 @@ export function VisitDetailPage() {
         .join('\n')
     : ''
 
-  const handleSendEmail = () => {
-    if (!emailTo.trim()) {
-      toast.error('Informe o e-mail do destinatário')
-      return
+  const handleSendEmail = async () => {
+    if (!visit) return
+    setSendingEmail(true)
+    try {
+      const mode = await sendVisitSummaryEmail({
+        to: emailTo,
+        subject: `Resumo da visita: ${visit.title}`,
+        body: emailSummary,
+        visitId: visit.id,
+      })
+      if (mode === 'firestore') {
+        toast.success('Resumo enfileirado para envio por e-mail')
+      } else {
+        toast.success('Cliente de e-mail aberto com o resumo')
+      }
+      setEmailOpen(false)
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Não foi possível enviar o resumo')
+    } finally {
+      setSendingEmail(false)
     }
-    const subject = encodeURIComponent(`Resumo da visita: ${visit?.title ?? ''}`)
-    const body = encodeURIComponent(emailSummary)
-    window.location.href = `mailto:${emailTo.trim()}?subject=${subject}&body=${body}`
-    toast.success('Cliente de e-mail aberto com o resumo')
-    setEmailOpen(false)
   }
 
   const showDelete = visit && user && canDeleteVisit(role, isAdmin, visit, user.uid)
@@ -343,13 +357,13 @@ export function VisitDetailPage() {
         title={visit.title}
         description={visit.company || visit.pvNumber || 'Detalhes da visita'}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setEmailOpen(true)}>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEmailOpen(true)}>
               <Mail className="h-4 w-4" />
               Enviar resumo
             </Button>
             {showDelete ? (
-            <Button variant="destructive" onClick={() => void onDelete()}>
+            <Button variant="destructive" className="w-full sm:w-auto" onClick={() => void onDelete()}>
               <Trash2 className="h-4 w-4" />
               Excluir
             </Button>
@@ -699,13 +713,21 @@ export function VisitDetailPage() {
               <Textarea readOnly rows={8} value={emailSummary} className="font-mono text-xs" />
             </div>
             <p className="text-xs text-muted-foreground">
-              Abre seu cliente de e-mail com o resumo preenchido. Para envio automático, configure um provedor (SendGrid/Resend).
+              {isFirestoreEmailEnabled()
+                ? 'O resumo será enfileirado na coleção mail e enviado pela extensão Trigger Email (SMTP/SendGrid).'
+                : 'Abre seu cliente de e-mail com o resumo preenchido. Para envio automático, defina VITE_EMAIL_MODE=firestore e instale a extensão Trigger Email.'}
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => setEmailOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSendEmail}>Preparar envio</Button>
+              <Button onClick={() => void handleSendEmail()} disabled={sendingEmail}>
+                {sendingEmail
+                  ? 'Enviando…'
+                  : isFirestoreEmailEnabled()
+                    ? 'Enviar e-mail'
+                    : 'Preparar envio'}
+              </Button>
             </div>
           </div>
         </DialogContent>

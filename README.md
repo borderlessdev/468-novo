@@ -38,6 +38,11 @@ Abra `http://localhost:5173`.
 | `npm run build` | Build de produção |
 | `npm run preview` | Preview do build |
 | `npm run lint` | Lint |
+| `npm run seed:user` | Cria conta demo única (`demo@promover.experience`) |
+| `npm run seed:accounts` | Cria operador, equipe e cliente de teste |
+| `npm run deploy:rules` | Deploy Firestore rules, indexes e Storage rules |
+| `npm run deploy:hosting` | Build + deploy Hosting |
+| `npm run deploy:all` | Build + deploy completo |
 
 ## Firebase
 
@@ -77,6 +82,34 @@ Na visita, informe UIDs em **Equipe** e **Clientes** (tela de detalhe) para libe
 
 Depois o usuário precisa renovar o token (logout/login ou `getIdToken(true)`).
 
+Script com Admin SDK (requer `service-account.json` na raiz ou `GOOGLE_APPLICATION_CREDENTIALS`):
+
+```bash
+npm install
+node scripts/set-admin-claim.mjs <uid>
+```
+
+## Contas de teste
+
+```bash
+npm run seed:accounts
+```
+
+Gera `credenciais.md` com operador (`user`), equipe (`team`) e cliente (`client`). Para admin, use o script acima no UID desejado.
+
+## E-mail de resumo da visita
+
+Por padrão (`VITE_EMAIL_MODE=mailto`), o botão abre o cliente de e-mail local.
+
+Para envio automático:
+
+1. Instale a extensão [Trigger Email](https://extensions.dev/extensions/firebase/firestore-send-email) no Firebase Console.
+2. Configure SMTP/SendGrid na extensão.
+3. Defina `VITE_EMAIL_MODE=firestore` no `.env`.
+4. Faça deploy das rules: `npm run deploy:rules`.
+
+O app enfileira documentos em `mail/{id}`; a extensão envia e atualiza o status.
+
 ## Como testar
 
 1. Cadastre um usuário e confirme o documento em `users/{uid}`.
@@ -91,6 +124,18 @@ Depois o usuário precisa renovar o token (logout/login ou `getIdToken(true)`).
 10. Com um segundo usuário, confirme isolamento por `ownerId`. Com admin (claim), confirme visão global.
 11. Abra uma visita pelo link na listagem; edite dados, vincule visitantes e faça upload de documento (Storage habilitado).
 12. Edite atividades, tarefas e linhas financeiras; confira progresso da visita após concluir tarefas.
+13. Envie resumo por e-mail (mailto ou fila Firestore, conforme `VITE_EMAIL_MODE`).
+14. **Mobile (~375px):** login → visitas (cards) → detalhe → agenda → planejamento (scroll horizontal) → financeiro → CRM.
+
+### Checklist de aceite (homologação)
+
+- [ ] Login com operador, equipe e cliente (contas seed)
+- [ ] Admin claim setado e visão global confirmada
+- [ ] Fluxo completo: visita → visitante → agenda → tarefa → despesa/doc → resumo
+- [ ] Fluxo ok no celular (375px)
+- [ ] `npm run deploy:rules` e `npm run deploy:hosting` executados (requer `firebase login`)
+- [ ] Storage habilitado no Console + upload de documento funcional
+- [ ] (Opcional) Trigger Email configurado + resumo chega na caixa de teste
 
 ## Ciclo de medição
 

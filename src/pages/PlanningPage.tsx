@@ -443,17 +443,18 @@ export function PlanningPage() {
           onDragStart={onDragStart}
           onDragEnd={(e) => void onDragEnd(e)}
         >
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
             {COLUMNS.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                id={column.id}
-                label={column.label}
-                tasks={grouped[column.id]}
-                onEdit={openEdit}
-                onDelete={(id) => void handleDelete(id)}
-                canWrite={canWrite}
-              />
+              <div key={column.id} className="min-w-[280px] shrink-0 lg:min-w-0">
+                <KanbanColumn
+                  id={column.id}
+                  label={column.label}
+                  tasks={grouped[column.id]}
+                  onEdit={openEdit}
+                  onDelete={(id) => void handleDelete(id)}
+                  canWrite={canWrite}
+                />
+              </div>
             ))}
           </div>
           <DragOverlay>

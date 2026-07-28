@@ -230,9 +230,9 @@ export function DashboardPage() {
                 <Link
                   key={visit.id}
                   to={`/visitas/${visit.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40"
+                  className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-medium">{visit.title}</p>
                     <p className="text-sm text-muted-foreground">
                       {formatDate(visit.startDate)}

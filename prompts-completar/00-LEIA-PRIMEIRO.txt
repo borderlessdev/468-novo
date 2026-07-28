@@ -13,22 +13,26 @@ STATUS GERAL (atualizado neste chat)
 [x] 06-tarefas.txt                  — FEITO (MVP)
 [x] 07-financeiro.txt               — FEITO (opção A: NF + comprovante)
 [x] 08-documentos.txt               — FEITO no código (deploy Storage ainda pendente)
-[~] 09-dashboard-emails.txt         — PARCIAL (resumo via mailto; envio API pendente)
-[~] 10-mobile-qa-deploy.txt         — PARCIAL (README/build ok; QA mobile/deploy real pendente)
-[ ] 11-mvp-ponta-a-ponta.txt        — PENDENTE (homologação/deploy/handoff)
+[x] 09-dashboard-emails.txt         — FEITO no código (mailto + fila Firestore; extensão SMTP pendente)
+[x] 10-mobile-qa-deploy.txt         — FEITO no código (mobile + README/checklist; deploy real pendente)
+[x] 11-mvp-ponta-a-ponta.txt        — FEITO (relatório em MVP-RELATORIO.md)
 
 Legenda: [x] feito  [~] parcial  [ ] pendente
 
-Ordem sugerida do que ainda falta
----------------------------------
-1. Deploy rules/indexes/storage (REQUISITOS-ACESSOS)
-2. Contas de teste admin/equipe/cliente
-3. Provedor de e-mail (fecha 09 de verdade)
-4. QA mobile + aceite (10 + 11)
+Ordem sugerida do que ainda falta (externo)
+-------------------------------------------
+1. Deploy rules/indexes/storage (REQUISITOS-ACESSOS) — `npm run deploy:rules`
+2. Contas de teste admin/equipe/cliente — `npm run seed:accounts` + set-admin-claim
+3. Provedor de e-mail — extensão Trigger Email + VITE_EMAIL_MODE=firestore
+4. Homologação + deploy hosting — checklist no README
 
 Arquivo de acessos / chaves
 ---------------------------
 Leia também: REQUISITOS-ACESSOS.txt
+
+Relatório de fechamento
+-----------------------
+MVP-RELATORIO.md — gaps P0/P1/P2 e próximos passos
 
 Como usar cada prompt
 ---------------------
@@ -41,8 +45,9 @@ Estado atual (resumo)
 ---------------------
 - Stack: React 19 + Vite + TypeScript + Firebase (Auth + Firestore + Storage no código)
 - Feito: detalhe/edição de visita, perfis user/team/client/admin, documentos, comprovantes
-  financeiros, agenda com edição/conflito, tarefas com responsável, CRM com histórico
-- Falta crítico externo: deploy Storage/rules, provedor de e-mail, contas de teste, QA/deploy final
+  financeiros, agenda com edição/conflito, tarefas com responsável, CRM com histórico,
+  mobile cards, e-mail mailto/fila Firestore, seeds e scripts de deploy
+- Falta crítico externo: deploy Storage/rules, extensão de e-mail, homologação/deploy final
 
 Escopo alvo destes prompts
 --------------------------

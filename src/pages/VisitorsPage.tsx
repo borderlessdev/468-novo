@@ -223,7 +223,50 @@ export function VisitorsPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-3 p-4 md:hidden">
+              {filtered.map((visitor) => (
+                <div
+                  key={visitor.id}
+                  className="rounded-lg border border-border p-4"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{visitor.name}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {visitor.company || '—'}
+                        {visitor.role ? ` · ${visitor.role}` : ''}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {visitor.country || 'Brasil'}
+                        {visitor.dietaryRestriction
+                          ? ` · ${visitor.dietaryRestriction}`
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => void openEdit(visitor)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="flex-1"
+                      onClick={() => void onDelete(visitor.id)}
+                    >
+                      Excluir
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-sm">
                 <thead className="border-b bg-muted/40 text-left text-muted-foreground">
                   <tr>
@@ -274,6 +317,7 @@ export function VisitorsPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

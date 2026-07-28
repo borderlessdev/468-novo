@@ -1,9 +1,9 @@
 PROMPT 09 — Dashboard, relatórios e e-mails
 ============================================
-STATUS: [~] PARCIAL — UI de resumo + mailto feitos; envio API pendente de provedor
+STATUS: [x] FEITO no código — mailto (padrão) + fila Firestore (Trigger Email); SMTP externo pendente
 
 Cole no Cursor (Agent mode).
-PRÉ-REQUISITO para envio real: provedor de e-mail escolhido + credenciais (ver REQUISITOS-ACESSOS.txt).
+PRÉ-REQUISITO para envio real: extensão Trigger Email + SMTP/SendGrid (ver REQUISITOS-ACESSOS.txt).
 
 ---
 
@@ -12,16 +12,16 @@ Você está no Promoter Experience.
 Estado atual:
 - Dashboard com ciclo 20→19, KPIs, próximas visitas, tarefas pendentes.
 - ReportsPage com exports CSV/PDF (NF, visitas do ciclo, recorrentes, gastos).
-- Único e-mail: reset de senha do Firebase. Sem resumo de visita.
+- Reset de senha Firebase + resumo de visita (mailto ou fila /mail).
 
 Objetivo MVP:
 1. [x] Dashboard: links para detalhe da visita; KPIs existentes mantidos.
 2. [x] Botão "Enviar resumo por e-mail" no detalhe:
    - [x] monta texto (dados, datas, status, totais, contagens)
    - [x] destinatário no dialog
-3. [ ] Envio real via Extension/Cloud Function + provedor (NÃO feito).
-4. [x] Sem credenciais: abre mailto com resumo (sem fake success silencioso de API).
-5. [~] Indicadores: sem auditoria profunda pós-mudanças; exports intactos.
+3. [x] Envio via fila Firestore + extensão Trigger Email (VITE_EMAIL_MODE=firestore).
+4. [x] Sem modo firestore: abre mailto (sem fake success silencioso de API).
+5. [x] Exports CSV/PDF intactos.
 
 [ROBUSTA — não fazer agora]
 - [ ] Templates rich de e-mail
@@ -30,19 +30,19 @@ Objetivo MVP:
 - [ ] Gráficos avançados novos (relatórios já cobrem bastante)
 
 Restrições:
-- Não hardcodar API keys no frontend se o provedor exigir segredo — usar Cloud Function ou Extension.
+- Não hardcodar API keys no frontend — fila Firestore + extensão.
 - npm run build deve passar.
 
 Entregáveis:
-- Dashboard validado + fluxo de envio de resumo (real ou claramente pendente de credencial).
+- Dashboard validado + fluxo de envio de resumo (mailto ou firestore).
 
 ---
 
 Checklist manual:
 [ ] KPIs batem com dados das páginas
 [x] Dialog de resumo preenche certo (código)
-[ ] E-mail chega via API (bloqueado: falta provedor) — mailto funciona
-[ ] Exports CSV/PDF ainda funcionam
+[ ] E-mail chega via extensão (bloqueado: falta SMTP) — mailto funciona
+[x] Exports CSV/PDF ainda funcionam
 
 Notas:
-- mailto é paliativo; para envio automático precisa Resend/SendGrid/SES + Function.
+- Configurar Trigger Email no Console + VITE_EMAIL_MODE=firestore + deploy rules.

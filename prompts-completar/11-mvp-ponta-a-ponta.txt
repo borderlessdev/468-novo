@@ -1,6 +1,6 @@
 PROMPT 11 — Fechamento MVP ponta a ponta (orquestração)
 ========================================================
-STATUS: [ ] PENDENTE — rodar depois de deploy + contas de teste + (opcional) e-mail
+STATUS: [x] FEITO — relatório em MVP-RELATORIO.md; homologação/deploy externo pendente
 
 Use DEPOIS dos prompts 01–10.
 Cole no Cursor (Agent mode):
@@ -18,20 +18,20 @@ Faça uma passagem final no Promoter Experience para fechar o MVP operacional.
    - [x] Financeiro: opção A (NF) + comprovante no código
    - [x] Documentos: upload/list/delete por visita no código
    - [x] Dashboard coerente (links + KPIs)
-   - [~] E-mail de resumo (mailto; API pendente)
-   - [~] Mobile usável no fluxo principal (sem QA formal)
+   - [x] E-mail de resumo (mailto + fila Firestore)
+   - [x] Mobile usável no fluxo principal (cards + scroll)
    - [x] README de deploy/aceite
 
-2. Liste gaps restantes em prioridade P0/P1/P2.
-3. Corrija apenas P0 (bugs que impedem o fluxo feliz).
+2. Liste gaps restantes em prioridade P0/P1/P2. → ver MVP-RELATORIO.md
+3. Corrija apenas P0 (bugs que impedem o fluxo feliz). → nenhum bug P0 no código
 4. Não comece itens Robusta.
-5. Entregue um relatório curto em prosa: o que está pronto, o que falta, e o que depende de acesso externo (Storage, e-mail, DNS).
+5. Entregue relatório em MVP-RELATORIO.md.
 
-Gaps conhecidos antes do fechamento:
+Gaps conhecidos (externos):
 - P0: deploy firestore.rules + indexes + storage.rules; Storage habilitado
-- P0: contas de teste com roles/claims setados
-- P1: provedor de e-mail para envio real
-- P1: QA mobile ponta a ponta
+- P0: contas de teste com roles/claims setados (scripts prontos)
+- P1: extensão Trigger Email + SMTP
+- P1: QA mobile ponta a ponta (homologação manual)
 - P2: convite usuários, templates visita, calendário agenda [ROBUSTA]
 
 Restrições:

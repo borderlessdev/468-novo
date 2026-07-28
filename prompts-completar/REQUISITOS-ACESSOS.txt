@@ -6,8 +6,10 @@ Para completar o projeto de ponta a ponta, preciso (ou a equipe precisa ter pron
 STATUS (código vs externo)
 --------------------------
 [x] Código MVP principal implementado (visitas, agenda, CRM, tarefas, financeiro, docs, perfis)
+[x] Mobile cards + scripts deploy/seed no repo
+[x] E-mail: mailto + fila Firestore (extensão Trigger Email) no código
 [ ] Acessos/deploy Firebase ainda necessários para uso real
-[ ] Provedor de e-mail ainda necessário para envio automático
+[ ] Provedor de e-mail (SMTP) ainda necessário para envio automático
 
 --------------------------------------------------------------------------------
 1) FIREBASE (obrigatório)
@@ -35,10 +37,10 @@ Arquivos locais esperados:
 --------------------------------------------------------------------------------
 2) E-MAIL TRANSACIONAL (obrigatório para MVP de comunicação)
 --------------------------------------------------------------------------------
-Hoje: reset de senha Firebase + resumo da visita via mailto: (paliativo).
+Hoje: reset de senha Firebase + resumo via mailto (padrão) ou fila /mail (VITE_EMAIL_MODE=firestore).
 Para envio automático real, escolher UMA opção:
 
-Opção A — Firebase Extension "Trigger Email" + provedor SMTP
+Opção A — Firebase Extension "Trigger Email" + provedor SMTP (recomendado; código pronto)
 Opção B — Cloud Function + SendGrid / Resend / Amazon SES / Mailgun
 Opção C — Integração com API do provedor que o cliente já usa
 
