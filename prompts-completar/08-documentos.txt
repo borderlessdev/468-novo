@@ -1,6 +1,6 @@
 PROMPT 08 — Documentos, comprovantes e arquivos
 ================================================
-STATUS: [x] FEITO no código — [ ] deploy Storage/rules no Firebase ainda pendente
+STATUS: [~] FEITO MVP ~85% — deploy Storage pendente; P1: storage.rules permissivas; query ownerId vs equipe
 
 Cole no Cursor (Agent mode).
 PRÉ-REQUISITO: Firebase Storage habilitado + regras de Storage.

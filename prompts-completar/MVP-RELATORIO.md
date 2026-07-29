@@ -1,54 +1,193 @@
 # Relatório de fechamento MVP — Promover Experience
 
-Gerado em: jul/2026 (prompt 11)
+Gerado em: jul/2026 (prompt 11)  
+Atualizado em: jul/2026 (avaliação vs escopo MVP/Robusta)
 
-## O que está pronto
+---
 
-O MVP operacional integrado está implementado no código:
+## Resumo executivo
+
+| Dimensão | Situação |
+|----------|----------|
+| **Código do MVP** | ~**85–90%** — módulos principais existem e estão integrados |
+| **MVP operacional (uso real)** | ~**65–70%** — bloqueado por deploy Firebase, Storage, homologação e ajustes de permissões |
+| **Versão Robusta** | ~**25–35%** — vários itens Robusta antecipados no MVP (Kanban, exports, histórico visitante); grosso da Robusta ainda não existe |
+| **Estimativa restante** | MVP: **~3–5 dias úteis** (ops + QA + correções). Robusta completa: **+7–10 dias** além do MVP |
+
+O projeto **não parte do zero**. A maior parte dos 14 dias úteis de MVP em desenvolvimento **já foi feita no código**. O que falta agora é menos “construir módulos” e mais **colocar em produção, validar ponta a ponta e corrigir arestas**.
+
+### Comparativo com estimativas originais
+
+| Versão | Estimativa original | Código hoje | Falta p/ operacional |
+|--------|---------------------|-------------|----------------------|
+| **MVP** | 14 dias úteis | ~11–12 dias feitos | ~3–5 dias (deploy + QA + fixes) |
+| **Robusta** | 21 dias úteis | ~5–7 dias feitos* | ~14–16 dias (se quiser tudo) |
+
+\* Alguns itens Robusta foram antecipados: Kanban de tarefas, exports CSV/PDF, categorias de documento, histórico simples de visitante.
+
+---
+
+## O que está pronto (código)
 
 - **Auth e perfis:** login, registro, reset de senha; roles `user`, `team`, `client` + claim `admin`.
-- **Visitas:** CRUD, detalhe, status, progresso, equipe/clientes por UID.
+- **Visitas:** CRUD, detalhe, status, progresso, equipe/clientes por UID, checklist inicial.
 - **Agenda:** CRUD de atividades com detecção básica de conflito de horário.
 - **CRM:** visitantes com histórico simples e vínculo à visita.
-- **Tarefas:** Kanban com drag-and-drop, responsável, edit/delete.
-- **Financeiro:** planilha NF/orçamentos + comprovante anexo.
+- **Tarefas:** Kanban com drag-and-drop, responsável (texto), edit/delete.
+- **Financeiro:** planilha NF/orçamentos + comprovante anexo (modelo opção A).
 - **Documentos:** upload/list/delete por visita (Storage no código).
 - **Dashboard:** KPIs do ciclo 20→19, próximas visitas com link, tarefas pendentes.
-- **Relatórios:** exports CSV/PDF.
-- **E-mail de resumo:** mailto (padrão) ou fila Firestore (`VITE_EMAIL_MODE=firestore`) compatível com extensão Trigger Email.
-- **Mobile:** cards em Visitas/Visitantes, Kanban com scroll horizontal, CTAs empilhados no detalhe.
+- **Relatórios:** exports CSV/PDF (item previsto só na Robusta, já antecipado).
+- **E-mail de resumo:** mailto (padrão) ou fila Firestore (`VITE_EMAIL_MODE=firestore`).
+- **Mobile:** cards em Visitas/Visitantes/Financeiro, Kanban com scroll horizontal, CTAs empilhados no detalhe.
 - **Deploy:** scripts `deploy:rules`, `deploy:hosting`, `deploy:all`; README com checklist de aceite.
-- **Seeds:** `seed:accounts` (operador/equipe/cliente) + `set-admin-claim.mjs`.
+- **Seeds:** `seed:accounts` + `set-user-role.mjs` para team/client/admin.
+- **Docs:** `SETUP-EXTERNO.md` com passo a passo operacional.
 
-`npm run build` passa.
+`npm run build` passa. Sem dados mockados no `src/`.
+
+---
+
+## Avaliação por módulo (vs escopo)
+
+### 1. Revisão geral, backend e estrutura — MVP ~85% | Robusta ~70%
+
+| Item | Status |
+|------|--------|
+| Stack React + Firebase, coleções, indexes, rules no repo | ✅ |
+| Remoção de mocks | ✅ |
+| Deploy rules/indexes/storage | ❌ Pendente (externo) |
+| Storage rules alinhadas à visita | ⚠️ Fracas — qualquer autenticado lê/escreve em `visits/*` |
+| Queries por `ownerId` vs visita compartilhada | ⚠️ Equipe não vê financeiro/documentos criados pelo operador |
+
+### 2. Auth, usuários e permissões — MVP ~80% | Robusta ~30%
+
+| Item | Status |
+|------|--------|
+| Login, cadastro, reset, perfis, cliente vê visitas autorizadas | ✅ |
+| Bloqueio de escrita para cliente (`canWrite`) | ✅ na maioria das telas |
+| Bloqueio de rotas para cliente | ⚠️ Só no menu; URL direta ainda abre `/financeiro`, `/visitantes`, `/relatorios` |
+| `VisitorsPage` sem `canWrite` | ⚠️ Cliente pode mutar CRM se acessar a rota |
+| Vínculo equipe/cliente por UID manual | ⚠️ Funciona, UX ruim |
+| Convite por e-mail, logs de atividade | ❌ Robusta |
+
+### 3. Visitas e fluxo principal — MVP ~90% | Robusta ~40%
+
+| Item | Status |
+|------|--------|
+| CRUD, status, progresso, local, datas, objetivo, detalhe integrado | ✅ |
+| Campo idioma da visita | ❌ (só em visitante) |
+| Histórico de alterações da visita | ❌ |
+| Duplicar visita / templates | ❌ Robusta |
+
+### 4. Agenda — MVP ~95% | Robusta ~20%
+
+| Item | Status |
+|------|--------|
+| Timeline, CRUD, conflito de horário, mobile | ✅ |
+| Calendário visual, drag-and-drop, alertas | ❌ Robusta |
+
+### 5. Visitantes e CRM — MVP ~95% | Robusta ~50%
+
+| Item | Status |
+|------|--------|
+| Cadastro completo, busca, vínculo, cards mobile | ✅ |
+| Histórico de visitas ao editar | ✅ parcial |
+| Brindes, busca inteligente | ❌ Robusta |
+
+### 6. Tarefas — MVP ~100% | Robusta ~60%
+
+| Item | Status |
+|------|--------|
+| CRUD, prazo, filtros, progresso da visita, mobile | ✅ |
+| Kanban interativo | ✅ **antecipado da Robusta** |
+| Responsável = nome livre (não usuário do sistema) | ⚠️ |
+| Dependências, notificações, histórico | ❌ Robusta |
+
+### 7. Financeiro — MVP ~80% | Robusta ~45%
+
+Modelo implementado: **orçamentos/NF + comprovante** (opção A), não “despesa + categoria + data” genérica do escopo.
+
+| Item | Status |
+|------|--------|
+| Registro por visita, valor, comprovante, totais, CRUD | ✅ |
+| Equipe vê financeiro da visita compartilhada | ⚠️ Query `ownerId` limita |
+| Categorias custom, relatórios por estado | ✅ parcial (exports em Relatórios) |
+
+### 8. Documentos — MVP ~85% | Robusta ~55%
+
+| Item | Status |
+|------|--------|
+| Upload/download/delete, categorias | ✅ |
+| Storage habilitado + deploy | ❌ Pendente |
+| Versionamento, visualização online | ❌ Robusta |
+
+### 9. Dashboard, relatórios e e-mails — MVP ~85% | Robusta ~55%
+
+| Item | Status |
+|------|--------|
+| KPIs, resumo manual, mailto + fila Firestore | ✅ |
+| Envio automático real | ❌ Trigger Email + SMTP |
+| Gráficos, templates, log de envios | ❌ Robusta |
+
+### 10. Mobile, QA e deploy — MVP ~55% | Robusta ~25%
+
+| Item | Status |
+|------|--------|
+| Responsivo no código, scripts deploy, checklist README | ✅ |
+| QA formal 3 perfis, deploy hosting, handoff | ❌ Pendente |
+| e2e / CI, performance | ❌ Robusta |
+
+---
 
 ## Gaps restantes (prioridade)
 
-### P0 — bloqueia uso real (depende de acesso externo)
+### P0 — bloqueia uso real (~1,5–2 dias; depende de acesso externo)
 
 | Item | Status | Ação necessária |
 |------|--------|-----------------|
 | Deploy Firestore rules + indexes | Pendente | `npm run deploy:rules` com `firebase login` |
 | Firebase Storage habilitado + rules | Pendente | Habilitar no Console + deploy storage |
-| Contas de teste com roles | Script pronto | `npm run seed:accounts` + setar admin claim |
+| Contas de teste com roles | Parcial | `npm run seed:accounts` + `set-user-role.mjs` |
 | Deploy Hosting | Pendente | `npm run deploy:hosting` |
+| UIDs equipe/cliente nas visitas de teste | Pendente | Detalhe da visita → campos Equipe/Clientes |
 
-### P1 — importante, não bloqueia demo local
+### P1 — importante para qualidade MVP (~1,5–2,5 dias)
 
 | Item | Status | Ação necessária |
 |------|--------|-----------------|
-| Envio real de e-mail | Infra pronta | Instalar Trigger Email + SMTP/SendGrid + `VITE_EMAIL_MODE=firestore` |
-| QA mobile formal | Ajustes feitos | Homologação manual no checklist do README |
-| Homologação ponta a ponta | Pendente | Cliente roda checklist com dados reais |
+| Homologação ponta a ponta (3 perfis + mobile 375px) | Pendente | Checklist no README e seção 8 do SETUP-EXTERNO.md |
+| Bloqueio de rotas para cliente | Pendente código | Guard em rotas além de `isNavAllowed` no menu |
+| `canWrite` em VisitorsPage | Pendente código | Desabilitar criar/editar/excluir para cliente |
+| Financeiro/documentos em visita compartilhada | Pendente código | Queries por `visitId` + rules, não só `ownerId` |
+| Storage rules mais restritivas | Pendente código | Alinhar `storage.rules` ao acesso por visita |
+| Envio real de e-mail | Infra pronta | Trigger Email + SMTP + `VITE_EMAIL_MODE=firestore` |
 
-### P2 — Robusta (fora do MVP)
+### P2 — Robusta (fora do MVP; ~7–10 dias adicionais)
 
-- Convite de usuários por e-mail
-- Templates/duplicar visita
-- Calendário visual + drag-and-drop na agenda
+- Convite automático de usuários por e-mail
+- Duplicar visita / templates de visita
+- Calendário visual + drag-and-drop na agenda + alertas
 - Brindes no CRM
+- Histórico detalhado de alterações (visitas, tarefas, despesas)
+- Permissões granulares por módulo
 - Log completo de envios de e-mail
-- Suite e2e / CI
+- Campo idioma na visita
+- Testes e2e / CI
+- Refinamento mobile e performance
+
+---
+
+## Riscos técnicos identificados
+
+1. **Deploy não executado** — app funciona local, não em ambiente real.
+2. **Storage rules permissivas** — risco de segurança em produção.
+3. **Permissões só no menu** — cliente acessa rotas restritas por URL.
+4. **Modelo financeiro** difere do escopo genérico (aceitável se for o modelo real da operação).
+5. **Equipe não vê dados do operador** em financeiro/documentos (filtro `ownerId`).
+6. **Sem testes automatizados** — QA 100% manual.
+
+---
 
 ## Dependências externas
 
@@ -57,17 +196,25 @@ O MVP operacional integrado está implementado no código:
 3. **Provedor de e-mail:** SMTP ou SendGrid via extensão Trigger Email.
 4. **Domínio/DNS:** opcional para Hosting customizado.
 
+---
+
 ## Próximos passos recomendados
 
-1. Rodar `npm run seed:accounts` e promover um UID a admin.
+1. Rodar `npm run seed:accounts` e promover UIDs (admin, team, client).
 2. Executar `npm run deploy:rules` e habilitar Storage no Console.
-3. Homologar fluxo completo no celular (375px) com as três contas.
-4. (Opcional) Configurar Trigger Email e testar resumo automático.
-5. `npm run deploy:hosting` para URL pública de homologação.
+3. Vincular UIDs de equipe/cliente em visitas de teste.
+4. Homologar fluxo completo no celular (375px) com as três contas — ver `SETUP-EXTERNO.md` §8.
+5. Corrigir gaps P1 de código (rotas, VisitorsPage, queries compartilhadas, storage rules).
+6. (Opcional) Configurar Trigger Email e testar resumo automático.
+7. `npm run deploy:hosting` para URL pública de homologação.
+
+---
 
 ## Checklist do cliente
 
-- [ ] Homologação com dados reais de teste
+- [ ] Homologação com dados reais de teste (operador, equipe, cliente, admin)
 - [ ] Admin claim setado
+- [ ] Deploy rules + Storage habilitado
 - [ ] Deploy hosting
+- [ ] Fluxo mobile 375px validado
 - [ ] Treinamento rápido / handoff

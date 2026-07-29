@@ -1,17 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { NewVisitDialog } from '@/features/visits/NewVisitDialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { VisitDialogProvider } from '@/contexts/VisitDialogContext'
+import { scanDueReminders } from '@/services/notificationReminders'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
-  const { role, isAdmin } = useAuth()
+  const { user, role, isAdmin } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    void scanDueReminders(user.uid, isAdmin, role)
+  }, [user, isAdmin, role])
 
   return (
     <VisitDialogProvider>

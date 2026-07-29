@@ -9,21 +9,17 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import type { VisitVisitor } from '@/types'
 
 const col = collection(db, 'visitVisitors')
 
 export async function listVisitVisitors(
   visitId: string,
-  ownerId: string,
-  isAdmin: boolean,
+  ownerId?: string,
+  isAdmin?: boolean,
 ): Promise<VisitVisitor[]> {
-  const constraints = isAdmin
-    ? [where('visitId', '==', visitId)]
-    : [where('ownerId', '==', ownerId), where('visitId', '==', visitId)]
-
-  const snap = await getDocs(query(col, ...constraints))
-  return snap.docs.map((d) => {
+  return getVisitChildDocs(col, visitId, ownerId, isAdmin, (d) => {
     const data = d.data()
     return {
       id: d.id,

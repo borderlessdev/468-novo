@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   query,
@@ -10,6 +9,8 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { isActiveRecord } from '@/lib/trash'
+import { softDeleteEntity } from '@/services/trash'
 import type { Activity } from '@/types'
 
 const col = collection(db, 'activities')
@@ -31,6 +32,10 @@ function mapActivity(id: string, data: Record<string, unknown>): Activity {
       ? (data.visitorNames as string[])
       : [],
     ownerId: String(data.ownerId ?? ''),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -47,6 +52,7 @@ export async function listActivities(
 
   const snap = await getDocs(query(col, ...constraints))
   return snap.docs
+    .filter((d) => isActiveRecord(d.data()))
     .map((d) => mapActivity(d.id, d.data()))
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
 }
@@ -58,6 +64,7 @@ export async function createActivity(
   const ref = await addDoc(col, {
     ...data,
     ownerId,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -74,6 +81,6 @@ export async function updateActivity(
   })
 }
 
-export async function deleteActivity(id: string): Promise<void> {
-  await deleteDoc(doc(col, id))
+export async function deleteActivity(id: string, deletedBy: string): Promise<void> {
+  await softDeleteEntity('activity', id, deletedBy)
 }

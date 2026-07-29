@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   query,
@@ -11,6 +10,9 @@ import {
 } from 'firebase/firestore'
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
+import { getVisitChildDocs } from '@/lib/firestore-visit-query'
+import { isActiveRecord } from '@/lib/trash'
+import { softDeleteEntity } from '@/services/trash'
 import type { FinanceItem } from '@/types'
 
 const col = collection(db, 'financeItems')
@@ -30,6 +32,10 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
     attachmentPath: data.attachmentPath ? String(data.attachmentPath) : undefined,
     attachmentName: data.attachmentName ? String(data.attachmentName) : undefined,
     ownerId: String(data.ownerId ?? ''),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -40,12 +46,10 @@ export async function listFinanceItems(
   ownerId: string,
   isAdmin: boolean,
 ): Promise<FinanceItem[]> {
-  const constraints = isAdmin
-    ? [where('visitId', '==', visitId)]
-    : [where('ownerId', '==', ownerId), where('visitId', '==', visitId)]
-
-  const snap = await getDocs(query(col, ...constraints))
-  return snap.docs.map((d) => mapItem(d.id, d.data()))
+  const items = await getVisitChildDocs(col, visitId, ownerId, isAdmin, (d) =>
+    mapItem(d.id, d.data()),
+  )
+  return items.filter((item) => !item.isDeleted)
 }
 
 export async function listFinanceItemsByOwner(
@@ -54,11 +58,15 @@ export async function listFinanceItemsByOwner(
 ): Promise<FinanceItem[]> {
   if (isAdmin) {
     const snap = await getDocs(col)
-    return snap.docs.map((d) => mapItem(d.id, d.data()))
+    return snap.docs
+      .filter((d) => isActiveRecord(d.data()))
+      .map((d) => mapItem(d.id, d.data()))
   }
 
   const snap = await getDocs(query(col, where('ownerId', '==', ownerId)))
-  return snap.docs.map((d) => mapItem(d.id, d.data()))
+  return snap.docs
+    .filter((d) => isActiveRecord(d.data()))
+    .map((d) => mapItem(d.id, d.data()))
 }
 
 export async function createFinanceItem(
@@ -78,6 +86,7 @@ export async function createFinanceItem(
     attachmentPath: data.attachmentPath ?? null,
     attachmentName: data.attachmentName ?? null,
     ownerId,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -94,8 +103,8 @@ export async function updateFinanceItem(
   })
 }
 
-export async function deleteFinanceItem(id: string): Promise<void> {
-  await deleteDoc(doc(col, id))
+export async function deleteFinanceItem(id: string, deletedBy: string): Promise<void> {
+  await softDeleteEntity('financeItem', id, deletedBy)
 }
 
 const FINANCE_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']

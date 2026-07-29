@@ -22,6 +22,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Clock, GripVertical, Plus, Users } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -47,7 +48,14 @@ import { formatDateShort } from '@/lib/utils'
 import { calculateVisitProgress } from '@/lib/utils'
 import { listVisits, syncVisitProgress } from '@/services/visits'
 import { createTask, deleteTask, listTasks, updateTask } from '@/services/tasks'
+import { notifyVisitStakeholders } from '@/services/notifications'
 import type { Task, TaskStatus, Visit } from '@/types'
+
+const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  backlog: 'Pendente',
+  in_progress: 'Em andamento',
+  completed: 'Concluída',
+}
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'backlog', label: 'Backlog' },
@@ -63,7 +71,7 @@ function SortableTaskCard({
 }: {
   task: Task
   onEdit: (task: Task) => void
-  onDelete: (id: string) => void
+  onDelete: (task: Task) => void
   canWrite: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -105,9 +113,9 @@ function SortableTaskCard({
             </Button>
             <Button
               size="sm"
-              variant="ghost"
+              variant="destructive"
               className="h-7 px-2"
-              onClick={() => onDelete(task.id)}
+              onClick={() => onDelete(task)}
             >
               Excluir
             </Button>
@@ -131,7 +139,7 @@ function KanbanColumn({
   label: string
   tasks: Task[]
   onEdit: (task: Task) => void
-  onDelete: (id: string) => void
+  onDelete: (task: Task) => void
   canWrite: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
@@ -173,7 +181,7 @@ function KanbanColumn({
 }
 
 export function PlanningPage() {
-  const { user, isAdmin, role, canWrite } = useAuth()
+  const { user, isAdmin, role, canWrite, profile } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -181,6 +189,7 @@ export function PlanningPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [saving, setSaving] = useState(false)
+  const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState('todos')
 
@@ -279,6 +288,22 @@ export function PlanningPage() {
     )
     try {
       await updateTask(task.id, { status: newStatus })
+      if (selectedVisit && user) {
+        try {
+          await notifyVisitStakeholders(selectedVisit, {
+            type: 'task_status_changed',
+            title: 'Tarefa atualizada',
+            body: `"${task.title}" — ${TASK_STATUS_LABELS[newStatus]}`,
+            visitId: selectedVisit.id,
+            entityId: task.id,
+            href: `/planejamento?visita=${selectedVisit.id}`,
+            actorId: user.uid,
+            actorName: profile?.name,
+          })
+        } catch (error) {
+          console.warn('Failed to send task_status_changed notification', error)
+        }
+      }
       await refreshProgress()
     } catch (error) {
       console.error(error)
@@ -304,17 +329,24 @@ export function PlanningPage() {
     setOpen(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Excluir esta tarefa?')) return
-    try {
-      await deleteTask(id)
-      toast.success('Tarefa excluída')
-      await loadTasks()
-      await refreshProgress()
-    } catch (error) {
-      console.error(error)
-      toast.error('Não foi possível excluir')
-    }
+  const handleDeleteRequest = (task: Task) => {
+    deleteDialog.requestDelete({ id: task.id, name: task.title })
+  }
+
+  const handleDeleteConfirm = () => {
+    void deleteDialog.confirm(async (item) => {
+      if (!user) return
+      try {
+        await deleteTask(item.id, user.uid)
+        toast.success('Tarefa movida para a lixeira')
+        await loadTasks()
+        await refreshProgress()
+      } catch (error) {
+        console.error(error)
+        toast.error('Não foi possível excluir')
+        throw error
+      }
+    })
   }
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -330,7 +362,7 @@ export function PlanningPage() {
         })
         toast.success('Tarefa atualizada')
       } else {
-        await createTask(user.uid, {
+        const taskId = await createTask(user.uid, {
           visitId,
           title: values.title,
           status: values.status,
@@ -338,6 +370,22 @@ export function PlanningPage() {
           dueDate: values.dueDate || undefined,
           assigneeName: values.assigneeName || undefined,
         })
+        if (selectedVisit) {
+          try {
+            await notifyVisitStakeholders(selectedVisit, {
+              type: 'task_created',
+              title: 'Nova tarefa criada',
+              body: `"${values.title}" foi adicionada ao planejamento`,
+              visitId,
+              entityId: taskId,
+              href: `/planejamento?visita=${visitId}`,
+              actorId: user.uid,
+              actorName: profile?.name,
+            })
+          } catch (error) {
+            console.warn('Failed to send task_created notification', error)
+          }
+        }
         toast.success('Tarefa criada')
       }
       setOpen(false)
@@ -451,7 +499,7 @@ export function PlanningPage() {
                   label={column.label}
                   tasks={grouped[column.id]}
                   onEdit={openEdit}
-                  onDelete={(id) => void handleDelete(id)}
+                  onDelete={handleDeleteRequest}
                   canWrite={canWrite}
                 />
               </div>
@@ -518,6 +566,14 @@ export function PlanningPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteDialog.open}
+        onOpenChange={deleteDialog.handleOpenChange}
+        itemName={deleteDialog.target?.name}
+        loading={deleteDialog.loading}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   )
 }

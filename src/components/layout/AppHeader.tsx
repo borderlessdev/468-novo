@@ -1,8 +1,7 @@
-import { Bell, Menu, PanelLeft, Plus } from 'lucide-react'
+import { Bell, Menu, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/contexts/AuthContext'
-import { useVisitDialog } from '@/contexts/VisitDialogContext'
 
 interface AppHeaderProps {
   onMenuClick: () => void
@@ -10,8 +9,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
-  const { profile, canWrite } = useAuth()
-  const { setOpen } = useVisitDialog()
+  const { profile } = useAuth()
   const initials = (profile?.name ?? 'U')
     .split(' ')
     .map((part) => part[0])
@@ -43,12 +41,6 @@ export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        {canWrite ? (
-          <Button onClick={() => setOpen(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Nova Visita</span>
-          </Button>
-        ) : null}
         <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
           <Bell className="h-5 w-5" />
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />

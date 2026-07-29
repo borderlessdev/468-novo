@@ -1,20 +1,17 @@
 import {
   collection,
-  deleteDoc,
   doc,
-  getDocs,
-  query,
   serverTimestamp,
   setDoc,
-  where,
 } from 'firebase/firestore'
 import {
-  deleteObject,
   getDownloadURL,
   ref,
   uploadBytes,
 } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
+import { getVisitChildDocs, isFirestorePermissionDenied } from '@/lib/firestore-visit-query'
+import { softDeleteEntity } from '@/services/trash'
 import type { DocumentCategory, VisitDocument } from '@/types'
 
 const col = collection(db, 'documents')
@@ -37,23 +34,35 @@ function mapDocument(id: string, data: Record<string, unknown>): VisitDocument {
     contentType: String(data.contentType ?? ''),
     size: Number(data.size ?? 0),
     ownerId: String(data.ownerId ?? ''),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
   }
 }
 
 export async function listDocuments(
   visitId: string,
-  ownerId: string,
-  isAdmin: boolean,
+  ownerId?: string,
+  isAdmin?: boolean,
 ): Promise<VisitDocument[]> {
-  const constraints = isAdmin
-    ? [where('visitId', '==', visitId)]
-    : [where('ownerId', '==', ownerId), where('visitId', '==', visitId)]
-
-  const snap = await getDocs(query(col, ...constraints))
-  return snap.docs
-    .map((d) => mapDocument(d.id, d.data()))
-    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+  try {
+    const docs = await getVisitChildDocs(col, visitId, ownerId, isAdmin, (d) =>
+      mapDocument(d.id, d.data()),
+    )
+    return docs
+      .filter((doc) => !doc.isDeleted)
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+  } catch (error) {
+    if (isFirestorePermissionDenied(error)) {
+      console.warn(
+        'Documentos da visita indisponíveis. Publique as regras do Firestore: npm run deploy:rules',
+      )
+      return []
+    }
+    throw error
+  }
 }
 
 export async function uploadDocument(
@@ -83,6 +92,7 @@ export async function uploadDocument(
     contentType: file.type,
     size: file.size,
     ownerId,
+    isDeleted: false,
     createdAt: serverTimestamp(),
   })
 
@@ -93,11 +103,9 @@ export async function getDocumentDownloadUrl(storagePath: string): Promise<strin
   return getDownloadURL(ref(storage, storagePath))
 }
 
-export async function deleteDocument(document: VisitDocument): Promise<void> {
-  try {
-    await deleteObject(ref(storage, document.storagePath))
-  } catch {
-    // Arquivo pode já ter sido removido manualmente no Storage
-  }
-  await deleteDoc(doc(col, document.id))
+export async function deleteDocument(
+  document: VisitDocument,
+  deletedBy: string,
+): Promise<void> {
+  await softDeleteEntity('document', document.id, deletedBy)
 }

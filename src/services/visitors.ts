@@ -1,17 +1,16 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
   where,
-  type QueryConstraint,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { isActiveRecord } from '@/lib/trash'
+import { softDeleteEntity } from '@/services/trash'
 import type { Visitor } from '@/types'
 
 const visitorsCol = collection(db, 'visitors')
@@ -33,6 +32,10 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
     mobilityReduced: data.mobilityReduced === true,
     notes: data.notes ? String(data.notes) : undefined,
     ownerId: String(data.ownerId ?? ''),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -42,11 +45,13 @@ export async function listVisitors(
   ownerId: string,
   isAdmin: boolean,
 ): Promise<Visitor[]> {
-  const constraints: QueryConstraint[] = isAdmin
-    ? [orderBy('name', 'asc')]
-    : [where('ownerId', '==', ownerId), orderBy('name', 'asc')]
-  const snap = await getDocs(query(visitorsCol, ...constraints))
-  return snap.docs.map((d) => mapVisitor(d.id, d.data()))
+  const snap = await getDocs(
+    isAdmin ? query(visitorsCol) : query(visitorsCol, where('ownerId', '==', ownerId)),
+  )
+  return snap.docs
+    .filter((d) => isActiveRecord(d.data()))
+    .map((d) => mapVisitor(d.id, d.data()))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
 export async function createVisitor(
@@ -66,6 +71,7 @@ export async function createVisitor(
     mobilityReduced: data.mobilityReduced ?? false,
     notes: data.notes ?? null,
     ownerId,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -82,6 +88,6 @@ export async function updateVisitor(
   })
 }
 
-export async function deleteVisitor(id: string): Promise<void> {
-  await deleteDoc(doc(visitorsCol, id))
+export async function deleteVisitor(id: string, deletedBy: string): Promise<void> {
+  await softDeleteEntity('visitor', id, deletedBy)
 }

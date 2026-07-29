@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Calendar, MapPin, Plus } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -46,6 +47,7 @@ export function AgendaPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
   const [saving, setSaving] = useState(false)
+  const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
 
   const visitId = searchParams.get('visita') ?? ''
 
@@ -198,51 +200,50 @@ export function AgendaPage() {
       <PageHeader
         title="Agenda"
         description="Visualize a programação detalhada de uma visita específica."
-        actions={
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Visita para visualizar a agenda</Label>
-              <Select
-                value={visitId || '_unset'}
-                onValueChange={(value) => {
-                  if (value === '_unset') {
-                    setSearchParams({})
-                    return
-                  }
-                  setSearchParams({ visita: value })
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-72">
-                  <SelectValue placeholder="Selecione uma visita" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_unset">Selecione uma visita</SelectItem>
-                  {visits.map((visit) => (
-                    <SelectItem key={visit.id} value={visit.id}>
-                      {visit.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Filtrar por dia (opcional)</Label>
-                <Input
-                  type="date"
-                  value={dayFilter}
-                  onChange={(e) => setDayFilter(e.target.value)}
-                  className="w-full sm:w-44"
-                />
-              </div>
-              <Button disabled={!visitId || !canWrite} onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                Nova atividade
-              </Button>
-            </div>
-          </div>
-        }
       />
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <Label className="text-xs">Visita para visualizar a agenda</Label>
+          <Select
+            value={visitId || '_unset'}
+            onValueChange={(value) => {
+              if (value === '_unset') {
+                setSearchParams({})
+                return
+              }
+              setSearchParams({ visita: value })
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder="Selecione uma visita" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_unset">Selecione uma visita</SelectItem>
+              {visits.map((visit) => (
+                <SelectItem key={visit.id} value={visit.id}>
+                  {visit.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Filtrar por dia (opcional)</Label>
+            <Input
+              type="date"
+              value={dayFilter}
+              onChange={(e) => setDayFilter(e.target.value)}
+              className="w-full sm:w-44"
+            />
+          </div>
+          <Button disabled={!visitId || !canWrite} onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Nova atividade
+          </Button>
+        </div>
+      </div>
 
       {loading ? (
         <Skeleton className="h-64 w-full" />
@@ -336,14 +337,10 @@ export function AgendaPage() {
                     {canWrite ? (
                     <Button
                       size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        void (async () => {
-                          await deleteActivity(activity.id)
-                          toast.success('Atividade removida')
-                          await loadActivities()
-                        })()
-                      }}
+                      variant="destructive"
+                      onClick={() =>
+                        deleteDialog.requestDelete({ id: activity.id, name: activity.title })
+                      }
                     >
                       Excluir
                     </Button>
@@ -411,6 +408,21 @@ export function AgendaPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteDialog.open}
+        onOpenChange={deleteDialog.handleOpenChange}
+        itemName={deleteDialog.target?.name}
+        loading={deleteDialog.loading}
+        onConfirm={() => {
+          void deleteDialog.confirm(async (item) => {
+            if (!user) return
+            await deleteActivity(item.id, user.uid)
+            toast.success('Atividade movida para a lixeira')
+            await loadActivities()
+          })
+        }}
+      />
     </div>
   )
 }

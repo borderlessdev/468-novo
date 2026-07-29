@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -95,10 +96,13 @@ export function VisitDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false)
   const [teamIdsInput, setTeamIdsInput] = useState('')
   const [clientIdsInput, setClientIdsInput] = useState('')
+  const deleteVisitDialog = useConfirmDelete<{ id: string; name: string }>()
+  const deleteDocDialog = useConfirmDelete<VisitDocument>()
 
   const form = useForm<VisitEditInput>({
     resolver: zodResolver(visitEditSchema),
   })
+  const { reset } = form
 
   const load = useCallback(async () => {
     if (!id || !user) return
@@ -113,7 +117,7 @@ export function VisitDetailPage() {
       setVisit(visitData)
       setTeamIdsInput(visitData.teamMemberIds.join(', '))
       setClientIdsInput(visitData.clientUserIds.join(', '))
-      form.reset({
+      reset({
         title: visitData.title,
         company: visitData.company ?? '',
         state: visitData.state ?? '',
@@ -124,13 +128,27 @@ export function VisitDetailPage() {
         objective: visitData.objective ?? '',
       })
 
-      const [links, visitors, tasks, finance, docs] = await Promise.all([
+      const results = await Promise.allSettled([
         listVisitVisitors(id, user.uid, isAdmin),
         listVisitors(user.uid, isAdmin),
         listTasks(id, user.uid, isAdmin),
         listFinanceItems(id, user.uid, isAdmin),
         listDocuments(id, user.uid, isAdmin),
       ])
+
+      const failed = results.filter((result) => result.status === 'rejected')
+      if (failed.length > 0) {
+        failed.forEach((result) => {
+          if (result.status === 'rejected') console.error(result.reason)
+        })
+        toast.error('Alguns dados da visita não puderam ser carregados')
+      }
+
+      const links = results[0].status === 'fulfilled' ? results[0].value : []
+      const visitors = results[1].status === 'fulfilled' ? results[1].value : []
+      const tasks = results[2].status === 'fulfilled' ? results[2].value : []
+      const finance = results[3].status === 'fulfilled' ? results[3].value : []
+      const docs = results[4].status === 'fulfilled' ? results[4].value : []
 
       const visitorMap = new Map(visitors.map((v) => [v.id, v]))
       setLinkedVisitors(
@@ -145,8 +163,12 @@ export function VisitDetailPage() {
 
       const progress = calculateVisitProgress(tasks)
       if (progress !== visitData.progress) {
-        await syncVisitProgress(id, progress)
-        setVisit((prev) => (prev ? { ...prev, progress } : prev))
+        try {
+          await syncVisitProgress(id, progress)
+          setVisit((prev) => (prev ? { ...prev, progress } : prev))
+        } catch (error) {
+          console.error(error)
+        }
       }
     } catch (error) {
       console.error(error)
@@ -154,7 +176,7 @@ export function VisitDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, user, isAdmin, navigate, form])
+  }, [id, user, isAdmin, navigate, reset])
 
   useEffect(() => {
     void load()
@@ -209,16 +231,31 @@ export function VisitDetailPage() {
     }
   })
 
-  const onDelete = async () => {
-    if (!id || !confirm('Excluir esta visita? Esta ação não pode ser desfeita.')) return
-    try {
-      await deleteVisit(id)
-      toast.success('Visita excluída')
+  const handleDeleteVisit = () => {
+    if (!id || !visit || !user) return
+    deleteVisitDialog.requestDelete({ id, name: visit.title })
+  }
+
+  const handleDeleteVisitConfirm = () => {
+    void deleteVisitDialog.confirm(async (item) => {
+      if (!user) return
+      await deleteVisit(item.id, user.uid)
+      toast.success('Visita movida para a lixeira')
       navigate('/visitas')
-    } catch (error) {
-      console.error(error)
-      toast.error('Não foi possível excluir')
-    }
+    })
+  }
+
+  const handleDeleteDocRequest = (doc: VisitDocument) => {
+    deleteDocDialog.requestDelete(doc)
+  }
+
+  const handleDeleteDocConfirm = () => {
+    void deleteDocDialog.confirm(async (doc) => {
+      if (!user) return
+      await deleteDocument(doc, user.uid)
+      toast.success('Documento movido para a lixeira')
+      await load()
+    })
   }
 
   const handleLinkVisitor = async (visitor: Visitor) => {
@@ -276,16 +313,8 @@ export function VisitDetailPage() {
     }
   }
 
-  const handleDeleteDoc = async (doc: VisitDocument) => {
-    if (!confirm(`Excluir "${doc.name}"?`)) return
-    try {
-      await deleteDocument(doc)
-      toast.success('Documento excluído')
-      await load()
-    } catch (error) {
-      console.error(error)
-      toast.error('Não foi possível excluir')
-    }
+  const handleDeleteDoc = (doc: VisitDocument) => {
+    handleDeleteDocRequest(doc)
   }
 
   const emailSummary = visit
@@ -363,7 +392,7 @@ export function VisitDetailPage() {
               Enviar resumo
             </Button>
             {showDelete ? (
-            <Button variant="destructive" className="w-full sm:w-auto" onClick={() => void onDelete()}>
+            <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDeleteVisit}>
               <Trash2 className="h-4 w-4" />
               Excluir
             </Button>
@@ -657,8 +686,8 @@ export function VisitDetailPage() {
                         </Button>
                         <Button
                           size="sm"
-                          variant="ghost"
-                          onClick={() => void handleDeleteDoc(doc)}
+                          variant="destructive"
+                          onClick={() => handleDeleteDoc(doc)}
                         >
                           Excluir
                         </Button>
@@ -732,6 +761,22 @@ export function VisitDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteVisitDialog.open}
+        onOpenChange={deleteVisitDialog.handleOpenChange}
+        itemName={deleteVisitDialog.target?.name}
+        loading={deleteVisitDialog.loading}
+        onConfirm={handleDeleteVisitConfirm}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteDocDialog.open}
+        onOpenChange={deleteDocDialog.handleOpenChange}
+        itemName={deleteDocDialog.target?.name}
+        loading={deleteDocDialog.loading}
+        onConfirm={handleDeleteDocConfirm}
+      />
     </div>
   )
 }

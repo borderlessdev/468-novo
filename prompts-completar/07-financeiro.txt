@@ -1,6 +1,6 @@
 PROMPT 07 — Módulo financeiro da visita
 ========================================
-STATUS: [x] FEITO (opção A: manter NF/orçamentos + comprovante)
+STATUS: [~] FEITO MVP ~80% (opção A: NF/orçamentos + comprovante) — P1: equipe pode não ver linhas do operador (query ownerId)
 
 Cole no Cursor (Agent mode).
 ANTES: confirmar em REQUISITOS-ACESSOS.txt se o modelo é (A) manter NF/orçamentos, (B) despesas+comprovante, ou (C) ambos.

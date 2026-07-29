@@ -86,8 +86,12 @@ Script com Admin SDK (requer `service-account.json` na raiz ou `GOOGLE_APPLICATI
 
 ```bash
 npm install
-node scripts/set-admin-claim.mjs <uid>
+node scripts/set-user-role.mjs <uid> admin
+node scripts/set-user-role.mjs <uid> team
+node scripts/set-user-role.mjs <uid> client
 ```
+
+Ou use o atalho legado: `node scripts/set-admin-claim.mjs <uid>`
 
 ## Contas de teste
 

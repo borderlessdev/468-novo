@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Plus, Trash2, Paperclip } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -25,8 +26,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
-import { financeItemSchema, parseOptionalNumber, type FinanceItemInput } from '@/lib/validations'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { financeItemSchema, type FinanceItemInput } from '@/lib/validations'
+import {
+  formatCurrencyInput,
+  formatCurrencyNumber,
+  formatCurrency,
+  formatDate,
+  parseCurrencyInput,
+} from '@/lib/utils'
 import { listVisits } from '@/services/visits'
 import {
   createFinanceItem,
@@ -37,10 +44,11 @@ import {
   updateFinanceItem,
   uploadFinanceAttachment,
 } from '@/services/finance'
+import { notifyVisitStakeholders } from '@/services/notifications'
 import type { FinanceItem, Visit } from '@/types'
 
 export function FinancePage() {
-  const { user, isAdmin, role, canWrite } = useAuth()
+  const { user, isAdmin, role, canWrite, profile } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [items, setItems] = useState<FinanceItem[]>([])
@@ -48,6 +56,10 @@ export function FinancePage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<FinanceItem | null>(null)
   const [saving, setSaving] = useState(false)
+  const [pendingNfFile, setPendingNfFile] = useState<File | null>(null)
+  const [removePendingAttachment, setRemovePendingAttachment] = useState(false)
+  const nfFileInputRef = useRef<HTMLInputElement>(null)
+  const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
 
   const visitId = searchParams.get('visita') ?? ''
   const selectedVisit = visits.find((v) => v.id === visitId)
@@ -100,8 +112,15 @@ export function FinancePage() {
     [items],
   )
 
+  const resetNfAttachmentState = () => {
+    setPendingNfFile(null)
+    setRemovePendingAttachment(false)
+    if (nfFileInputRef.current) nfFileInputRef.current.value = ''
+  }
+
   const openCreate = () => {
     setEditing(null)
+    resetNfAttachmentState()
     form.reset({
       serviceName: '',
       budget1: '',
@@ -117,12 +136,13 @@ export function FinancePage() {
 
   const openEdit = (item: FinanceItem) => {
     setEditing(item)
+    resetNfAttachmentState()
     form.reset({
       serviceName: item.serviceName,
-      budget1: item.budget1 != null ? String(item.budget1) : '',
-      budget2: item.budget2 != null ? String(item.budget2) : '',
-      budget3: item.budget3 != null ? String(item.budget3) : '',
-      serviceValue: item.serviceValue != null ? String(item.serviceValue) : '',
+      budget1: item.budget1 != null ? formatCurrencyNumber(item.budget1) : '',
+      budget2: item.budget2 != null ? formatCurrencyNumber(item.budget2) : '',
+      budget3: item.budget3 != null ? formatCurrencyNumber(item.budget3) : '',
+      serviceValue: item.serviceValue != null ? formatCurrencyNumber(item.serviceValue) : '',
       winningCompany: item.winningCompany ?? '',
       nfReceived: item.nfReceived,
       nfDueDate: item.nfDueDate ?? '',
@@ -130,29 +150,87 @@ export function FinancePage() {
     setOpen(true)
   }
 
+  const handleDeleteConfirm = () => {
+    void deleteDialog.confirm(async (item) => {
+      if (!user) return
+      await deleteFinanceItem(item.id, user.uid)
+      toast.success('Item movido para a lixeira')
+      await loadItems()
+    })
+  }
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!user || !visitId) return
     setSaving(true)
     const payload = {
       serviceName: values.serviceName,
-      budget1: parseOptionalNumber(values.budget1),
-      budget2: parseOptionalNumber(values.budget2),
-      budget3: parseOptionalNumber(values.budget3),
-      serviceValue: parseOptionalNumber(values.serviceValue),
+      budget1: parseCurrencyInput(values.budget1),
+      budget2: parseCurrencyInput(values.budget2),
+      budget3: parseCurrencyInput(values.budget3),
+      serviceValue: parseCurrencyInput(values.serviceValue),
       winningCompany: values.winningCompany,
       nfReceived: values.nfReceived,
       nfDueDate: values.nfDueDate || undefined,
     }
     try {
+      let itemId = editing?.id
+
       if (editing) {
         await updateFinanceItem(editing.id, payload)
-        toast.success('Linha atualizada')
+        itemId = editing.id
       } else {
-        await createFinanceItem(user.uid, { visitId, ...payload })
-        toast.success('Linha adicionada')
+        itemId = await createFinanceItem(user.uid, { visitId, ...payload })
       }
+
+      if (itemId) {
+        if (removePendingAttachment && editing?.attachmentPath) {
+          await removeFinanceAttachment(editing)
+        }
+        if (payload.nfReceived && pendingNfFile) {
+          await uploadFinanceAttachment(
+            {
+              ...(editing ?? {
+                id: itemId,
+                visitId,
+                serviceName: payload.serviceName,
+                nfReceived: payload.nfReceived,
+                ownerId: user.uid,
+              }),
+              id: itemId,
+              visitId,
+              serviceName: payload.serviceName,
+              nfReceived: payload.nfReceived,
+            },
+            pendingNfFile,
+          )
+        }
+      }
+
+      const visit = visits.find((v) => v.id === visitId)
+      const nfDueDateSet = Boolean(payload.nfDueDate)
+      const nfDueDateChanged =
+        nfDueDateSet && payload.nfDueDate !== (editing?.nfDueDate ?? undefined)
+      if (visit && nfDueDateSet && !payload.nfReceived && nfDueDateChanged) {
+        try {
+          await notifyVisitStakeholders(visit, {
+            type: 'finance_nf_due',
+            title: 'NF com vencimento definido',
+            body: `"${payload.serviceName}" — vencimento em ${payload.nfDueDate}`,
+            visitId,
+            href: `/financeiro?visita=${visitId}`,
+            actorId: user.uid,
+            actorName: profile?.name,
+          })
+        } catch (error) {
+          console.warn('Failed to send finance_nf_due notification', error)
+        }
+      }
+
+      toast.success(editing ? 'Linha atualizada' : 'Linha adicionada')
+
       setOpen(false)
       setEditing(null)
+      resetNfAttachmentState()
       form.reset({
         serviceName: '',
         budget1: '',
@@ -244,34 +322,111 @@ export function FinancePage() {
               Nenhum item. Clique em &quot;Nova linha&quot; para adicionar.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+            <>
+            <div className="space-y-3 p-4 md:hidden">
+              {items.map((item) => (
+                <div key={item.id} className="rounded-lg border border-border p-4">
+                  <p className="font-medium">{item.serviceName}</p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {formatCurrency(item.serviceValue)}
+                  </p>
+                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    <p>Empresa: {item.winningCompany || '—'}</p>
+                    <p>NF: {item.nfReceived ? 'Recebida' : 'Pendente'}</p>
+                    <p>Vencimento: {formatDate(item.nfDueDate)}</p>
+                    {item.attachmentName ? (
+                      <p>Comprovante: {item.attachmentName}</p>
+                    ) : null}
+                  </div>
+                  {canWrite ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
+                        Editar
+                      </Button>
+                      <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            void (async () => {
+                              try {
+                                await uploadFinanceAttachment(item, file)
+                                toast.success('Comprovante anexado')
+                                await loadItems()
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error ? error.message : 'Falha no upload',
+                                )
+                              }
+                              e.target.value = ''
+                            })()
+                          }}
+                        />
+                        <Paperclip className="h-4 w-4" />
+                        Anexar
+                      </label>
+                      {item.attachmentPath ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            void (async () => {
+                              await removeFinanceAttachment(item)
+                              toast.success('Comprovante removido')
+                              await loadItems()
+                            })()
+                          }}
+                        >
+                          Remover anexo
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          deleteDialog.requestDelete({ id: item.id, name: item.serviceName })
+                        }
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-max min-w-full text-sm">
                 <thead className="border-y bg-muted/40 text-left text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Serviços contratados</th>
-                    <th className="px-4 py-3 font-medium">Orçamento 1</th>
-                    <th className="px-4 py-3 font-medium">Orçamento 2</th>
-                    <th className="px-4 py-3 font-medium">Orçamento 3</th>
-                    <th className="px-4 py-3 font-medium">Valor do serviço</th>
-                    <th className="px-4 py-3 font-medium">Empresa vencedora</th>
-                    <th className="px-4 py-3 font-medium">NF recebida</th>
-                    <th className="px-4 py-3 font-medium">Venc. pagamento NF</th>
-                    <th className="px-4 py-3 font-medium">Comprovante</th>
-                    <th className="px-4 py-3 font-medium">Ações</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Serviços contratados</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Primeiro orçamento</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Segundo orçamento</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Terceiro orçamento</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Valor do serviço</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Empresa vencedora</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Nota fiscal recebida</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">
+                      Vencimento do pagamento da nota fiscal
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Comprovante da nota fiscal</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{item.serviceName}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.budget1)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.budget2)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.budget3)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.serviceValue)}</td>
-                      <td className="px-4 py-3">{item.winningCompany || '—'}</td>
-                      <td className="px-4 py-3">{item.nfReceived ? 'Sim' : 'Não'}</td>
-                      <td className="px-4 py-3">{formatDate(item.nfDueDate)}</td>
-                      <td className="px-4 py-3">
+                      <td className="whitespace-nowrap px-4 py-3 font-medium">{item.serviceName}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget1)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget2)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget3)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.serviceValue)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{item.winningCompany || '—'}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{item.nfReceived ? 'Sim' : 'Não'}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{formatDate(item.nfDueDate)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
                         {item.attachmentName ? (
                           <Button
                             size="sm"
@@ -291,7 +446,7 @@ export function FinancePage() {
                           '—'
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex gap-1">
                           {canWrite ? (
                           <>
@@ -346,14 +501,10 @@ export function FinancePage() {
                           </Button>
                           <Button
                             size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              void (async () => {
-                                await deleteFinanceItem(item.id)
-                                toast.success('Linha removida')
-                                await loadItems()
-                              })()
-                            }}
+                            variant="destructive"
+                            onClick={() =>
+                              deleteDialog.requestDelete({ id: item.id, name: item.serviceName })
+                            }
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -366,6 +517,7 @@ export function FinancePage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -374,7 +526,10 @@ export function FinancePage() {
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (!value) setEditing(null)
+          if (!value) {
+            setEditing(null)
+            resetNfAttachmentState()
+          }
         }}
       >
         <DialogContent className="max-w-lg">
@@ -388,19 +543,55 @@ export function FinancePage() {
             </div>
             <div className="space-y-2">
               <Label>Orçamento 1</Label>
-              <Input type="number" step="0.01" {...form.register('budget1')} />
+              <Input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={form.watch('budget1')}
+                onChange={(e) => {
+                  form.setValue('budget1', formatCurrencyInput(e.target.value), {
+                    shouldDirty: true,
+                  })
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label>Orçamento 2</Label>
-              <Input type="number" step="0.01" {...form.register('budget2')} />
+              <Input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={form.watch('budget2')}
+                onChange={(e) => {
+                  form.setValue('budget2', formatCurrencyInput(e.target.value), {
+                    shouldDirty: true,
+                  })
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label>Orçamento 3</Label>
-              <Input type="number" step="0.01" {...form.register('budget3')} />
+              <Input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={form.watch('budget3')}
+                onChange={(e) => {
+                  form.setValue('budget3', formatCurrencyInput(e.target.value), {
+                    shouldDirty: true,
+                  })
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label>Valor do serviço</Label>
-              <Input type="number" step="0.01" {...form.register('serviceValue')} />
+              <Input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={form.watch('serviceValue')}
+                onChange={(e) => {
+                  form.setValue('serviceValue', formatCurrencyInput(e.target.value), {
+                    shouldDirty: true,
+                  })
+                }}
+              />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Empresa vencedora</Label>
@@ -413,12 +604,72 @@ export function FinancePage() {
             <label className="flex items-center gap-2 self-end text-sm">
               <Checkbox
                 checked={form.watch('nfReceived')}
-                onCheckedChange={(checked) =>
-                  form.setValue('nfReceived', checked === true)
-                }
+                onCheckedChange={(checked) => {
+                  const received = checked === true
+                  form.setValue('nfReceived', received)
+                  if (!received) {
+                    setPendingNfFile(null)
+                    setRemovePendingAttachment(false)
+                    if (nfFileInputRef.current) nfFileInputRef.current.value = ''
+                  }
+                }}
               />
               NF recebida
             </label>
+            {form.watch('nfReceived') ? (
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Arquivo da NF (opcional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Envie a nota fiscal em PDF, JPG ou PNG. Máximo 10 MB.
+              </p>
+              {editing?.attachmentPath && !removePendingAttachment && !pendingNfFile ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <span className="min-w-0 truncate">{editing.attachmentName}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRemovePendingAttachment(true)}
+                  >
+                    Remover
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#f0c27a] bg-[#fff3e0] px-4 py-2 text-sm font-medium text-[#a65f00] transition-colors hover:bg-[#ffe8c7]">
+                    <input
+                      ref={nfFileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null
+                        setPendingNfFile(file)
+                        if (file) setRemovePendingAttachment(false)
+                      }}
+                    />
+                    Escolher arquivo
+                  </label>
+                  {pendingNfFile ? (
+                    <div className="flex cursor-default items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">{pendingNfFile.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPendingNfFile(null)
+                          if (nfFileInputRef.current) nfFileInputRef.current.value = ''
+                        }}
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+            ) : null}
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
@@ -430,6 +681,14 @@ export function FinancePage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteDialog.open}
+        onOpenChange={deleteDialog.handleOpenChange}
+        itemName={deleteDialog.target?.name}
+        loading={deleteDialog.loading}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   )
 }

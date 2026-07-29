@@ -1,6 +1,6 @@
 PROMPT 02 — Autenticação, usuários e permissões
 ================================================
-STATUS: [x] FEITO (MVP) — pendente: convite por e-mail e audit log [ROBUSTA]
+STATUS: [~] FEITO MVP ~80% — P1: rotas cliente só no menu; VisitorsPage sem canWrite; UIDs manuais. Robusta: convite e audit log
 
 Cole no Cursor (Agent mode).
 ANTES: confirme a matriz de perfis em REQUISITOS-ACESSOS.txt (decisão do cliente).

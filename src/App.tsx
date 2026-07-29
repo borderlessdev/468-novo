@@ -18,6 +18,7 @@ import { PlanningPage } from '@/pages/PlanningPage'
 import { FinancePage } from '@/pages/FinancePage'
 import { ReportsPage } from '@/pages/ReportsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { TrashPage } from '@/pages/TrashPage'
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="/financeiro" element={<FinancePage />} />
               <Route path="/relatorios" element={<ReportsPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
+              <Route path="/configuracoes/lixeira" element={<TrashPage />} />
             </Route>
           </Route>
 

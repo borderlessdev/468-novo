@@ -1,6 +1,6 @@
 PROMPT 03 — Módulo de visitas e fluxo principal
 ================================================
-STATUS: [x] FEITO (MVP) — pendente: templates/duplicar/audit [ROBUSTA]
+STATUS: [~] FEITO MVP ~90% — falta idioma da visita e histórico alterações. Robusta: templates/duplicar
 
 Cole no Cursor (Agent mode):
 

@@ -3,13 +3,19 @@ REQUISITOS DE ACESSOS, CHAVES E DECISÕES
 
 Para completar o projeto de ponta a ponta, preciso (ou a equipe precisa ter pronto) o seguinte.
 
-STATUS (código vs externo)
---------------------------
+STATUS (código vs externo) — atualizado jul/2026
+------------------------------------------------
 [x] Código MVP principal implementado (visitas, agenda, CRM, tarefas, financeiro, docs, perfis)
 [x] Mobile cards + scripts deploy/seed no repo
 [x] E-mail: mailto + fila Firestore (extensão Trigger Email) no código
+[x] Kanban tarefas + exports CSV/PDF (itens Robusta antecipados)
+[~] Permissões MVP ~80% — rotas cliente e VisitorsPage pendentes (ver MVP-RELATORIO.md P1)
+[~] Queries financeiro/documentos — equipe pode não ver dados do operador (ownerId)
 [ ] Acessos/deploy Firebase ainda necessários para uso real
 [ ] Provedor de e-mail (SMTP) ainda necessário para envio automático
+[ ] Homologação formal 3 perfis + mobile — pendente
+
+Avaliação completa: prompts-completar/MVP-RELATORIO.md
 
 --------------------------------------------------------------------------------
 1) FIREBASE (obrigatório)
@@ -20,7 +26,7 @@ Preciso que alguém com acesso de Owner/Editor no Firebase Console confirme:
 
 [ ] Acesso ao Console Firebase do projeto borderless-e4a6a
 [x] Firebase Authentication habilitado (Email/Password) — já em uso no app
-[ ] Firestore em modo produção (ou regras já deployadas) — rules novas no repo, deploy pendente
+[ ] Firestore em modo produção (ou regras já deployadas) — rules no repo, deploy pendente
 [ ] Firebase Storage HABILITADO + rules deployadas — código pronto; enable/deploy pendente
 [ ] Firebase Hosting com permissão de deploy
 [ ] Conta com firebase-tools logado (firebase login)
@@ -68,6 +74,11 @@ Preciso que confirmem (ou peçam ajuste):
 [x] Equipe via teamMemberIds por visita
 [ ] Quem cria usuários: só Admin? convite por e-mail? — convite ainda não implementado
 
+GAPS CONHECIDOS (código — P1):
+[~] Bloqueio de rotas: só menu filtra cliente; URL direta ainda abre módulos
+[~] VisitorsPage sem canWrite — cliente pode mutar CRM se acessar /visitantes
+[~] Vínculo equipe/cliente por UID manual (sem seletor de usuários)
+
 --------------------------------------------------------------------------------
 4) FINANCEIRO — MODELO DE DADOS (decisão)
 --------------------------------------------------------------------------------
@@ -78,6 +89,9 @@ Preciso que confirmem (ou peçam ajuste):
 Categorias padrão desejadas (se despesas):
 [ ] lista (ex.: transporte, hotel, alimentação, brinde, outros) — N/A enquanto opção A
 
+GAP CONHECIDO:
+[~] listFinanceItems filtra por ownerId — equipe pode não ver linhas do operador na visita compartilhada
+
 --------------------------------------------------------------------------------
 5) DOCUMENTOS / STORAGE (obrigatório para módulo 08)
 --------------------------------------------------------------------------------
@@ -86,7 +100,11 @@ Categorias padrão desejadas (se despesas):
 [x] Tipos permitidos no código: PDF, JPG, PNG, WEBP
 [x] Tamanho máximo: 10 MB
 [x] Categorias: contrato, boarding, briefing, comprovante, outro
-[x] Quem pode baixar: autenticado com acesso à visita (rules)
+[x] Quem pode baixar: autenticado com acesso à visita (Firestore rules)
+
+GAP CONHECIDO:
+[~] storage.rules atuais: qualquer autenticado lê/escreve em visits/* — endurecer antes de produção
+[~] listDocuments filtra por ownerId — mesmo problema da equipe que no financeiro
 
 --------------------------------------------------------------------------------
 6) AMBIENTES E DOMÍNIO (para deploy final)
@@ -114,13 +132,26 @@ Categorias padrão desejadas (se despesas):
 --------------------------------------------------------------------------------
 RESUMO DO QUE AINDA BLOQUEIA O FECHAMENTO
 --------------------------------------------------------------------------------
-Já desbloqueado no código:
+Já desbloqueado no código (~85–90% MVP):
 1. [x] 3 perfis + matriz padrão
 2. [x] Modelo financeiro opção A + comprovante
 3. [x] Módulo documentos no código
+4. [x] Kanban, relatórios CSV/PDF (Robusta antecipada)
 
-Ainda bloqueante externo:
+Ainda bloqueante externo (P0):
 1. Storage habilitado + deploy de rules/indexes
-2. Provedor de e-mail + credenciais (envio automático)
-3. Contas de teste e quem será admin (UID para setar claim)
-4. Deploy hosting (+ domínio se houver)
+2. Contas de teste e quem será admin (UID para setar claim)
+3. Deploy hosting (+ domínio se houver)
+4. Homologação ponta a ponta (SETUP-EXTERNO.md §7)
+
+Ainda bloqueante código (P1 — ver MVP-RELATORIO.md):
+1. Rotas cliente + VisitorsPage canWrite
+2. Queries financeiro/documentos para visita compartilhada
+3. storage.rules mais restritivas
+
+Opcional (P1 externo):
+- Provedor de e-mail + credenciais (envio automático)
+
+Robusta (P2 — ~7–10 dias adicionais):
+- Convite usuários, templates visita, calendário agenda, brindes CRM
+- Histórico alterações, permissões granulares, log e-mail, e2e/CI

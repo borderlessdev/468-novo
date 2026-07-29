@@ -1,18 +1,20 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { LogOut } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash'
 import { profileSchema, type ProfileInput } from '@/lib/validations'
 
 export function SettingsPage() {
-  const { profile, logout, updateProfileData } = useAuth()
+  const { profile, updateProfileData } = useAuth()
   const [saving, setSaving] = useState(false)
 
   const form = useForm<ProfileInput>({
@@ -46,56 +48,53 @@ export function SettingsPage() {
         description="Gerencie seu perfil e preferências da conta."
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Perfil</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome</Label>
-                <Input {...form.register('name')} />
-              </div>
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input value={profile?.email ?? ''} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>URL da foto</Label>
-                <Input {...form.register('photoURL')} placeholder="https://" />
-              </div>
-              <div className="space-y-2">
-                <Label>Papel</Label>
-                <Input value={profile?.role ?? 'user'} disabled />
-              </div>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Salvando...' : 'Salvar alterações'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sessão</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Encerre a sessão neste dispositivo com segurança.
-            </p>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                void logout().then(() => toast.success('Sessão encerrada'))
-              }}
-            >
-              <LogOut className="h-4 w-4" />
-              Sair da conta
+      <Card className="max-w-lg">
+        <CardHeader>
+          <CardTitle>Perfil</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nome</Label>
+              <Input {...form.register('name')} />
+            </div>
+            <div className="space-y-2">
+              <Label>E-mail</Label>
+              <Input value={profile?.email ?? ''} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label>URL da foto</Label>
+              <Input {...form.register('photoURL')} placeholder="https://" />
+            </div>
+            <div className="space-y-2">
+              <Label>Papel</Label>
+              <Input value={profile?.role ?? 'user'} disabled />
+            </div>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar alterações'}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 max-w-lg">
+        <CardHeader>
+          <CardTitle>Lixeira</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Visitas, visitantes, agenda, tarefas, financeiro e documentos excluídos
+            ficam na lixeira por {TRASH_RETENTION_DAYS} dias. Você pode restaurar ou apagar
+            permanentemente.
+          </p>
+          <Button variant="outline" asChild>
+            <Link to="/configuracoes/lixeira">
+              <Trash2 className="h-4 w-4" />
+              Abrir lixeira
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

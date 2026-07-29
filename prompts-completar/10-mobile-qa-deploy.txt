@@ -1,6 +1,6 @@
 PROMPT 10 — Responsividade, mobile-first, QA e deploy
 ======================================================
-STATUS: [x] FEITO no código — mobile cards/scroll + README/checklist; deploy real pendente
+STATUS: [~] FEITO MVP ~55% — mobile no código; QA formal 3 perfis + deploy hosting pendentes (SETUP-EXTERNO.md §7)
 
 Cole no Cursor (Agent mode):
 

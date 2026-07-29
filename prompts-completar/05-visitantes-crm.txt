@@ -1,6 +1,6 @@
 PROMPT 05 — Gestão de visitantes e CRM
 =======================================
-STATUS: [x] FEITO (MVP) — pendente: brindes/busca avançada [ROBUSTA]
+STATUS: [x] FEITO MVP ~95% — histórico simples ao editar. Robusta: brindes, busca inteligente
 
 Cole no Cursor (Agent mode):
 

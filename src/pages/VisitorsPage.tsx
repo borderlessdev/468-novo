@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Plus, Search, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
+import { formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
 import { listVisitIdsForVisitor } from '@/services/visitVisitors'
 import { getVisit } from '@/services/visits'
@@ -34,6 +36,7 @@ export function VisitorsPage() {
   const [editing, setEditing] = useState<Visitor | null>(null)
   const [visitHistory, setVisitHistory] = useState<{ id: string; title: string }[]>([])
   const [saving, setSaving] = useState(false)
+  const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
 
   const form = useForm<VisitorInput>({
     resolver: zodResolver(visitorSchema),
@@ -52,21 +55,22 @@ export function VisitorsPage() {
     },
   })
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { showLoading?: boolean }) => {
     if (!user) return
-    setLoading(true)
+    const showLoading = options?.showLoading ?? false
+    if (showLoading) setLoading(true)
     try {
       setVisitors(await listVisitors(user.uid, isAdmin))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar visitantes')
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [user, isAdmin])
 
   useEffect(() => {
-    void load()
+    void load({ showLoading: true })
   }, [load])
 
   const filtered = useMemo(() => {
@@ -107,7 +111,7 @@ export function VisitorsPage() {
       company: visitor.company ?? '',
       role: visitor.role ?? '',
       country: visitor.country ?? '',
-      weightKg: visitor.weightKg != null ? String(visitor.weightKg) : '',
+      weightKg: visitor.weightKg != null ? formatWeightKgNumber(visitor.weightKg) : '',
       shoeSize: visitor.shoeSize != null ? String(visitor.shoeSize) : '',
       dietaryRestriction: visitor.dietaryRestriction ?? '',
       notes: visitor.notes ?? '',
@@ -139,7 +143,7 @@ export function VisitorsPage() {
       company: values.company,
       role: values.role,
       country: values.country,
-      weightKg: parseOptionalNumber(values.weightKg),
+      weightKg: parseWeightKg(values.weightKg),
       shoeSize: parseOptionalNumber(values.shoeSize),
       dietaryRestriction: values.dietaryRestriction,
       language: values.language,
@@ -164,16 +168,19 @@ export function VisitorsPage() {
     }
   })
 
-  const onDelete = async (id: string) => {
-    if (!confirm('Excluir este visitante?')) return
-    try {
-      await deleteVisitor(id)
-      toast.success('Visitante excluído')
-      await load()
-    } catch (error) {
-      console.error(error)
-      toast.error('Não foi possível excluir')
-    }
+  const handleDeleteConfirm = () => {
+    void deleteDialog.confirm(async (item) => {
+      if (!user) return
+      try {
+        await deleteVisitor(item.id, user.uid)
+        toast.success('Visitante movido para a lixeira')
+        await load()
+      } catch (error) {
+        console.error(error)
+        toast.error('Não foi possível excluir')
+        throw error
+      }
+    })
   }
 
   return (
@@ -186,7 +193,7 @@ export function VisitorsPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="pl-9 sm:w-64"
+                className="pl-9 sm:w-80"
                 placeholder="Buscar por nome ou documento"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -256,9 +263,9 @@ export function VisitorsPage() {
                     </Button>
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="destructive"
                       className="flex-1"
-                      onClick={() => void onDelete(visitor.id)}
+                      onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}
                     >
                       Excluir
                     </Button>
@@ -288,7 +295,7 @@ export function VisitorsPage() {
                       <td className="px-4 py-3">{visitor.role || '—'}</td>
                       <td className="px-4 py-3">{visitor.country || '—'}</td>
                       <td className="px-4 py-3">
-                        {visitor.weightKg != null ? `${visitor.weightKg} kg` : '—'}
+                        {visitor.weightKg != null ? `${formatWeightKgNumber(visitor.weightKg)} kg` : '—'}
                       </td>
                       <td className="px-4 py-3">{visitor.shoeSize ?? '—'}</td>
                       <td className="px-4 py-3">
@@ -305,8 +312,8 @@ export function VisitorsPage() {
                           </Button>
                           <Button
                             size="sm"
-                            variant="ghost"
-                            onClick={() => void onDelete(visitor.id)}
+                            variant="destructive"
+                            onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}
                           >
                             Excluir
                           </Button>
@@ -352,7 +359,16 @@ export function VisitorsPage() {
             </div>
             <div className="space-y-2">
               <Label>Peso (kg)</Label>
-              <Input type="number" step="0.1" {...form.register('weightKg')} />
+              <Input
+                inputMode="decimal"
+                placeholder="0,0"
+                value={form.watch('weightKg')}
+                onChange={(e) => {
+                  form.setValue('weightKg', formatWeightKgInput(e.target.value), {
+                    shouldDirty: true,
+                  })
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label>Nº calçado</Label>
@@ -404,6 +420,14 @@ export function VisitorsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteDialog.open}
+        onOpenChange={deleteDialog.handleOpenChange}
+        itemName={deleteDialog.target?.name}
+        loading={deleteDialog.loading}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   )
 }

@@ -1,13 +1,14 @@
 PROMPT 11 — Fechamento MVP ponta a ponta (orquestração)
 ========================================================
-STATUS: [x] FEITO — relatório em MVP-RELATORIO.md; homologação/deploy externo pendente
+STATUS: [x] FEITO — relatório em MVP-RELATORIO.md (atualizado jul/2026)
+        Homologação/deploy externo + fixes P1 de código pendentes
 
 Use DEPOIS dos prompts 01–10.
 Cole no Cursor (Agent mode):
 
 ---
 
-Faça uma passagem final no Promoter Experience para fechar o MVP operacional.
+Faça uma passagem final no Promover Experience para fechar o MVP operacional.
 
 1. Compare o estado do código com este escopo MVP mínimo:
    - [x] Auth + 3 perfis (user/team/client + admin claim) no código
@@ -23,16 +24,38 @@ Faça uma passagem final no Promoter Experience para fechar o MVP operacional.
    - [x] README de deploy/aceite
 
 2. Liste gaps restantes em prioridade P0/P1/P2. → ver MVP-RELATORIO.md
-3. Corrija apenas P0 (bugs que impedem o fluxo feliz). → nenhum bug P0 no código
+3. Corrija apenas P0 (bugs que impedem o fluxo feliz). → nenhum bug P0 no código local
 4. Não comece itens Robusta.
 5. Entregue relatório em MVP-RELATORIO.md.
 
-Gaps conhecidos (externos):
-- P0: deploy firestore.rules + indexes + storage.rules; Storage habilitado
-- P0: contas de teste com roles/claims setados (scripts prontos)
-- P1: extensão Trigger Email + SMTP
-- P1: QA mobile ponta a ponta (homologação manual)
-- P2: convite usuários, templates visita, calendário agenda [ROBUSTA]
+AVALIAÇÃO JUL/2026 (vs escopo MVP/Robusta)
+------------------------------------------
+Código MVP:      ~85–90%
+Operacional:     ~65–70%
+Robusta:         ~25–35%
+Dias restantes:  MVP ~3–5 úteis | Robusta +7–10 além do MVP
+
+Gaps conhecidos:
+
+P0 (externo — bloqueia uso real):
+- deploy firestore.rules + indexes + storage.rules
+- Storage habilitado no Console
+- contas de teste com roles/claims (scripts prontos)
+- UIDs equipe/cliente nas visitas de teste
+- deploy hosting
+
+P1 (qualidade MVP):
+- homologação 3 perfis + mobile 375px (SETUP-EXTERNO.md §7)
+- código: bloquear rotas para cliente (além do menu)
+- código: canWrite em VisitorsPage
+- código: queries financeiro/documentos para visita compartilhada
+- código: endurecer storage.rules
+- extensão Trigger Email + SMTP (opcional)
+
+P2 [ROBUSTA]:
+- convite usuários, templates/duplicar visita, calendário agenda
+- brindes CRM, histórico alterações, permissões granulares
+- log envios e-mail, idioma na visita, e2e/CI
 
 Restrições:
 - Mudanças mínimas e seguras.
@@ -41,7 +64,9 @@ Restrições:
 ---
 
 Checklist do cliente:
-[ ] Homologação com dados reais de teste
+[ ] Homologação com dados reais (operador, equipe, cliente, admin)
 [ ] Admin claim setado
+[ ] Deploy rules + Storage habilitado
 [ ] Deploy hosting
+[ ] Fluxo mobile 375px validado
 [ ] Treinamento rápido / handoff

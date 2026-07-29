@@ -1,3 +1,28 @@
+export type TrashEntityType =
+  | 'visit'
+  | 'visitor'
+  | 'activity'
+  | 'task'
+  | 'financeItem'
+  | 'document'
+
+export interface SoftDeletable {
+  isDeleted?: boolean
+  deletedAt?: unknown
+  deletedBy?: string
+  expiresAt?: unknown
+}
+
+export interface TrashItem {
+  id: string
+  entityType: TrashEntityType
+  title: string
+  ownerId: string
+  deletedAt?: unknown
+  expiresAt?: unknown
+  visitId?: string
+}
+
 export type UserRole = 'user' | 'team' | 'client' | 'admin'
 
 export type VisitStatus =
@@ -18,7 +43,7 @@ export interface UserProfile {
   updatedAt?: unknown
 }
 
-export interface Visit {
+export interface Visit extends SoftDeletable {
   id: string
   title: string
   company?: string
@@ -37,7 +62,7 @@ export interface Visit {
   updatedAt?: unknown
 }
 
-export interface Visitor {
+export interface Visitor extends SoftDeletable {
   id: string
   name: string
   document: string
@@ -63,7 +88,7 @@ export interface VisitVisitor {
   createdAt?: unknown
 }
 
-export interface Activity {
+export interface Activity extends SoftDeletable {
   id: string
   visitId: string
   title: string
@@ -79,7 +104,7 @@ export interface Activity {
   updatedAt?: unknown
 }
 
-export interface Task {
+export interface Task extends SoftDeletable {
   id: string
   visitId: string
   title: string
@@ -92,7 +117,7 @@ export interface Task {
   updatedAt?: unknown
 }
 
-export interface FinanceItem {
+export interface FinanceItem extends SoftDeletable {
   id: string
   visitId: string
   serviceName: string
@@ -117,7 +142,7 @@ export type DocumentCategory =
   | 'comprovante'
   | 'outro'
 
-export interface VisitDocument {
+export interface VisitDocument extends SoftDeletable {
   id: string
   visitId: string
   name: string
@@ -126,5 +151,31 @@ export interface VisitDocument {
   contentType: string
   size: number
   ownerId: string
+  createdAt?: unknown
+}
+
+export type NotificationType =
+  | 'visit_created'
+  | 'visit_status_changed'
+  | 'task_created'
+  | 'task_status_changed'
+  | 'task_due_soon'
+  | 'document_uploaded'
+  | 'finance_nf_due'
+  | 'team_updated'
+
+export interface Notification {
+  id: string
+  recipientId: string
+  type: NotificationType
+  title: string
+  body: string
+  visitId?: string
+  entityId?: string
+  href?: string
+  read: boolean
+  actorId?: string
+  actorName?: string
+  dedupeKey?: string
   createdAt?: unknown
 }

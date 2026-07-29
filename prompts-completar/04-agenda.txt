@@ -1,6 +1,6 @@
 PROMPT 04 — Agenda e programação da visita
 ==========================================
-STATUS: [x] FEITO (MVP) — pendente: calendário/dnd/alertas [ROBUSTA]
+STATUS: [x] FEITO MVP ~95% — Robusta: calendário visual, dnd, alertas
 
 Cole no Cursor (Agent mode):
 

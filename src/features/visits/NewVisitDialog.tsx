@@ -29,10 +29,11 @@ import {
   type QuickVisitorInput,
   type VisitInput,
 } from '@/lib/validations'
-import { createVisit } from '@/services/visits'
+import { createVisit, getVisit } from '@/services/visits'
 import { createVisitor, listVisitors } from '@/services/visitors'
 import { linkVisitorToVisit } from '@/services/visitVisitors'
 import { createTasksBatch } from '@/services/tasks'
+import { notifyVisitStakeholders } from '@/services/notifications'
 import type { Visitor } from '@/types'
 import { Search, UserPlus, X } from 'lucide-react'
 
@@ -42,7 +43,7 @@ interface NewVisitDialogProps {
 
 export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const { open, setOpen } = useVisitDialog()
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, profile } = useAuth()
   const [saving, setSaving] = useState(false)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [selectedVisitors, setSelectedVisitors] = useState<Visitor[]>([])
@@ -148,6 +149,23 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
 
       if (values.startWithChecklist) {
         await createTasksBatch(user.uid, visitId, DEFAULT_CHECKLIST)
+      }
+
+      const createdVisit = await getVisit(visitId)
+      if (createdVisit) {
+        try {
+          await notifyVisitStakeholders(createdVisit, {
+            type: 'visit_created',
+            title: 'Nova visita criada',
+            body: `"${values.title}" foi adicionada ao sistema`,
+            visitId,
+            href: `/visitas/${visitId}`,
+            actorId: user.uid,
+            actorName: profile?.name,
+          })
+        } catch (error) {
+          console.warn('Failed to send visit_created notification', error)
+        }
       }
 
       toast.success('Visita criada com sucesso')

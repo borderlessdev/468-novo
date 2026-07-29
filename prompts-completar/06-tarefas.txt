@@ -1,6 +1,6 @@
 PROMPT 06 — Tarefas e planejamento operacional
 ===============================================
-STATUS: [x] FEITO (MVP)
+STATUS: [x] FEITO MVP ~100% — Kanban antecipado da Robusta; responsável é texto livre (não usuário)
 
 Cole no Cursor (Agent mode):
 

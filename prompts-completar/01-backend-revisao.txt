@@ -1,6 +1,6 @@
 PROMPT 01 — Revisão geral, backend e estrutura de dados
 =======================================================
-STATUS: [x] FEITO
+STATUS: [~] FEITO MVP ~85% — deploy rules/indexes/storage pendente; storage.rules permissivas; queries ownerId vs visita compartilhada (ver MVP-RELATORIO.md P0/P1)
 
 Cole no Cursor (Agent mode):
 

@@ -1,6 +1,6 @@
 PROMPT 09 — Dashboard, relatórios e e-mails
 ============================================
-STATUS: [x] FEITO no código — mailto (padrão) + fila Firestore (Trigger Email); SMTP externo pendente
+STATUS: [~] FEITO MVP ~85% — mailto + fila Firestore; SMTP/Trigger Email pendente. Exports CSV/PDF antecipados da Robusta
 
 Cole no Cursor (Agent mode).
 PRÉ-REQUISITO para envio real: extensão Trigger Email + SMTP/SendGrid (ver REQUISITOS-ACESSOS.txt).

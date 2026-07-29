@@ -6,13 +6,16 @@ import {
   DollarSign,
   LayoutDashboard,
   ListTodo,
+  LogOut,
   MapPin,
   Settings,
   Users,
   X,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { isNavAllowed } from '@/lib/access'
+import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/types'
 
 const icons = {
@@ -46,6 +49,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSidebarProps) {
+  const { logout } = useAuth()
+
   return (
     <>
       <div
@@ -110,6 +115,23 @@ export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSideb
             )
           })}
         </nav>
+
+        <div className="border-t border-sidebar-foreground/10 p-3">
+          <button
+            type="button"
+            onClick={() => {
+              void logout().then(() => toast.success('Sessão encerrada'))
+            }}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-white',
+              collapsed && 'justify-center px-2',
+            )}
+            title="Sair da conta"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed ? <span>Sair</span> : null}
+          </button>
+        </div>
       </aside>
     </>
   )

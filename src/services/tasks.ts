@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   query,
@@ -11,7 +10,11 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { Task, TaskStatus } from '@/types'
+import { getVisitChildDocs } from '@/lib/firestore-visit-query'
+import { isActiveRecord } from '@/lib/trash'
+import { softDeleteEntity } from '@/services/trash'
+import { listVisits } from '@/services/visits'
+import type { Task, TaskStatus, UserRole } from '@/types'
 
 const col = collection(db, 'tasks')
 
@@ -25,6 +28,10 @@ function mapTask(id: string, data: Record<string, unknown>): Task {
     dueDate: data.dueDate ? String(data.dueDate) : undefined,
     assigneeName: data.assigneeName ? String(data.assigneeName) : undefined,
     ownerId: String(data.ownerId ?? ''),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -48,29 +55,51 @@ export async function listTasks(
   ownerId: string,
   isAdmin: boolean,
 ): Promise<Task[]> {
-  const constraints = isAdmin
-    ? [where('visitId', '==', visitId)]
-    : [where('ownerId', '==', ownerId), where('visitId', '==', visitId)]
+  const tasks = await getVisitChildDocs(col, visitId, ownerId, isAdmin, (d) =>
+    mapTask(d.id, d.data()),
+  )
+  return sortTasks(tasks.filter((task) => !task.isDeleted))
+}
 
-  const snap = await getDocs(query(col, ...constraints))
-  return sortTasks(snap.docs.map((d) => mapTask(d.id, d.data())))
+function sortPendingTasks(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    if (!a.dueDate && !b.dueDate) return a.title.localeCompare(b.title)
+    if (!a.dueDate) return 1
+    if (!b.dueDate) return -1
+    const byDue = a.dueDate.localeCompare(b.dueDate)
+    if (byDue !== 0) return byDue
+    return a.title.localeCompare(b.title)
+  })
 }
 
 export async function listPendingTasks(
-  ownerId: string,
+  userId: string,
   isAdmin: boolean,
+  role: UserRole = 'user',
 ): Promise<Task[]> {
-  const constraints = isAdmin
-    ? [where('status', 'in', ['backlog', 'in_progress'])]
-    : [
-        where('ownerId', '==', ownerId),
-        where('status', 'in', ['backlog', 'in_progress']),
-      ]
+  if (isAdmin) {
+    const snap = await getDocs(
+      query(col, where('status', 'in', ['backlog', 'in_progress'])),
+    )
+    return sortPendingTasks(
+      snap.docs
+        .filter((d) => isActiveRecord(d.data()))
+        .map((d) => mapTask(d.id, d.data())),
+    )
+  }
 
-  const snap = await getDocs(query(col, ...constraints))
-  return snap.docs
-    .map((d) => mapTask(d.id, d.data()))
-    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
+  const visits = await listVisits(userId, isAdmin, role)
+  if (visits.length === 0) return []
+
+  const tasksPerVisit = await Promise.all(
+    visits.map((visit) => listTasks(visit.id, userId, isAdmin)),
+  )
+
+  return sortPendingTasks(
+    tasksPerVisit
+      .flat()
+      .filter((task) => task.status === 'backlog' || task.status === 'in_progress'),
+  )
 }
 
 export async function createTask(
@@ -85,6 +114,7 @@ export async function createTask(
     dueDate: data.dueDate ?? null,
     assigneeName: data.assigneeName ?? null,
     ownerId,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -107,6 +137,7 @@ export async function createTasksBatch(
       dueDate: null,
       assigneeName: null,
       ownerId,
+      isDeleted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
@@ -124,6 +155,6 @@ export async function updateTask(
   })
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  await deleteDoc(doc(col, id))
+export async function deleteTask(id: string, deletedBy: string): Promise<void> {
+  await softDeleteEntity('task', id, deletedBy)
 }

@@ -10,6 +10,7 @@ import {
   MapPin,
   RotateCcw,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { VisitStatusBadge, TaskStatusBadge } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -56,7 +57,7 @@ export function DashboardPage() {
     try {
       const [visitsData, tasksData, financeData] = await Promise.all([
         listVisits(user.uid, isAdmin, role),
-        listPendingTasks(user.uid, isAdmin),
+        listPendingTasks(user.uid, isAdmin, role),
         listFinanceItemsByOwner(user.uid, isAdmin),
       ])
       setVisits(visitsData)
@@ -64,6 +65,7 @@ export function DashboardPage() {
       setFinanceItems(financeData)
     } catch (error) {
       console.error(error)
+      toast.error('Erro ao carregar o dashboard')
     } finally {
       setLoading(false)
     }
@@ -115,6 +117,8 @@ export function DashboardPage() {
   const upcoming = [...cycleVisits]
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 5)
+
+  const visitById = useMemo(() => new Map(visits.map((v) => [v.id, v])), [visits])
 
   const kpis = [
     {
@@ -263,20 +267,25 @@ export function DashboardPage() {
                 description="As tarefas do planejamento aparecerão aqui."
               />
             ) : (
-              tasks.map((task) => (
-                <div
+              tasks.map((task) => {
+                const visit = visitById.get(task.visitId)
+                return (
+                <Link
                   key={task.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+                  to={`/planejamento?visita=${task.visitId}`}
+                  className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-medium">{task.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      Prazo: {formatDate(task.dueDate)}
+                      {visit ? `${visit.title} · ` : ''}
+                      Prazo: {task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}
                     </p>
                   </div>
                   <TaskStatusBadge status={task.status} />
-                </div>
-              ))
+                </Link>
+                )
+              })
             )}
           </CardContent>
         </Card>

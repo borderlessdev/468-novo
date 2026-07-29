@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -12,6 +11,8 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { isActiveRecord } from '@/lib/trash'
+import { softDeleteEntity } from '@/services/trash'
 import type { UserRole, Visit, VisitStatus } from '@/types'
 
 const visitsCol = collection(db, 'visits')
@@ -36,6 +37,10 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
       ? (data.clientUserIds as string[])
       : [],
     ownerId: String(data.ownerId ?? ''),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -51,7 +56,9 @@ function mergeVisits(visits: Visit[]): Visit[] {
 export async function getVisit(id: string): Promise<Visit | null> {
   const snap = await getDoc(doc(visitsCol, id))
   if (!snap.exists()) return null
-  return mapVisit(snap.id, snap.data())
+  const data = snap.data()
+  if (!isActiveRecord(data)) return null
+  return mapVisit(snap.id, data)
 }
 
 export async function listVisits(
@@ -61,7 +68,9 @@ export async function listVisits(
 ): Promise<Visit[]> {
   if (isAdmin) {
     const snap = await getDocs(query(visitsCol, orderBy('startDate', 'desc')))
-    return snap.docs.map((d) => mapVisit(d.id, d.data()))
+    return snap.docs
+      .filter((d) => isActiveRecord(d.data()))
+      .map((d) => mapVisit(d.id, d.data()))
   }
 
   if (role === 'client') {
@@ -72,7 +81,9 @@ export async function listVisits(
         orderBy('startDate', 'desc'),
       ),
     )
-    return snap.docs.map((d) => mapVisit(d.id, d.data()))
+    return snap.docs
+      .filter((d) => isActiveRecord(d.data()))
+      .map((d) => mapVisit(d.id, d.data()))
   }
 
   if (role === 'team') {
@@ -93,15 +104,21 @@ export async function listVisits(
       ),
     ])
     return mergeVisits([
-      ...ownedSnap.docs.map((d) => mapVisit(d.id, d.data())),
-      ...teamSnap.docs.map((d) => mapVisit(d.id, d.data())),
+      ...ownedSnap.docs
+        .filter((d) => isActiveRecord(d.data()))
+        .map((d) => mapVisit(d.id, d.data())),
+      ...teamSnap.docs
+        .filter((d) => isActiveRecord(d.data()))
+        .map((d) => mapVisit(d.id, d.data())),
     ])
   }
 
   const snap = await getDocs(
     query(visitsCol, where('ownerId', '==', uid), orderBy('startDate', 'desc')),
   )
-  return snap.docs.map((d) => mapVisit(d.id, d.data()))
+  return snap.docs
+    .filter((d) => isActiveRecord(d.data()))
+    .map((d) => mapVisit(d.id, d.data()))
 }
 
 export async function createVisit(
@@ -127,6 +144,7 @@ export async function createVisit(
     teamMemberIds: data.teamMemberIds ?? [],
     clientUserIds: data.clientUserIds ?? [],
     ownerId,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -143,8 +161,8 @@ export async function updateVisit(
   })
 }
 
-export async function deleteVisit(id: string): Promise<void> {
-  await deleteDoc(doc(visitsCol, id))
+export async function deleteVisit(id: string, deletedBy: string): Promise<void> {
+  await softDeleteEntity('visit', id, deletedBy)
 }
 
 export async function syncVisitProgress(visitId: string, progress: number): Promise<void> {
