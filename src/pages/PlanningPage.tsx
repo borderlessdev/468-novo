@@ -20,7 +20,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Clock, GripVertical, Plus, Users } from 'lucide-react'
+import { Clock, Plus, Users } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Badge } from '@/components/ui/badge'
@@ -84,45 +84,40 @@ function SortableTaskCard({
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      className={`rounded-lg border bg-card p-3 shadow-sm ${isDragging ? 'opacity-40' : ''}`}
+      className={`cursor-grab rounded-lg border bg-card p-3 shadow-sm active:cursor-grabbing ${
+        isDragging ? 'opacity-40' : ''
+      }`}
+      {...attributes}
+      {...listeners}
     >
-      <div className="flex items-start gap-2">
-        <button
-          type="button"
-          className="mt-0.5 cursor-grab text-muted-foreground active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
+      <p className="text-sm font-medium">{task.title}</p>
+      {task.assigneeName ? (
+        <p className="mt-1 text-xs text-muted-foreground">Resp.: {task.assigneeName}</p>
+      ) : null}
+      {task.dueDate ? (
+        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          {formatDateShort(task.dueDate)}
+        </p>
+      ) : null}
+      {canWrite ? (
+        <div
+          className="mt-2 flex gap-1"
+          onPointerDown={(e) => e.stopPropagation()}
         >
-          <GripVertical className="h-4 w-4" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{task.title}</p>
-          {task.assigneeName ? (
-            <p className="mt-1 text-xs text-muted-foreground">Resp.: {task.assigneeName}</p>
-          ) : null}
-          {task.dueDate ? (
-            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              {formatDateShort(task.dueDate)}
-            </p>
-          ) : null}
-          {canWrite ? (
-          <div className="mt-2 flex gap-1">
-            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onEdit(task)}>
-              Editar
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-7 px-2"
-              onClick={() => onDelete(task)}
-            >
-              Excluir
-            </Button>
-          </div>
-          ) : null}
+          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onEdit(task)}>
+            Editar
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 px-2"
+            onClick={() => onDelete(task)}
+          >
+            Excluir
+          </Button>
         </div>
-      </div>
+      ) : null}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -83,32 +83,6 @@ export function NotificationBell() {
     useNotifications(user?.uid)
 
   const [open, setOpen] = useState(false)
-  const [showDot, setShowDot] = useState(false)
-  const initialized = useRef(false)
-  const prevUnreadCount = useRef(0)
-
-  useEffect(() => {
-    if (loading) return
-
-    if (!initialized.current) {
-      initialized.current = true
-      if (unreadCount > 0) setShowDot(true)
-      prevUnreadCount.current = unreadCount
-      return
-    }
-
-    if (!open && unreadCount > prevUnreadCount.current) {
-      setShowDot(true)
-    }
-    prevUnreadCount.current = unreadCount
-  }, [unreadCount, open, loading])
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (nextOpen) {
-      setShowDot(false)
-    }
-  }
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read) {
@@ -121,7 +95,7 @@ export function NotificationBell() {
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -133,7 +107,7 @@ export function NotificationBell() {
           aria-label="Notificações"
         >
           <Bell className={cn('h-5 w-5 transition-transform', open && 'scale-110')} />
-          {showDot ? (
+          {unreadCount > 0 ? (
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-card" />
           ) : null}
         </Button>

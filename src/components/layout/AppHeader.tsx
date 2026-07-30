@@ -1,6 +1,7 @@
-import { Bell, Menu, PanelLeft } from 'lucide-react'
+import { Menu, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface AppHeaderProps {
@@ -41,10 +42,7 @@ export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
-        </Button>
+        <NotificationBell />
         <Avatar>
           {profile?.photoURL ? <AvatarImage src={profile.photoURL} alt={profile.name} /> : null}
           <AvatarFallback>{initials}</AvatarFallback>

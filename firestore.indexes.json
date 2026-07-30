@@ -147,13 +147,6 @@
       ]
     },
     {
-      "collectionGroup": "visitVisitors",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "visitorId", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
