@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { toastMovedToTrash } from '@/lib/toast'
 import {
   ArrowLeft,
   Calendar,
@@ -240,7 +241,7 @@ export function VisitDetailPage() {
     void deleteVisitDialog.confirm(async (item) => {
       if (!user) return
       await deleteVisit(item.id, user.uid)
-      toast.success('Visita movida para a lixeira')
+      toastMovedToTrash('Visita movida para a lixeira')
       navigate('/visitas')
     })
   }
@@ -253,7 +254,7 @@ export function VisitDetailPage() {
     void deleteDocDialog.confirm(async (doc) => {
       if (!user) return
       await deleteDocument(doc, user.uid)
-      toast.success('Documento movido para a lixeira')
+      toastMovedToTrash('Documento movido para a lixeira')
       await load()
     })
   }

@@ -20,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { toastMovedToTrash } from '@/lib/toast'
 import { Clock, Plus, Users } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
@@ -333,7 +334,7 @@ export function PlanningPage() {
       if (!user) return
       try {
         await deleteTask(item.id, user.uid)
-        toast.success('Tarefa movida para a lixeira')
+        toastMovedToTrash('Tarefa movida para a lixeira')
         await loadTasks()
         await refreshProgress()
       } catch (error) {

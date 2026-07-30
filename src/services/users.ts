@@ -7,6 +7,10 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import {
+  mergeNotificationPreferences,
+  type NotificationPreferences,
+} from '@/lib/notificationPreferences'
 import type { UserProfile, UserRole } from '@/types'
 
 const usersCol = collection(db, 'users')
@@ -37,10 +41,24 @@ export async function createUserProfile(input: {
 
 export async function updateUserProfile(
   uid: string,
-  data: Partial<Pick<UserProfile, 'name' | 'photoURL'>>,
+  data: Partial<Pick<UserProfile, 'name' | 'photoURL' | 'notificationPreferences'>>,
 ): Promise<void> {
   await updateDoc(doc(usersCol, uid), {
     ...data,
     updatedAt: serverTimestamp(),
   })
+}
+
+export async function getUserNotificationPreferences(
+  uid: string,
+): Promise<NotificationPreferences> {
+  const profile = await getUserProfile(uid)
+  return mergeNotificationPreferences(profile?.notificationPreferences)
+}
+
+export async function updateUserNotificationPreferences(
+  uid: string,
+  preferences: NotificationPreferences,
+): Promise<void> {
+  await updateUserProfile(uid, { notificationPreferences: preferences })
 }

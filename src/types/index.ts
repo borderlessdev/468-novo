@@ -25,6 +25,17 @@ export interface TrashItem {
 
 export type UserRole = 'user' | 'team' | 'client' | 'admin'
 
+export interface NotificationPreferences {
+  taskDueSoon: boolean
+  financeNfDue: boolean
+  visitStatusChanged: boolean
+  visitCreated: boolean
+  taskCreated: boolean
+  taskStatusChanged: boolean
+  documentUploaded: boolean
+  teamUpdated: boolean
+}
+
 export type VisitStatus =
   | 'planejamento'
   | 'em_andamento'
@@ -39,6 +50,7 @@ export interface UserProfile {
   email: string
   photoURL?: string
   role: UserRole
+  notificationPreferences?: Partial<NotificationPreferences>
   createdAt?: unknown
   updatedAt?: unknown
 }

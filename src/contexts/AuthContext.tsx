@@ -18,8 +18,9 @@ import {
 } from 'firebase/auth'
 import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
-import { createUserProfile, getUserProfile, updateUserProfile } from '@/services/users'
+import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
 import type { UserProfile, UserRole } from '@/types'
+import type { NotificationPreferences } from '@/lib/notificationPreferences'
 import { getAuthErrorMessage } from '@/lib/utils'
 
 interface AuthContextValue {
@@ -36,6 +37,9 @@ interface AuthContextValue {
   resetPassword: (email: string) => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfileData: (data: { name: string; photoURL?: string }) => Promise<void>
+  updateNotificationPreferences: (
+    preferences: import('@/lib/notificationPreferences').NotificationPreferences,
+  ) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -151,6 +155,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProfile, user],
   )
 
+  const updateNotificationPreferences = useCallback(
+    async (preferences: NotificationPreferences) => {
+      if (!user) return
+      await updateUserNotificationPreferences(user.uid, preferences)
+      await refreshProfile()
+    },
+    [refreshProfile, user],
+  )
+
   const role: UserRole = isAdmin ? 'admin' : (profile?.role ?? 'user')
   const isClient = role === 'client'
   const canWrite = canWriteOperations(role, isAdmin)
@@ -170,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       refreshProfile,
       updateProfileData,
+      updateNotificationPreferences,
     }),
     [
       user,
@@ -185,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       refreshProfile,
       updateProfileData,
+      updateNotificationPreferences,
     ],
   )
 

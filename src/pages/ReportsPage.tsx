@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf'
 import { toast } from 'sonner'
 import {
   BarChart3,
+  ChevronDown,
   DollarSign,
   Download,
   FileText,
@@ -18,6 +19,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -29,6 +36,11 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { downloadCsv, formatCurrency, formatDate } from '@/lib/utils'
+import {
+  exportTable,
+  getExportFormatLabel,
+  type TableExportFormat,
+} from '@/lib/export'
 import { getCurrentCycle } from '@/lib/constants'
 import { listVisits } from '@/services/visits'
 import { listVisitors } from '@/services/visitors'
@@ -51,7 +63,7 @@ export function ReportsPage() {
       const [visitsData, visitorsData, financeData] = await Promise.all([
         listVisits(user.uid, isAdmin, role),
         listVisitors(user.uid, isAdmin),
-        listFinanceItemsByOwner(user.uid, isAdmin),
+        listFinanceItemsByOwner(user.uid, isAdmin, role),
       ])
       setVisits(visitsData)
       setVisitors(visitorsData)
@@ -60,14 +72,14 @@ export function ReportsPage() {
       console.error(error)
       toast.error('Erro ao carregar dados dos relatórios')
     }
-  }, [user, isAdmin])
+  }, [user, isAdmin, role])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  const exportNfCsv = () => {
-    const rows = financeItems.filter((item) => {
+  const getNfReportRows = () => {
+    const items = financeItems.filter((item) => {
       if (!item.nfDueDate) return false
       if (nfStart && item.nfDueDate < nfStart) return false
       if (nfEnd && item.nfDueDate > nfEnd) return false
@@ -76,18 +88,28 @@ export function ReportsPage() {
       return true
     })
 
-    downloadCsv('relatorio-vencimento-nfs.csv', [
-      ['Serviço', 'Valor', 'Empresa', 'NF recebida', 'Vencimento', 'Visita'],
-      ...rows.map((item) => [
-        item.serviceName,
-        String(item.serviceValue ?? 0),
-        item.winningCompany ?? '',
-        item.nfReceived ? 'Sim' : 'Não',
-        formatDate(item.nfDueDate),
-        visits.find((v) => v.id === item.visitId)?.title ?? item.visitId,
-      ]),
+    const headers = ['Serviço', 'Valor', 'Empresa', 'NF recebida', 'Vencimento', 'Visita']
+    const rows = items.map((item) => [
+      item.serviceName,
+      String(item.serviceValue ?? 0),
+      item.winningCompany ?? '',
+      item.nfReceived ? 'Sim' : 'Não',
+      formatDate(item.nfDueDate!),
+      visits.find((v) => v.id === item.visitId)?.title ?? item.visitId,
     ])
-    toast.success('CSV exportado')
+
+    return { headers, rows }
+  }
+
+  const exportNfReport = async (format: TableExportFormat) => {
+    const { headers, rows } = getNfReportRows()
+    await exportTable(format, {
+      filenameBase: 'relatorio-vencimento-nfs',
+      title: 'Relatório de vencimento das NFs',
+      headers,
+      rows,
+    })
+    toast.success(`${getExportFormatLabel(format)} exportado`)
   }
 
   const exportMonthVisits = (asPdf = false) => {
@@ -235,7 +257,7 @@ export function ReportsPage() {
               <CardTitle>Relatório de vencimento das NFs</CardTitle>
               <CardDescription>
                 Notas fiscais com data de vencimento. Filtre por período e status e
-                exporte em CSV.
+                exporte em CSV, PDF, Excel ou Word.
               </CardDescription>
             </div>
           </div>
@@ -262,10 +284,29 @@ export function ReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" onClick={exportNfCsv}>
-            <Download className="h-4 w-4" />
-            Exportar CSV
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="h-4 w-4" />
+                Exportar
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => void exportNfReport('csv')}>
+                CSV (.csv)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportNfReport('pdf')}>
+                PDF (.pdf)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportNfReport('xlsx')}>
+                Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportNfReport('docx')}>
+                Word (.docx)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </CardContent>
       </Card>
 

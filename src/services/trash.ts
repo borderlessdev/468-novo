@@ -20,7 +20,15 @@ import {
   isActiveRecord,
   TRASH_ENTITY_COLLECTIONS,
 } from '@/lib/trash'
-import type { TrashEntityType, TrashItem } from '@/types'
+import { listVisits } from '@/services/visits'
+import type { TrashEntityType, TrashItem, UserRole } from '@/types'
+
+const CHILD_ENTITY_TYPES: TrashEntityType[] = [
+  'activity',
+  'task',
+  'financeItem',
+  'document',
+]
 
 const collections: Record<TrashEntityType, CollectionReference> = {
   visit: collection(db, 'visits'),
@@ -113,11 +121,80 @@ export async function permanentDeleteEntity(
   await deleteDoc(doc(col, id))
 }
 
+async function getAccessibleVisitIds(
+  uid: string,
+  isAdmin: boolean,
+  role: UserRole,
+): Promise<string[]> {
+  const ids = new Set<string>()
+
+  const activeVisits = await listVisits(uid, isAdmin, role)
+  activeVisits.forEach((visit) => ids.add(visit.id))
+
+  const visitCol = collections.visit
+
+  if (isAdmin) {
+    const deletedSnap = await getDocs(query(visitCol, where('isDeleted', '==', true)))
+    deletedSnap.docs.forEach((d) => ids.add(d.id))
+  } else {
+    const ownedDeletedSnap = await getDocs(
+      query(visitCol, where('ownerId', '==', uid), where('isDeleted', '==', true)),
+    )
+    ownedDeletedSnap.docs.forEach((d) => ids.add(d.id))
+
+    if (role === 'team') {
+      const teamSnap = await getDocs(
+        query(visitCol, where('teamMemberIds', 'array-contains', uid)),
+      )
+      teamSnap.docs
+        .filter((d) => d.data().isDeleted === true)
+        .forEach((d) => ids.add(d.id))
+    }
+
+    if (role === 'client') {
+      const clientSnap = await getDocs(
+        query(visitCol, where('clientUserIds', 'array-contains', uid)),
+      )
+      clientSnap.docs
+        .filter((d) => d.data().isDeleted === true)
+        .forEach((d) => ids.add(d.id))
+    }
+  }
+
+  return [...ids]
+}
+
+async function listVisitChildTrash(
+  entityType: TrashEntityType,
+  visitIds: string[],
+): Promise<TrashItem[]> {
+  if (visitIds.length === 0) return []
+
+  const col = collections[entityType]
+  const items: TrashItem[] = []
+
+  await Promise.all(
+    visitIds.map(async (visitId) => {
+      const snap = await getDocs(query(col, where('visitId', '==', visitId)))
+      snap.docs
+        .filter((d) => d.data().isDeleted === true && isNotExpired(d.data()))
+        .forEach((d) => items.push(mapTrashItem(entityType, d.id, d.data())))
+    }),
+  )
+
+  return items
+}
+
 async function listTrashByType(
   entityType: TrashEntityType,
   ownerId: string,
   isAdmin: boolean,
+  visitIds: string[],
 ): Promise<TrashItem[]> {
+  if (CHILD_ENTITY_TYPES.includes(entityType)) {
+    return listVisitChildTrash(entityType, visitIds)
+  }
+
   const col = collections[entityType]
   const constraints = isAdmin
     ? [where('isDeleted', '==', true)]
@@ -132,12 +209,14 @@ async function listTrashByType(
 export async function listTrashItems(
   ownerId: string,
   isAdmin: boolean,
+  role: UserRole = 'user',
 ): Promise<Record<TrashEntityType, TrashItem[]>> {
+  const visitIds = await getAccessibleVisitIds(ownerId, isAdmin, role)
   const types = Object.keys(TRASH_ENTITY_COLLECTIONS) as TrashEntityType[]
   const results = await Promise.all(
     types.map(async (entityType) => ({
       entityType,
-      items: await listTrashByType(entityType, ownerId, isAdmin),
+      items: await listTrashByType(entityType, ownerId, isAdmin, visitIds),
     })),
   )
 

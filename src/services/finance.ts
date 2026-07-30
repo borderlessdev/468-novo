@@ -2,18 +2,15 @@ import {
   addDoc,
   collection,
   doc,
-  getDocs,
-  query,
   serverTimestamp,
   updateDoc,
-  where,
 } from 'firebase/firestore'
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
-import { isActiveRecord } from '@/lib/trash'
 import { softDeleteEntity } from '@/services/trash'
-import type { FinanceItem } from '@/types'
+import { listVisits } from '@/services/visits'
+import type { FinanceItem, UserRole } from '@/types'
 
 const col = collection(db, 'financeItems')
 
@@ -55,18 +52,16 @@ export async function listFinanceItems(
 export async function listFinanceItemsByOwner(
   ownerId: string,
   isAdmin: boolean,
+  role: UserRole = 'user',
 ): Promise<FinanceItem[]> {
-  if (isAdmin) {
-    const snap = await getDocs(col)
-    return snap.docs
-      .filter((d) => isActiveRecord(d.data()))
-      .map((d) => mapItem(d.id, d.data()))
-  }
+  const visits = await listVisits(ownerId, isAdmin, role)
+  if (visits.length === 0) return []
 
-  const snap = await getDocs(query(col, where('ownerId', '==', ownerId)))
-  return snap.docs
-    .filter((d) => isActiveRecord(d.data()))
-    .map((d) => mapItem(d.id, d.data()))
+  const itemsPerVisit = await Promise.all(
+    visits.map((visit) => listFinanceItems(visit.id, ownerId, isAdmin)),
+  )
+
+  return itemsPerVisit.flat()
 }
 
 export async function createFinanceItem(

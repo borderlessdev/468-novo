@@ -2,16 +2,12 @@ import {
   addDoc,
   collection,
   doc,
-  getDocs,
-  query,
   serverTimestamp,
   updateDoc,
-  where,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
-import { isActiveRecord } from '@/lib/trash'
 import { softDeleteEntity } from '@/services/trash'
 import { listVisits } from '@/services/visits'
 import type { Task, TaskStatus, UserRole } from '@/types'
@@ -77,17 +73,6 @@ export async function listPendingTasks(
   isAdmin: boolean,
   role: UserRole = 'user',
 ): Promise<Task[]> {
-  if (isAdmin) {
-    const snap = await getDocs(
-      query(col, where('status', 'in', ['backlog', 'in_progress'])),
-    )
-    return sortPendingTasks(
-      snap.docs
-        .filter((d) => isActiveRecord(d.data()))
-        .map((d) => mapTask(d.id, d.data())),
-    )
-  }
-
   const visits = await listVisits(userId, isAdmin, role)
   if (visits.length === 0) return []
 

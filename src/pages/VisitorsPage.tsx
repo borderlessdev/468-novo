@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { toastMovedToTrash } from '@/lib/toast'
 import { Plus, Search, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
@@ -21,14 +22,14 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
-import { formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
+import { formatWeightKgInput, formatWeightKgNumber, getFirestoreErrorMessage, parseWeightKg } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
 import { listVisitIdsForVisitor } from '@/services/visitVisitors'
 import { getVisit } from '@/services/visits'
 import type { Visitor } from '@/types'
 
 export function VisitorsPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role } = useAuth()
   const [loading, setLoading] = useState(true)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [search, setSearch] = useState('')
@@ -121,7 +122,7 @@ export function VisitorsPage() {
     setOpen(true)
     if (user) {
       try {
-        const ids = await listVisitIdsForVisitor(visitor.id, user.uid, isAdmin)
+        const ids = await listVisitIdsForVisitor(visitor.id, user.uid, isAdmin, role)
         const visits = await Promise.all(ids.map((id) => getVisit(id)))
         setVisitHistory(
           visits
@@ -173,7 +174,7 @@ export function VisitorsPage() {
       if (!user) return
       try {
         await deleteVisitor(item.id, user.uid)
-        toast.success('Visitante movido para a lixeira')
+        toastMovedToTrash('Visitante movido para a lixeira')
         await load()
       } catch (error) {
         console.error(error)

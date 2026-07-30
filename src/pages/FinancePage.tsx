@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { toastMovedToTrash } from '@/lib/toast'
 import { Plus, Trash2, Paperclip } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
@@ -154,7 +155,7 @@ export function FinancePage() {
     void deleteDialog.confirm(async (item) => {
       if (!user) return
       await deleteFinanceItem(item.id, user.uid)
-      toast.success('Item movido para a lixeira')
+      toastMovedToTrash()
       await loadItems()
     })
   }
@@ -412,7 +413,7 @@ export function FinancePage() {
                       Vencimento do pagamento da nota fiscal
                     </th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Comprovante da nota fiscal</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">Ações</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-center font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -447,7 +448,7 @@ export function FinancePage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <div className="flex gap-1">
+                        <div className="flex items-center justify-center gap-1">
                           {canWrite ? (
                           <>
                           <label

@@ -38,7 +38,7 @@ function formatTrashDate(value: unknown): string {
 }
 
 export function TrashPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, role } = useAuth()
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<TrashEntityType | 'all'>('all')
   const [trash, setTrash] = useState<Record<TrashEntityType, TrashItem[]>>({
@@ -56,14 +56,14 @@ export function TrashPage() {
     if (!user) return
     setLoading(true)
     try {
-      setTrash(await listTrashItems(user.uid, isAdmin))
+      setTrash(await listTrashItems(user.uid, isAdmin, role))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar lixeira')
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin])
+  }, [user, isAdmin, role])
 
   useEffect(() => {
     void load()

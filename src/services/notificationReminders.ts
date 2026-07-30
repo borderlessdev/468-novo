@@ -31,7 +31,7 @@ export async function scanDueReminders(
   try {
     const [tasks, financeItems, visits] = await Promise.all([
       listPendingTasks(userId, isAdmin, role),
-      listFinanceItemsByOwner(userId, isAdmin),
+      listFinanceItemsByOwner(userId, isAdmin, role),
       listVisits(userId, isAdmin, role),
     ])
 

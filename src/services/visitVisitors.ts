@@ -3,14 +3,12 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
-  query,
   serverTimestamp,
-  where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
-import type { VisitVisitor } from '@/types'
+import { listVisits } from '@/services/visits'
+import type { UserRole, VisitVisitor } from '@/types'
 
 const col = collection(db, 'visitVisitors')
 
@@ -53,13 +51,21 @@ export async function listVisitIdsForVisitor(
   visitorId: string,
   ownerId: string,
   isAdmin: boolean,
+  role: UserRole = 'user',
 ): Promise<string[]> {
-  const constraints = isAdmin
-    ? [where('visitorId', '==', visitorId)]
-    : [where('ownerId', '==', ownerId), where('visitorId', '==', visitorId)]
+  const visits = await listVisits(ownerId, isAdmin, role)
+  const visitIds: string[] = []
 
-  const snap = await getDocs(query(col, ...constraints))
-  return snap.docs.map((d) => String(d.data().visitId))
+  await Promise.all(
+    visits.map(async (visit) => {
+      const links = await listVisitVisitors(visit.id, ownerId, isAdmin)
+      if (links.some((link) => link.visitorId === visitorId)) {
+        visitIds.push(visit.id)
+      }
+    }),
+  )
+
+  return visitIds
 }
 
 export async function unlinkVisitVisitor(id: string): Promise<void> {

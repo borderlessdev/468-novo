@@ -2,14 +2,11 @@ import {
   addDoc,
   collection,
   doc,
-  getDocs,
-  query,
   serverTimestamp,
   updateDoc,
-  where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { isActiveRecord } from '@/lib/trash'
+import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import { softDeleteEntity } from '@/services/trash'
 import type { Activity } from '@/types'
 
@@ -46,14 +43,11 @@ export async function listActivities(
   ownerId: string,
   isAdmin: boolean,
 ): Promise<Activity[]> {
-  const constraints = isAdmin
-    ? [where('visitId', '==', visitId)]
-    : [where('ownerId', '==', ownerId), where('visitId', '==', visitId)]
-
-  const snap = await getDocs(query(col, ...constraints))
-  return snap.docs
-    .filter((d) => isActiveRecord(d.data()))
-    .map((d) => mapActivity(d.id, d.data()))
+  const activities = await getVisitChildDocs(col, visitId, ownerId, isAdmin, (d) =>
+    mapActivity(d.id, d.data()),
+  )
+  return activities
+    .filter((activity) => !activity.isDeleted)
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
 }
 

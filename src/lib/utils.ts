@@ -107,6 +107,25 @@ export function getAuthErrorMessage(code: string): string {
   return map[code] ?? 'Ocorreu um erro. Tente novamente.'
 }
 
+export function getFirestoreErrorMessage(error: unknown, fallback: string): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code ?? '')
+      : ''
+
+  if (code === 'permission-denied') {
+    return 'Sem permissão para esta ação. Verifique seu acesso ou contate o administrador.'
+  }
+  if (code === 'not-found') {
+    return 'Item não encontrado. Ele pode já ter sido excluído.'
+  }
+  if (code === 'unavailable' || code === 'network-request-failed') {
+    return 'Falha de rede. Verifique sua conexão e tente novamente.'
+  }
+
+  return fallback
+}
+
 export function calculateVisitProgress(
   tasks: { status: string }[],
 ): number {

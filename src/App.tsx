@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AppShell } from '@/components/layout/AppShell'
+import { TrashToastNavigator } from '@/components/shared/TrashToastNavigator'
 import {
   ProtectedRoute,
   PublicOnlyRoute,
@@ -22,8 +24,10 @@ import { TrashPage } from '@/pages/TrashPage'
 
 export default function App() {
   return (
-    <AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
       <BrowserRouter>
+        <TrashToastNavigator />
         <Routes>
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<LoginPage />} />
@@ -50,6 +54,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       <Toaster richColors position="top-right" />
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

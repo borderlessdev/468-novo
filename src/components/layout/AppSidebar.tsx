@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   BarChart3,
@@ -8,14 +9,14 @@ import {
   ListTodo,
   LogOut,
   MapPin,
+  PanelLeft,
   Settings,
   Users,
   X,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { isNavAllowed } from '@/lib/access'
-import { useAuth } from '@/contexts/AuthContext'
+import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import type { UserRole } from '@/types'
 
 const icons = {
@@ -44,12 +45,21 @@ interface AppSidebarProps {
   open: boolean
   onClose: () => void
   collapsed: boolean
+  onToggleCollapse: () => void
   role: UserRole
   isAdmin: boolean
 }
 
-export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSidebarProps) {
-  const { logout } = useAuth()
+export function AppSidebar({
+  open,
+  onClose,
+  collapsed,
+  onToggleCollapse,
+  role,
+  isAdmin,
+}: AppSidebarProps) {
+  const [logoutOpen, setLogoutOpen] = useState(false)
+  const sairButtonRef = useRef<HTMLButtonElement>(null)
 
   return (
     <>
@@ -62,13 +72,18 @@ export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSideb
       />
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-200 lg:static',
+          'fixed inset-y-0 left-0 z-50 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-all duration-200',
           collapsed ? 'w-[72px]' : 'w-64',
           open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
-        <div className={cn('flex h-16 items-center gap-3 px-4', collapsed && 'justify-center px-2')}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4A017] text-sidebar">
+        <div
+          className={cn(
+            'flex h-16 items-center gap-2 border-b border-sidebar-foreground/10',
+            collapsed ? 'justify-center px-2' : 'px-3',
+          )}
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#D4A017] text-sidebar">
             <Compass className="h-5 w-5" />
           </div>
           {!collapsed ? (
@@ -79,7 +94,15 @@ export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSideb
           ) : null}
           <button
             type="button"
-            className="rounded-md p-1 text-sidebar-foreground/80 lg:hidden"
+            className="hidden cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <PanelLeft className={cn('h-4 w-4', collapsed && 'rotate-180')} />
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md p-1 text-sidebar-foreground/80 lg:hidden"
             onClick={onClose}
             aria-label="Fechar menu"
           >
@@ -87,7 +110,7 @@ export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSideb
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
           {items
             .filter((item) => isNavAllowed(item.to, role, isAdmin))
             .map((item) => {
@@ -116,21 +139,29 @@ export function AppSidebar({ open, onClose, collapsed, role, isAdmin }: AppSideb
           })}
         </nav>
 
-        <div className="border-t border-sidebar-foreground/10 p-3">
-          <button
-            type="button"
-            onClick={() => {
-              void logout().then(() => toast.success('Sessão encerrada'))
-            }}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-white',
-              collapsed && 'justify-center px-2',
-            )}
-            title="Sair da conta"
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            {!collapsed ? <span>Sair</span> : null}
-          </button>
+        <div className="shrink-0">
+          <LogoutConfirmCard
+            open={logoutOpen}
+            onOpenChange={setLogoutOpen}
+            collapsed={collapsed}
+            triggerRef={sairButtonRef}
+          />
+          <div className="border-t border-sidebar-foreground/10 p-3">
+            <button
+              ref={sairButtonRef}
+              type="button"
+              onClick={() => setLogoutOpen(true)}
+              className={cn(
+                'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'bg-red-300/10 text-red-200 hover:bg-red-300/20 hover:text-red-100',
+                collapsed && 'justify-center px-2',
+              )}
+              title="Sair da conta"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              {!collapsed ? <span>Sair</span> : null}
+            </button>
+          </div>
         </div>
       </aside>
     </>

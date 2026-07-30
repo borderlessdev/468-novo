@@ -13,7 +13,9 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore'
+import { isNotificationTypeEnabled } from '@/lib/notificationPreferences'
 import { db } from '@/lib/firebase'
+import { getUserNotificationPreferences } from '@/services/users'
 import type { Notification, NotificationType, Visit } from '@/types'
 
 const col = collection(db, 'notifications')
@@ -49,7 +51,12 @@ export type CreateNotificationInput = Omit<
 
 export async function createNotification(
   input: CreateNotificationInput,
-): Promise<string> {
+): Promise<string | null> {
+  const preferences = await getUserNotificationPreferences(input.recipientId)
+  if (!isNotificationTypeEnabled(input.type, preferences)) {
+    return null
+  }
+
   const ref = await addDoc(col, {
     recipientId: input.recipientId,
     type: input.type,

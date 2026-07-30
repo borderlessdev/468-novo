@@ -26,14 +26,17 @@ export function AppShell() {
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
           collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((prev) => !prev)}
           role={role}
           isAdmin={isAdmin}
         />
-        <div className={cn('flex min-w-0 flex-1 flex-col')}>
-          <AppHeader
-            onMenuClick={() => setMobileOpen(true)}
-            onToggleCollapse={() => setCollapsed((prev) => !prev)}
-          />
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 flex-col transition-all duration-200',
+            collapsed ? 'lg:ml-[72px]' : 'lg:ml-64',
+          )}
+        >
+          <AppHeader onMenuClick={() => setMobileOpen(true)} />
           <main className="flex-1 p-4 md:p-6" key={refreshKey}>
             <Outlet />
           </main>

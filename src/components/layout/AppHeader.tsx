@@ -1,4 +1,4 @@
-import { Menu, PanelLeft } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
@@ -6,10 +6,9 @@ import { useAuth } from '@/contexts/AuthContext'
 
 interface AppHeaderProps {
   onMenuClick: () => void
-  onToggleCollapse: () => void
 }
 
-export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
+export function AppHeader({ onMenuClick }: AppHeaderProps) {
   const { profile } = useAuth()
   const initials = (profile?.name ?? 'U')
     .split(' ')
@@ -29,15 +28,6 @@ export function AppHeader({ onMenuClick, onToggleCollapse }: AppHeaderProps) {
           aria-label="Abrir menu"
         >
           <Menu className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden lg:inline-flex"
-          onClick={onToggleCollapse}
-          aria-label="Recolher menu"
-        >
-          <PanelLeft className="h-5 w-5" />
         </Button>
       </div>
 

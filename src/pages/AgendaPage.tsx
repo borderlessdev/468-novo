@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { toastMovedToTrash } from '@/lib/toast'
 import { Calendar, MapPin, Plus } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
@@ -418,7 +419,7 @@ export function AgendaPage() {
           void deleteDialog.confirm(async (item) => {
             if (!user) return
             await deleteActivity(item.id, user.uid)
-            toast.success('Atividade movida para a lixeira')
+            toastMovedToTrash('Atividade movida para a lixeira')
             await loadActivities()
           })
         }}

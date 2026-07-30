@@ -58,7 +58,7 @@ export function DashboardPage() {
       const [visitsData, tasksData, financeData] = await Promise.all([
         listVisits(user.uid, isAdmin, role),
         listPendingTasks(user.uid, isAdmin, role),
-        listFinanceItemsByOwner(user.uid, isAdmin),
+        listFinanceItemsByOwner(user.uid, isAdmin, role),
       ])
       setVisits(visitsData)
       setTasks(tasksData.slice(0, 8))
