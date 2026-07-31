@@ -29,12 +29,13 @@ import {
   type QuickVisitorInput,
   type VisitInput,
 } from '@/lib/validations'
-import { createVisit, getVisit } from '@/services/visits'
+import { createVisit, getVisit, listVisitTemplates } from '@/services/visits'
+import { createVisitFromTemplate } from '@/services/visitClone'
 import { createVisitor, listVisitors } from '@/services/visitors'
 import { linkVisitorToVisit } from '@/services/visitVisitors'
 import { createTasksBatch } from '@/services/tasks'
 import { notifyVisitStakeholders } from '@/services/notifications'
-import type { Visitor } from '@/types'
+import type { Visit, Visitor } from '@/types'
 import { Search, UserPlus, X } from 'lucide-react'
 
 interface NewVisitDialogProps {
@@ -49,6 +50,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const [selectedVisitors, setSelectedVisitors] = useState<Visitor[]>([])
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<Visitor[]>([])
+  const [templates, setTemplates] = useState<Visit[]>([])
 
   const form = useForm<VisitInput>({
     resolver: zodResolver(visitSchema),
@@ -61,6 +63,8 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       endDate: '',
       status: 'planejamento',
       objective: '',
+      language: '',
+      templateId: '',
       startWithChecklist: true,
     },
   })
@@ -73,6 +77,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   useEffect(() => {
     if (!open || !user) return
     void listVisitors(user.uid, isAdmin).then(setVisitors)
+    void listVisitTemplates(user.uid, isAdmin).then(setTemplates)
   }, [open, user, isAdmin])
 
   const handleSearch = () => {
@@ -89,6 +94,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       ),
     )
   }
+
+  useEffect(() => {
+    handleSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- search as user types
+  }, [search, visitors])
 
   const addVisitor = (visitor: Visitor) => {
     if (selectedVisitors.some((v) => v.id === visitor.id)) return
@@ -128,28 +138,42 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     if (!user) return
     setSaving(true)
     try {
-      const visitId = await createVisit(user.uid, {
-        title: values.title,
-        company: values.company,
-        state: values.state,
-        city: values.city,
-        startDate: values.startDate,
-        endDate: values.endDate,
-        status: values.status,
-        objective: values.objective,
-        progress: 0,
-        teamMemberIds: [],
-      })
+      let visitId: string
+      if (values.templateId) {
+        visitId = await createVisitFromTemplate(values.templateId, user.uid, {
+          title: values.title,
+          company: values.company,
+          state: values.state,
+          city: values.city,
+          startDate: values.startDate,
+          endDate: values.endDate,
+          objective: values.objective,
+          language: values.language,
+        })
+      } else {
+        visitId = await createVisit(user.uid, {
+          title: values.title,
+          company: values.company,
+          state: values.state,
+          city: values.city,
+          startDate: values.startDate,
+          endDate: values.endDate,
+          status: values.status,
+          objective: values.objective,
+          language: values.language,
+          progress: 0,
+          teamMemberIds: [],
+        })
+        if (values.startWithChecklist) {
+          await createTasksBatch(user.uid, visitId, DEFAULT_CHECKLIST)
+        }
+      }
 
       await Promise.all(
         selectedVisitors.map((visitor) =>
           linkVisitorToVisit(user.uid, visitId, visitor.id),
         ),
       )
-
-      if (values.startWithChecklist) {
-        await createTasksBatch(user.uid, visitId, DEFAULT_CHECKLIST)
-      }
 
       const createdVisit = await getVisit(visitId)
       if (createdVisit) {
@@ -200,6 +224,29 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
 
         <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-4">
+            {templates.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Modelo (opcional)</Label>
+                <Select
+                  value={form.watch('templateId') || '_none'}
+                  onValueChange={(value) =>
+                    form.setValue('templateId', value === '_none' ? '' : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem modelo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Sem modelo</SelectItem>
+                    {templates.map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.id}>
+                        {tpl.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="title">Título da visita *</Label>
               <Input id="title" {...form.register('title')} />
@@ -246,6 +293,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
               <div className="space-y-2">
                 <Label htmlFor="endDate">Data fim *</Label>
                 <Input id="endDate" type="date" {...form.register('endDate')} />
+                {form.formState.errors.endDate ? (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.endDate.message}
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="space-y-2">
@@ -271,15 +323,21 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
               <Label htmlFor="objective">Objetivo</Label>
               <Input id="objective" {...form.register('objective')} />
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={form.watch('startWithChecklist')}
-                onCheckedChange={(checked) =>
-                  form.setValue('startWithChecklist', checked === true)
-                }
-              />
-              Iniciar com check-list básico
-            </label>
+            <div className="space-y-2">
+              <Label htmlFor="language">Idioma</Label>
+              <Input id="language" placeholder="Português, Inglês..." {...form.register('language')} />
+            </div>
+            {!form.watch('templateId') ? (
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={form.watch('startWithChecklist')}
+                  onCheckedChange={(checked) =>
+                    form.setValue('startWithChecklist', checked === true)
+                  }
+                />
+                Iniciar com check-list básico
+              </label>
+            ) : null}
           </div>
 
           <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">

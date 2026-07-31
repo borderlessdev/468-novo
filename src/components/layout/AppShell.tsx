@@ -9,7 +9,7 @@ import { scanDueReminders } from '@/services/notificationReminders'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
-  const { user, role, isAdmin } = useAuth()
+  const { user, role, isAdmin, profile } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -27,8 +27,10 @@ export function AppShell() {
           onClose={() => setMobileOpen(false)}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((prev) => !prev)}
+          onExpand={() => setCollapsed(false)}
           role={role}
           isAdmin={isAdmin}
+          modulePermissions={profile?.modulePermissions}
         />
         <div
           className={cn(

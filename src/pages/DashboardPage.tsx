@@ -32,7 +32,7 @@ function formatCycleLabel(startIso: string, endIso: string) {
 }
 
 export function DashboardPage() {
-  const { user, isAdmin, role } = useAuth()
+  const { user, isAdmin, role, isClient } = useAuth()
   const defaultCycle = useMemo(() => getCurrentCycle(), [])
   const [cycleStart, setCycleStart] = useState(defaultCycle.startIso)
   const [cycleEnd, setCycleEnd] = useState(defaultCycle.endIso)
@@ -130,12 +130,16 @@ export function DashboardPage() {
     { label: 'Em planejamento', value: String(planning), icon: Clock3 },
     { label: 'Em andamento', value: String(ongoing), icon: TrendingUp },
     { label: 'Total de visitantes', value: String(visitorCount), icon: Users },
-    {
-      label: 'Gastos do ciclo',
-      value: formatCurrency(cycleSpend),
-      hint: `Ciclo ${cycleLabel}`,
-      icon: DollarSign,
-    },
+    ...(!isClient
+      ? [
+          {
+            label: 'Gastos do ciclo',
+            value: formatCurrency(cycleSpend),
+            hint: `Ciclo ${cycleLabel}`,
+            icon: DollarSign,
+          },
+        ]
+      : []),
   ]
 
   return (

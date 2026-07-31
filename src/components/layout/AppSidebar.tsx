@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
   Calendar,
@@ -17,7 +17,7 @@ import {
 import { cn } from '@/lib/utils'
 import { isNavAllowed } from '@/lib/access'
 import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
-import type { UserRole } from '@/types'
+import type { ModulePermissions, UserRole } from '@/types'
 
 const icons = {
   LayoutDashboard,
@@ -46,8 +46,10 @@ interface AppSidebarProps {
   onClose: () => void
   collapsed: boolean
   onToggleCollapse: () => void
+  onExpand: () => void
   role: UserRole
   isAdmin: boolean
+  modulePermissions?: Partial<ModulePermissions> | null
 }
 
 export function AppSidebar({
@@ -55,11 +57,17 @@ export function AppSidebar({
   onClose,
   collapsed,
   onToggleCollapse,
+  onExpand,
   role,
   isAdmin,
+  modulePermissions,
 }: AppSidebarProps) {
   const [logoutOpen, setLogoutOpen] = useState(false)
   const sairButtonRef = useRef<HTMLButtonElement>(null)
+
+  const expandIfCollapsed = () => {
+    if (collapsed) onExpand()
+  }
 
   return (
     <>
@@ -76,6 +84,7 @@ export function AppSidebar({
           collapsed ? 'w-[72px]' : 'w-64',
           open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
+        onClick={expandIfCollapsed}
       >
         <div
           className={cn(
@@ -83,27 +92,44 @@ export function AppSidebar({
             collapsed ? 'justify-center px-2' : 'px-3',
           )}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#D4A017] text-sidebar">
+          <Link
+            to="/"
+            onClick={(event) => {
+              event.stopPropagation()
+              onClose()
+            }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#D4A017] text-sidebar transition-opacity hover:opacity-90"
+            aria-label="Ir para a página inicial"
+            title="Página inicial"
+          >
             <Compass className="h-5 w-5" />
-          </div>
+          </Link>
           {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">Promover Experience</p>
-              <p className="truncate text-xs text-sidebar-foreground/70">Operações de visitas</p>
-            </div>
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">Promover Experience</p>
+                <p className="truncate text-xs text-sidebar-foreground/70">Operações de visitas</p>
+              </div>
+              <button
+                type="button"
+                className="hidden cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onToggleCollapse()
+                }}
+                aria-label="Recolher menu"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            </>
           ) : null}
           <button
             type="button"
-            className="hidden cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          >
-            <PanelLeft className={cn('h-4 w-4', collapsed && 'rotate-180')} />
-          </button>
-          <button
-            type="button"
             className="cursor-pointer rounded-md p-1 text-sidebar-foreground/80 lg:hidden"
-            onClick={onClose}
+            onClick={(event) => {
+              event.stopPropagation()
+              onClose()
+            }}
             aria-label="Fechar menu"
           >
             <X className="h-4 w-4" />
@@ -112,7 +138,7 @@ export function AppSidebar({
 
         <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
           {items
-            .filter((item) => isNavAllowed(item.to, role, isAdmin))
+            .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
             .map((item) => {
             const Icon = icons[item.icon]
             return (
@@ -120,7 +146,10 @@ export function AppSidebar({
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
-                onClick={onClose}
+                onClick={() => {
+                  if (collapsed) onExpand()
+                  onClose()
+                }}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
@@ -150,7 +179,11 @@ export function AppSidebar({
             <button
               ref={sairButtonRef}
               type="button"
-              onClick={() => setLogoutOpen(true)}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (collapsed) onExpand()
+                setLogoutOpen(true)
+              }}
               className={cn(
                 'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 'bg-red-300/10 text-red-200 hover:bg-red-300/20 hover:text-red-100',

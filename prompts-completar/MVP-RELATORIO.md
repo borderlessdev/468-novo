@@ -9,12 +9,12 @@ Atualizado em: jul/2026 (avaliação vs escopo MVP/Robusta)
 
 | Dimensão | Situação |
 |----------|----------|
-| **Código do MVP** | ~**85–90%** — módulos principais existem e estão integrados |
-| **MVP operacional (uso real)** | ~**65–70%** — bloqueado por deploy Firebase, Storage, homologação e ajustes de permissões |
-| **Versão Robusta** | ~**25–35%** — vários itens Robusta antecipados no MVP (Kanban, exports, histórico visitante); grosso da Robusta ainda não existe |
-| **Estimativa restante** | MVP: **~3–5 dias úteis** (ops + QA + correções). Robusta completa: **+7–10 dias** além do MVP |
+| **Código do MVP** | **100%** — gaps P1 de código fechados (rotas, CRM, storage, visitantes compartilhados) |
+| **MVP operacional (uso real)** | ~**70–80%** — bloqueado por deploy Firebase, Storage, seeds e homologação |
+| **Versão Robusta** | ~**85–90%** no código — itens P2 principais entregues; SMTP/deploy/calendário mensal fora |
+| **Estimativa restante** | MVP ops: **~1–3 dias úteis** (deploy + QA). Robusta completa: **+7–10 dias** além do MVP |
 
-O projeto **não parte do zero**. A maior parte dos 14 dias úteis de MVP em desenvolvimento **já foi feita no código**. O que falta agora é menos “construir módulos” e mais **colocar em produção, validar ponta a ponta e corrigir arestas**.
+O projeto **não parte do zero**. O código do MVP está fechado. O que falta agora é **colocar em produção, validar ponta a ponta e configurar infra externa**.
 
 ### Comparativo com estimativas originais
 
@@ -156,36 +156,37 @@ Modelo implementado: **orçamentos/NF + comprovante** (opção A), não “despe
 
 | Item | Status | Ação necessária |
 |------|--------|-----------------|
-| Homologação ponta a ponta (3 perfis + mobile 375px) | Pendente | Checklist no README e seção 8 do SETUP-EXTERNO.md |
-| Bloqueio de rotas para cliente | Pendente código | Guard em rotas além de `isNavAllowed` no menu |
-| `canWrite` em VisitorsPage | Pendente código | Desabilitar criar/editar/excluir para cliente |
-| Financeiro/documentos em visita compartilhada | Pendente código | Queries por `visitId` + rules, não só `ownerId` |
-| Storage rules mais restritivas | Pendente código | Alinhar `storage.rules` ao acesso por visita |
+| Homologação ponta a ponta (3 perfis + mobile 375px) | Pendente (ops) | Checklist no README e seção 7 do SETUP-EXTERNO.md |
+| Bloqueio de rotas para cliente | ✅ Feito | `ProtectedRoute` + `isNavAllowed` (lixeira bloqueada para cliente) |
+| `canWrite` em VisitorsPage | ✅ Feito | Create/edit/delete condicionados a `canWrite` |
+| Financeiro/documentos em visita compartilhada | ✅ Feito | Query `visitId` + fallback com `visit.ownerId` |
+| Visitantes em visita compartilhada | ✅ Feito | `get` por ID + `getVisitorsByIds` no detalhe |
+| Storage rules mais restritivas | ✅ Feito | Membership da visita (read team/client; write owner/team/admin) |
 | Envio real de e-mail | Infra pronta | Trigger Email + SMTP + `VITE_EMAIL_MODE=firestore` |
 
-### P2 — Robusta (fora do MVP; ~7–10 dias adicionais)
+### P2 — Robusta (código entregue)
 
-- Convite automático de usuários por e-mail
-- Duplicar visita / templates de visita
-- Calendário visual + drag-and-drop na agenda + alertas
-- Brindes no CRM
-- Histórico detalhado de alterações (visitas, tarefas, despesas)
-- Permissões granulares por módulo
-- Log completo de envios de e-mail
-- Campo idioma na visita
-- Testes e2e / CI
-- Refinamento mobile e performance
+- [x] Convite automático de usuários por e-mail (`invites` + mail/mailto)
+- [x] Duplicar visita / templates (`isTemplate`)
+- [x] Calendário semanal + drag-and-drop na agenda + alertas `activity_soon`
+- [x] Brindes no CRM
+- [x] Histórico de alterações (`activityLogs`)
+- [x] Permissões granulares por módulo (`modulePermissions`)
+- [x] Log de envios de e-mail (`emailLogs`)
+- [x] Campo idioma na visita
+- [x] Responsável de tarefa = usuário (`assigneeId`)
+- [x] Testes e2e smoke (Playwright) + CI GitHub Actions
+
+Fora do código / futuro: SMTP real, calendário mensal, dependências de tarefa, push FCM.
 
 ---
 
 ## Riscos técnicos identificados
 
 1. **Deploy não executado** — app funciona local, não em ambiente real.
-2. **Storage rules permissivas** — risco de segurança em produção.
-3. **Permissões só no menu** — cliente acessa rotas restritas por URL.
-4. **Modelo financeiro** difere do escopo genérico (aceitável se for o modelo real da operação).
-5. **Equipe não vê dados do operador** em financeiro/documentos (filtro `ownerId`).
-6. **Sem testes automatizados** — QA 100% manual.
+2. **Visitor `get` aberto a autenticados** — trade-off MVP; list continua restrito a dono/admin; IDs vêm de `visitVisitors`.
+3. **Modelo financeiro** difere do escopo genérico (aceitável se for o modelo real da operação).
+4. **Sem testes automatizados** — QA 100% manual.
 
 ---
 
@@ -203,10 +204,9 @@ Modelo implementado: **orçamentos/NF + comprovante** (opção A), não “despe
 1. Rodar `npm run seed:accounts` e promover UIDs (admin, team, client).
 2. Executar `npm run deploy:rules` e habilitar Storage no Console.
 3. Vincular UIDs de equipe/cliente em visitas de teste.
-4. Homologar fluxo completo no celular (375px) com as três contas — ver `SETUP-EXTERNO.md` §8.
-5. Corrigir gaps P1 de código (rotas, VisitorsPage, queries compartilhadas, storage rules).
-6. (Opcional) Configurar Trigger Email e testar resumo automático.
-7. `npm run deploy:hosting` para URL pública de homologação.
+4. Homologar fluxo completo no celular (375px) com as três contas — ver `SETUP-EXTERNO.md` §7.
+5. (Opcional) Configurar Trigger Email e testar resumo automático.
+6. `npm run deploy:hosting` para URL pública de homologação.
 
 ---
 

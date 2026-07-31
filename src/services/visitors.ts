@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -16,6 +17,7 @@ import type { Visitor } from '@/types'
 const visitorsCol = collection(db, 'visitors')
 
 function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
+  const giftsRaw = Array.isArray(data.gifts) ? data.gifts : []
   return {
     id,
     name: String(data.name ?? ''),
@@ -31,6 +33,14 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
     language: data.language ? String(data.language) : undefined,
     mobilityReduced: data.mobilityReduced === true,
     notes: data.notes ? String(data.notes) : undefined,
+    gifts: giftsRaw.map((g) => {
+      const item = g as Record<string, unknown>
+      return {
+        name: String(item.name ?? ''),
+        quantity: item.quantity != null ? Number(item.quantity) : undefined,
+        notes: item.notes ? String(item.notes) : undefined,
+      }
+    }),
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
@@ -39,6 +49,23 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
+}
+
+export async function getVisitor(id: string): Promise<Visitor | null> {
+  const snap = await getDoc(doc(visitorsCol, id))
+  if (!snap.exists()) return null
+  const data = snap.data() as Record<string, unknown>
+  if (!isActiveRecord(data)) return null
+  return mapVisitor(snap.id, data)
+}
+
+export async function getVisitorsByIds(ids: string[]): Promise<Visitor[]> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return []
+  const results = await Promise.all(unique.map((id) => getVisitor(id)))
+  return results
+    .filter((v): v is Visitor => v != null)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
 export async function listVisitors(
@@ -70,6 +97,11 @@ export async function createVisitor(
     language: data.language ?? null,
     mobilityReduced: data.mobilityReduced ?? false,
     notes: data.notes ?? null,
+    gifts: (data.gifts ?? []).map((g) => ({
+      name: g.name,
+      quantity: g.quantity ?? null,
+      notes: g.notes ?? null,
+    })),
     ownerId,
     isDeleted: false,
     createdAt: serverTimestamp(),

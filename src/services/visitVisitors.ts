@@ -58,7 +58,7 @@ export async function listVisitIdsForVisitor(
 
   await Promise.all(
     visits.map(async (visit) => {
-      const links = await listVisitVisitors(visit.id, ownerId, isAdmin)
+      const links = await listVisitVisitors(visit.id, visit.ownerId, isAdmin)
       if (links.some((link) => link.visitorId === visitorId)) {
         visitIds.push(visit.id)
       }

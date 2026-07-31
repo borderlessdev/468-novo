@@ -77,7 +77,7 @@ export function LogoutConfirmCard({
                   <Button
                     type="button"
                     size="sm"
-                    className="cursor-pointer flex-1 bg-red-300 text-red-900 hover:bg-red-200"
+                    className="cursor-pointer flex-1 bg-[#8B0000] text-white hover:bg-[#6B0000]"
                     disabled={loggingOut}
                     onClick={() => void handleLogout()}
                   >
@@ -103,7 +103,7 @@ export function LogoutConfirmCard({
                   <Button
                     type="button"
                     size="sm"
-                    className="cursor-pointer flex-1 bg-red-300 px-1 text-red-900 hover:bg-red-200"
+                    className="cursor-pointer flex-1 bg-[#8B0000] px-1 text-white hover:bg-[#6B0000]"
                     disabled={loggingOut}
                     onClick={() => void handleLogout()}
                     title="Sair"

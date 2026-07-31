@@ -19,6 +19,7 @@ import {
 import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
+import { acceptInvite } from '@/services/invites'
 import type { UserProfile, UserRole } from '@/types'
 import type { NotificationPreferences } from '@/lib/notificationPreferences'
 import { getAuthErrorMessage } from '@/lib/utils'
@@ -32,7 +33,12 @@ interface AuthContextValue {
   isClient: boolean
   canWrite: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    options?: { role?: UserRole; inviteId?: string },
+  ) => Promise<void>
   logout: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   refreshProfile: () => Promise<void>
@@ -104,7 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (
+      name: string,
+      email: string,
+      password: string,
+      options?: { role?: UserRole; inviteId?: string },
+    ) => {
       try {
         const credential = await createUserWithEmailAndPassword(auth, email, password)
         await updateProfile(credential.user, { displayName: name })
@@ -112,7 +123,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           uid: credential.user.uid,
           name,
           email,
+          role: options?.role ?? 'user',
         })
+        if (options?.inviteId) {
+          await acceptInvite(options.inviteId, credential.user.uid)
+        }
       } catch (error) {
         const code = (error as { code?: string }).code ?? ''
         throw new Error(getAuthErrorMessage(code))
@@ -127,7 +142,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = useCallback(async (email: string) => {
     try {
-      await sendPasswordResetEmail(auth, email)
+      const normalizedEmail = email.trim().toLowerCase()
+      auth.languageCode = 'pt'
+      await sendPasswordResetEmail(auth, normalizedEmail, {
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: false,
+      })
     } catch (error) {
       const code = (error as { code?: string }).code ?? ''
       throw new Error(getAuthErrorMessage(code))

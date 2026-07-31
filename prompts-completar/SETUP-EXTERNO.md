@@ -4,7 +4,7 @@ Tudo em `prompts-completar` está implementado **no repositório**. Este guia co
 
 > **Não execute deploy** até confirmar acesso ao projeto correto (`borderless-e4a6a`).
 
-**Situação (jul/2026):** código MVP ~85–90%; operacional ~65–70%. Ver `MVP-RELATORIO.md` para avaliação completa.
+**Situação (jul/2026):** código MVP **100%** (gaps P1 fechados); operacional depende de deploy + homologação. Ver `MVP-RELATORIO.md`.
 
 ---
 
@@ -42,7 +42,7 @@ Itens excluídos recebem o campo `expiresAt`. Para remoção automática após 3
 2. Crie política para o campo `expiresAt` nas coleções: `visits`, `visitors`, `activities`, `tasks`, `financeItems`, `documents`
 3. Sem TTL, a UI da lixeira oculta itens expirados, mas os documentos permanecem no banco até limpeza manual
 
-> **Atenção:** `storage.rules` atuais permitem leitura/escrita a qualquer usuário autenticado em `visits/*`. Endurecer antes de produção está na lista P1 do `MVP-RELATORIO.md`.
+> **Atenção:** `storage.rules` exigem membership da visita (owner/team/client para leitura; owner/team/admin para escrita). Faça deploy junto com as Firestore rules.
 
 ---
 
@@ -148,14 +148,14 @@ Validar com as contas seed após deploy e UIDs vinculados na visita.
 
 - [ ] Vê visitas em `teamMemberIds`
 - [ ] Edita agenda e tarefas
-- [ ] **Verificar:** financeiro e documentos criados pelo operador (gap conhecido — query `ownerId`)
+- [ ] **Verificar:** financeiro e documentos criados pelo operador (query por `visitId` + rules deployadas)
 - [ ] Não cria visitas nem exclui visita alheia
 
 ### Cliente (`client`)
 
 - [ ] Vê apenas visitas em `clientUserIds`
-- [ ] Menu restrito (Dashboard, Visitas, Agenda, Configurações)
-- [ ] **Verificar:** não acessa `/financeiro`, `/visitantes`, `/planejamento`, `/relatorios` por URL (gap conhecido — só menu bloqueia)
+- [ ] Menu restrito (Dashboard, Visitas, Agenda, Configurações — sem Lixeira)
+- [ ] **Verificar:** URL `/financeiro`, `/visitantes`, `/planejamento`, `/relatorios`, `/configuracoes/lixeira` redireciona para `/`
 - [ ] Não cria/edita dados (`canWrite` false)
 
 ### Admin (claim `admin: true`)
@@ -165,16 +165,17 @@ Validar com as contas seed após deploy e UIDs vinculados na visita.
 
 ---
 
-## 8. Gaps de código conhecidos (corrigir antes ou durante homologação)
+## 8. Gaps de código (fechados)
 
-| Gap | Impacto | Arquivos relacionados |
-|-----|---------|----------------------|
-| Rotas cliente não bloqueadas | Cliente acessa módulos por URL | `ProtectedRoute`, `access.ts`, rotas em `App.tsx` |
-| `VisitorsPage` sem `canWrite` | Cliente pode mutar CRM | `VisitorsPage.tsx` |
-| Financeiro/docs por `ownerId` | Equipe não vê dados do operador | `finance.ts`, `documents.ts` |
-| `storage.rules` permissivas | Risco de segurança | `storage.rules` |
+| Gap | Status |
+|-----|--------|
+| Rotas cliente não bloqueadas | ✅ `ProtectedRoute` + `isNavAllowed` |
+| `VisitorsPage` sem `canWrite` | ✅ |
+| Financeiro/docs por `ownerId` | ✅ query `visitId` + fallback `visit.ownerId` |
+| Visitantes em visita compartilhada | ✅ `get` + `getVisitorsByIds` |
+| `storage.rules` permissivas | ✅ membership da visita |
 
-Detalhes e prioridade: `MVP-RELATORIO.md` § P1.
+Restante para uso real: deploy + homologação (P0 / checklist §7).
 
 ---
 

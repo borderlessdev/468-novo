@@ -23,6 +23,7 @@ function mapTask(id: string, data: Record<string, unknown>): Task {
     order: Number(data.order ?? 0),
     dueDate: data.dueDate ? String(data.dueDate) : undefined,
     assigneeName: data.assigneeName ? String(data.assigneeName) : undefined,
+    assigneeId: data.assigneeId ? String(data.assigneeId) : undefined,
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
@@ -77,7 +78,7 @@ export async function listPendingTasks(
   if (visits.length === 0) return []
 
   const tasksPerVisit = await Promise.all(
-    visits.map((visit) => listTasks(visit.id, userId, isAdmin)),
+    visits.map((visit) => listTasks(visit.id, visit.ownerId, isAdmin)),
   )
 
   return sortPendingTasks(
@@ -98,6 +99,7 @@ export async function createTask(
     order: data.order,
     dueDate: data.dueDate ?? null,
     assigneeName: data.assigneeName ?? null,
+    assigneeId: data.assigneeId ?? null,
     ownerId,
     isDeleted: false,
     createdAt: serverTimestamp(),
@@ -121,6 +123,7 @@ export async function createTasksBatch(
       order: index,
       dueDate: null,
       assigneeName: null,
+      assigneeId: null,
       ownerId,
       isDeleted: false,
       createdAt: serverTimestamp(),

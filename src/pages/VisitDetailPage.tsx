@@ -8,7 +8,9 @@ import {
   ArrowLeft,
   Calendar,
   ClipboardList,
+  Copy,
   DollarSign,
+  FileStack,
   FileText,
   Mail,
   Trash2,
@@ -41,7 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
-import { canDeleteVisit, canManageVisitAccess } from '@/lib/access'
+import { canDeleteVisit, canManageVisitAccess, isNavAllowed } from '@/lib/access'
 import { BRAZILIAN_STATES } from '@/lib/constants'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
 import {
@@ -57,15 +59,17 @@ import {
   listDocuments,
   uploadDocument,
 } from '@/services/documents'
-import { listVisitors } from '@/services/visitors'
+import { listVisitors, getVisitorsByIds } from '@/services/visitors'
 import {
   linkVisitorToVisit,
   listVisitVisitors,
   unlinkVisitVisitor,
 } from '@/services/visitVisitors'
 import { deleteVisit, getVisit, syncVisitProgress, updateVisit } from '@/services/visits'
+import { writeActivityLog, listActivityLogsForVisit } from '@/services/activityLogs'
+import { duplicateVisit, saveVisitAsTemplate } from '@/services/visitClone'
 import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
-import type { DocumentCategory, Visitor, Visit, VisitDocument } from '@/types'
+import type { ActivityLog, DocumentCategory, Visitor, Visit, VisitDocument } from '@/types'
 
 const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
   { value: 'contrato', label: 'Contrato' },
@@ -78,7 +82,7 @@ const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
 export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user, isAdmin, role, canWrite } = useAuth()
+  const { user, isAdmin, role, canWrite, profile } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
@@ -97,6 +101,8 @@ export function VisitDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false)
   const [teamIdsInput, setTeamIdsInput] = useState('')
   const [clientIdsInput, setClientIdsInput] = useState('')
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+  const [cloning, setCloning] = useState(false)
   const deleteVisitDialog = useConfirmDelete<{ id: string; name: string }>()
   const deleteDocDialog = useConfirmDelete<VisitDocument>()
 
@@ -127,14 +133,19 @@ export function VisitDetailPage() {
         endDate: visitData.endDate,
         status: visitData.status,
         objective: visitData.objective ?? '',
+        language: visitData.language ?? '',
       })
 
+      const ownerIdForQuery = visitData.ownerId
+
       const results = await Promise.allSettled([
-        listVisitVisitors(id, user.uid, isAdmin),
-        listVisitors(user.uid, isAdmin),
-        listTasks(id, user.uid, isAdmin),
-        listFinanceItems(id, user.uid, isAdmin),
-        listDocuments(id, user.uid, isAdmin),
+        listVisitVisitors(id, ownerIdForQuery, isAdmin),
+        canWrite
+          ? listVisitors(user.uid, isAdmin)
+          : Promise.resolve([] as Visitor[]),
+        listTasks(id, ownerIdForQuery, isAdmin),
+        listFinanceItems(id, ownerIdForQuery, isAdmin),
+        listDocuments(id, ownerIdForQuery, isAdmin),
       ])
 
       const failed = results.filter((result) => result.status === 'rejected')
@@ -151,16 +162,29 @@ export function VisitDetailPage() {
       const finance = results[3].status === 'fulfilled' ? results[3].value : []
       const docs = results[4].status === 'fulfilled' ? results[4].value : []
 
-      const visitorMap = new Map(visitors.map((v) => [v.id, v]))
-      setLinkedVisitors(
-        links.map((l) => visitorMap.get(l.visitorId)).filter(Boolean) as Visitor[],
-      )
+      let linked: Visitor[]
+      try {
+        linked = await getVisitorsByIds(links.map((l) => l.visitorId))
+      } catch (error) {
+        console.error(error)
+        linked = []
+        toast.error('Não foi possível carregar visitantes vinculados')
+      }
+
+      setLinkedVisitors(linked)
       setAllVisitors(visitors)
       setDocuments(docs)
       setPendingTasks(tasks.filter((t) => t.status !== 'completed').length)
       setFinanceTotal(
         finance.reduce((sum, item) => sum + (item.serviceValue ?? 0), 0),
       )
+
+      try {
+        setActivityLogs(await listActivityLogsForVisit(id))
+      } catch (error) {
+        console.error(error)
+        setActivityLogs([])
+      }
 
       const progress = calculateVisitProgress(tasks)
       if (progress !== visitData.progress) {
@@ -177,7 +201,7 @@ export function VisitDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, user, isAdmin, navigate, reset])
+  }, [id, user, isAdmin, canWrite, navigate, reset])
 
   useEffect(() => {
     void load()
@@ -216,12 +240,26 @@ export function VisitDetailPage() {
         endDate: values.endDate,
         status: values.status,
         objective: values.objective || undefined,
+        language: values.language || undefined,
       }
       if (canManageVisitAccess(role, isAdmin, visit, user!.uid)) {
         payload.teamMemberIds = parseUidList(teamIdsInput)
         payload.clientUserIds = parseUidList(clientIdsInput)
       }
       await updateVisit(id, payload)
+      try {
+        await writeActivityLog({
+          entityType: 'visit',
+          entityId: id,
+          visitId: id,
+          action: 'updated',
+          summary: `Visita "${values.title}" atualizada`,
+          actorId: user!.uid,
+          actorName: undefined,
+        })
+      } catch (error) {
+        console.warn(error)
+      }
       toast.success('Visita atualizada')
       await load()
     } catch (error) {
@@ -334,7 +372,7 @@ export function VisitDetailPage() {
     : ''
 
   const handleSendEmail = async () => {
-    if (!visit) return
+    if (!visit || !user) return
     setSendingEmail(true)
     try {
       const mode = await sendVisitSummaryEmail({
@@ -342,6 +380,7 @@ export function VisitDetailPage() {
         subject: `Resumo da visita: ${visit.title}`,
         body: emailSummary,
         visitId: visit.id,
+        createdBy: user.uid,
       })
       if (mode === 'firestore') {
         toast.success('Resumo enfileirado para envio por e-mail')
@@ -387,11 +426,56 @@ export function VisitDetailPage() {
         title={visit.title}
         description={visit.company || visit.pvNumber || 'Detalhes da visita'}
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
             <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEmailOpen(true)}>
               <Mail className="h-4 w-4" />
               Enviar resumo
             </Button>
+            {canWrite ? (
+              <>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={cloning || !user}
+                  onClick={() => {
+                    if (!user || !id) return
+                    setCloning(true)
+                    void duplicateVisit(id, user.uid)
+                      .then((newId) => {
+                        toast.success('Visita duplicada')
+                        navigate(`/visitas/${newId}`)
+                      })
+                      .catch((error) => {
+                        console.error(error)
+                        toast.error('Não foi possível duplicar')
+                      })
+                      .finally(() => setCloning(false))
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  Duplicar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={cloning || !user}
+                  onClick={() => {
+                    if (!user || !id) return
+                    setCloning(true)
+                    void saveVisitAsTemplate(id, user.uid)
+                      .then(() => toast.success('Modelo salvo'))
+                      .catch((error) => {
+                        console.error(error)
+                        toast.error('Não foi possível salvar modelo')
+                      })
+                      .finally(() => setCloning(false))
+                  }}
+                >
+                  <FileStack className="h-4 w-4" />
+                  Salvar como modelo
+                </Button>
+              </>
+            ) : null}
             {showDelete ? (
             <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDeleteVisit}>
               <Trash2 className="h-4 w-4" />
@@ -420,22 +504,26 @@ export function VisitDetailPage() {
             Agenda
           </Link>
         </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link to={`/planejamento?visita=${visit.id}`}>
-            <ClipboardList className="h-4 w-4" />
-            Planejamento
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link to={`/financeiro?visita=${visit.id}`}>
-            <DollarSign className="h-4 w-4" />
-            Financeiro ({formatCurrency(financeTotal)})
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" disabled>
-          <Users className="h-4 w-4" />
+        {isNavAllowed('/planejamento', role, isAdmin, profile?.modulePermissions) ? (
+          <Button variant="outline" className="justify-start" asChild>
+            <Link to={`/planejamento?visita=${visit.id}`}>
+              <ClipboardList className="h-4 w-4" />
+              Planejamento
+            </Link>
+          </Button>
+        ) : null}
+        {isNavAllowed('/financeiro', role, isAdmin, profile?.modulePermissions) ? (
+          <Button variant="outline" className="justify-start" asChild>
+            <Link to={`/financeiro?visita=${visit.id}`}>
+              <DollarSign className="h-4 w-4" />
+              Financeiro ({formatCurrency(financeTotal)})
+            </Link>
+          </Button>
+        ) : null}
+        <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
+          <Users className="h-4 w-4 shrink-0" />
           {linkedVisitors.length} visitante(s) · {pendingTasks} tarefa(s)
-        </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -514,6 +602,10 @@ export function VisitDetailPage() {
                 <Label>Objetivo</Label>
                 <Textarea {...form.register('objective')} rows={3} />
               </div>
+              <div className="space-y-2">
+                <Label>Idioma</Label>
+                <Input {...form.register('language')} placeholder="Português, Inglês..." />
+              </div>
               {showAccessFields ? (
                 <>
                   <div className="space-y-2">
@@ -544,6 +636,7 @@ export function VisitDetailPage() {
                 <div><dt className="text-muted-foreground">Local</dt><dd>{visit.city || '—'}{visit.state ? `, ${visit.state}` : ''}</dd></div>
                 <div><dt className="text-muted-foreground">Período</dt><dd>{formatDate(visit.startDate)} — {formatDate(visit.endDate)}</dd></div>
                 <div><dt className="text-muted-foreground">Objetivo</dt><dd>{visit.objective || '—'}</dd></div>
+                <div><dt className="text-muted-foreground">Idioma</dt><dd>{visit.language || '—'}</dd></div>
               </dl>
             )}
           </CardContent>
@@ -722,6 +815,29 @@ export function VisitDetailPage() {
           </Card>
         </div>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Histórico</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {activityLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma alteração registrada.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {activityLogs.map((log) => (
+                <li key={log.id} className="rounded-lg border px-3 py-2">
+                  <p className="font-medium">{log.summary || log.action}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {log.actorName || 'Usuário'}
+                    {log.entityType ? ` · ${log.entityType}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
         <DialogContent>

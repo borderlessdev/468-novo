@@ -28,6 +28,7 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     endDate: String(data.endDate ?? ''),
     status: (data.status as VisitStatus) ?? 'planejamento',
     objective: data.objective ? String(data.objective) : undefined,
+    language: data.language ? String(data.language) : undefined,
     pvNumber: data.pvNumber ? String(data.pvNumber) : undefined,
     progress: Number(data.progress ?? 0),
     teamMemberIds: Array.isArray(data.teamMemberIds)
@@ -36,6 +37,7 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     clientUserIds: Array.isArray(data.clientUserIds)
       ? (data.clientUserIds as string[])
       : [],
+    isTemplate: data.isTemplate === true,
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
@@ -69,7 +71,7 @@ export async function listVisits(
   if (isAdmin) {
     const snap = await getDocs(query(visitsCol, orderBy('startDate', 'desc')))
     return snap.docs
-      .filter((d) => isActiveRecord(d.data()))
+      .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
       .map((d) => mapVisit(d.id, d.data()))
   }
 
@@ -82,7 +84,7 @@ export async function listVisits(
       ),
     )
     return snap.docs
-      .filter((d) => isActiveRecord(d.data()))
+      .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
       .map((d) => mapVisit(d.id, d.data()))
   }
 
@@ -105,10 +107,10 @@ export async function listVisits(
     ])
     return mergeVisits([
       ...ownedSnap.docs
-        .filter((d) => isActiveRecord(d.data()))
+        .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
         .map((d) => mapVisit(d.id, d.data())),
       ...teamSnap.docs
-        .filter((d) => isActiveRecord(d.data()))
+        .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
         .map((d) => mapVisit(d.id, d.data())),
     ])
   }
@@ -117,17 +119,47 @@ export async function listVisits(
     query(visitsCol, where('ownerId', '==', uid), orderBy('startDate', 'desc')),
   )
   return snap.docs
+    .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
+    .map((d) => mapVisit(d.id, d.data()))
+}
+
+export async function listVisitTemplates(
+  uid: string,
+  isAdmin: boolean,
+): Promise<Visit[]> {
+  const snap = await getDocs(
+    isAdmin
+      ? query(visitsCol, where('isTemplate', '==', true))
+      : query(
+          visitsCol,
+          where('ownerId', '==', uid),
+          where('isTemplate', '==', true),
+        ),
+  )
+  return snap.docs
     .filter((d) => isActiveRecord(d.data()))
     .map((d) => mapVisit(d.id, d.data()))
+    .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'))
 }
 
 export async function createVisit(
   ownerId: string,
-  data: Omit<Visit, 'id' | 'ownerId' | 'createdAt' | 'updatedAt' | 'progress' | 'teamMemberIds' | 'clientUserIds' | 'pvNumber'> & {
+  data: Omit<
+    Visit,
+    | 'id'
+    | 'ownerId'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'progress'
+    | 'teamMemberIds'
+    | 'clientUserIds'
+    | 'pvNumber'
+  > & {
     progress?: number
     teamMemberIds?: string[]
     clientUserIds?: string[]
     pvNumber?: string
+    isTemplate?: boolean
   },
 ): Promise<string> {
   const ref = await addDoc(visitsCol, {
@@ -139,10 +171,12 @@ export async function createVisit(
     endDate: data.endDate,
     status: data.status,
     objective: data.objective ?? null,
+    language: data.language ?? null,
     pvNumber: data.pvNumber ?? crypto.randomUUID(),
     progress: data.progress ?? 0,
     teamMemberIds: data.teamMemberIds ?? [],
     clientUserIds: data.clientUserIds ?? [],
+    isTemplate: data.isTemplate === true,
     ownerId,
     isDeleted: false,
     createdAt: serverTimestamp(),

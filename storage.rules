@@ -6,12 +6,46 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function visitDoc(visitId) {
+      return firestore.get(/databases/(default)/documents/visits/$(visitId));
+    }
+
+    function visitData(visitId) {
+      return visitDoc(visitId).data;
+    }
+
+    function memberIds(field) {
+      return field is list ? field : [];
+    }
+
+    function canReadVisit(visitId) {
+      let visit = visitData(visitId);
+      return isAdmin()
+        || visit.ownerId == request.auth.uid
+        || request.auth.uid in memberIds(visit.teamMemberIds)
+        || request.auth.uid in memberIds(visit.clientUserIds);
+    }
+
+    function canWriteVisit(visitId) {
+      let visit = visitData(visitId);
+      return isAdmin()
+        || visit.ownerId == request.auth.uid
+        || request.auth.uid in memberIds(visit.teamMemberIds);
+    }
+
     match /visits/{visitId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && canReadVisit(visitId);
+
       allow write: if isSignedIn()
+        && canWriteVisit(visitId)
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('application/pdf|image/.*');
-      allow delete: if isSignedIn();
+
+      allow delete: if isSignedIn() && canWriteVisit(visitId);
     }
   }
 }

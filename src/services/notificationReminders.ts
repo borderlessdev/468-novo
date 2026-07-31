@@ -1,4 +1,5 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
+import { listActivities } from '@/services/activities'
 import { listFinanceItemsByOwner } from '@/services/finance'
 import {
   createNotification,
@@ -83,6 +84,29 @@ export async function scanDueReminders(
         href: `/financeiro?visita=${item.visitId}`,
         dedupeKey,
       })
+    }
+
+    const now = Date.now()
+    const in24h = now + 24 * 60 * 60 * 1000
+    for (const visit of visits) {
+      const activities = await listActivities(visit.id, visit.ownerId, isAdmin)
+      for (const activity of activities) {
+        const start = parseISO(activity.startTime).getTime()
+        if (Number.isNaN(start) || start < now || start > in24h) continue
+        const dedupeKey = `activity_soon:${activity.id}:${activity.startTime}`
+        const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
+        if (exists) continue
+        await createNotification({
+          recipientId: userId,
+          type: 'activity_soon',
+          title: 'Atividade nas próximas 24h',
+          body: `"${activity.title}" em ${visit.title}`,
+          visitId: visit.id,
+          entityId: activity.id,
+          href: `/agenda?visita=${visit.id}`,
+          dedupeKey,
+        })
+      }
     }
   } catch (error) {
     console.warn('Failed to scan due reminders', error)

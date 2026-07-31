@@ -25,6 +25,13 @@ export interface TrashItem {
 
 export type UserRole = 'user' | 'team' | 'client' | 'admin'
 
+export interface ModulePermissions {
+  visitors: boolean
+  planning: boolean
+  finance: boolean
+  reports: boolean
+}
+
 export interface NotificationPreferences {
   taskDueSoon: boolean
   financeNfDue: boolean
@@ -34,6 +41,7 @@ export interface NotificationPreferences {
   taskStatusChanged: boolean
   documentUploaded: boolean
   teamUpdated: boolean
+  activitySoon: boolean
 }
 
 export type VisitStatus =
@@ -51,6 +59,7 @@ export interface UserProfile {
   photoURL?: string
   role: UserRole
   notificationPreferences?: Partial<NotificationPreferences>
+  modulePermissions?: Partial<ModulePermissions>
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -65,13 +74,21 @@ export interface Visit extends SoftDeletable {
   endDate: string
   status: VisitStatus
   objective?: string
+  language?: string
   pvNumber?: string
   progress: number
   teamMemberIds: string[]
   clientUserIds: string[]
+  isTemplate?: boolean
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
+}
+
+export interface VisitorGift {
+  name: string
+  quantity?: number
+  notes?: string
 }
 
 export interface Visitor extends SoftDeletable {
@@ -87,6 +104,7 @@ export interface Visitor extends SoftDeletable {
   dietaryRestriction?: string
   mobilityReduced?: boolean
   notes?: string
+  gifts?: VisitorGift[]
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -124,6 +142,7 @@ export interface Task extends SoftDeletable {
   order: number
   dueDate?: string
   assigneeName?: string
+  assigneeId?: string
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -175,6 +194,7 @@ export type NotificationType =
   | 'document_uploaded'
   | 'finance_nf_due'
   | 'team_updated'
+  | 'activity_soon'
 
 export interface Notification {
   id: string
@@ -189,5 +209,57 @@ export interface Notification {
   actorId?: string
   actorName?: string
   dedupeKey?: string
+  createdAt?: unknown
+}
+
+export type ActivityLogEntityType =
+  | 'visit'
+  | 'task'
+  | 'financeItem'
+  | 'activity'
+  | 'visitor'
+  | 'document'
+
+export interface ActivityLog {
+  id: string
+  entityType: ActivityLogEntityType
+  entityId: string
+  visitId?: string
+  action: string
+  changes?: Record<string, { from?: unknown; to?: unknown }>
+  summary?: string
+  actorId: string
+  actorName?: string
+  createdAt?: unknown
+}
+
+export type InviteRole = 'team' | 'client'
+export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'cancelled'
+
+export interface Invite {
+  id: string
+  email: string
+  role: InviteRole
+  token: string
+  status: InviteStatus
+  createdBy: string
+  visitId?: string
+  expiresAt: string
+  createdAt?: unknown
+  acceptedAt?: unknown
+  acceptedBy?: string
+}
+
+export type EmailLogKind = 'visit_summary' | 'invite'
+export type EmailLogStatus = 'queued' | 'mailto'
+
+export interface EmailLog {
+  id: string
+  to: string[]
+  subject: string
+  visitId?: string
+  kind: EmailLogKind
+  status: EmailLogStatus
+  createdBy: string
   createdAt?: unknown
 }

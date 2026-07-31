@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { createEmailLog } from '@/services/emailLogs'
 
 export type EmailDeliveryMode = 'mailto' | 'firestore'
 
@@ -17,9 +18,12 @@ export interface VisitSummaryEmailInput {
   subject: string
   body: string
   visitId?: string
+  createdBy?: string
 }
 
-export async function sendVisitSummaryEmail(input: VisitSummaryEmailInput): Promise<'firestore' | 'mailto'> {
+export async function sendVisitSummaryEmail(
+  input: VisitSummaryEmailInput,
+): Promise<'firestore' | 'mailto'> {
   const to = input.to.trim()
   if (!to) {
     throw new Error('Informe o e-mail do destinatário')
@@ -35,11 +39,31 @@ export async function sendVisitSummaryEmail(input: VisitSummaryEmailInput): Prom
       ...(input.visitId ? { visitId: input.visitId } : {}),
       createdAt: serverTimestamp(),
     })
+    if (input.createdBy) {
+      await createEmailLog({
+        to: [to],
+        subject: input.subject,
+        visitId: input.visitId,
+        kind: 'visit_summary',
+        status: 'queued',
+        createdBy: input.createdBy,
+      })
+    }
     return 'firestore'
   }
 
   const subject = encodeURIComponent(input.subject)
   const body = encodeURIComponent(input.body)
   window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
+  if (input.createdBy) {
+    await createEmailLog({
+      to: [to],
+      subject: input.subject,
+      visitId: input.visitId,
+      kind: 'visit_summary',
+      status: 'mailto',
+      createdBy: input.createdBy,
+    })
+  }
   return 'mailto'
 }

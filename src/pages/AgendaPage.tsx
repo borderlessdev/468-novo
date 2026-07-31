@@ -4,8 +4,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
+import { addDays, format } from 'date-fns'
 import { Calendar, MapPin, Plus } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
+import { WeeklyAgenda, getWeekStart } from '@/components/agenda/WeeklyAgenda'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -45,6 +47,8 @@ export function AgendaPage() {
   const [loading, setLoading] = useState(true)
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [dayFilter, setDayFilter] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'week'>('week')
+  const [weekStart, setWeekStart] = useState(() => getWeekStart())
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
   const [saving, setSaving] = useState(false)
@@ -83,16 +87,18 @@ export function AgendaPage() {
       setActivities([])
       return
     }
+    const ownerIdForQuery =
+      visits.find((v) => v.id === visitId)?.ownerId ?? user.uid
     setLoadingActivities(true)
     try {
-      setActivities(await listActivities(visitId, user.uid, isAdmin))
+      setActivities(await listActivities(visitId, ownerIdForQuery, isAdmin))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar agenda')
     } finally {
       setLoadingActivities(false)
     }
-  }, [visitId, user, isAdmin])
+  }, [visitId, user, isAdmin, visits])
 
   useEffect(() => {
     void loadActivities()
@@ -196,6 +202,32 @@ export function AgendaPage() {
     }
   })
 
+  const handleMoveActivity = async (
+    activity: Activity,
+    next: { date: string; startTime: string; endTime: string },
+  ) => {
+    const conflict = activities.find(
+      (a) =>
+        a.id !== activity.id &&
+        activitiesOverlap(
+          { date: next.date, startTime: next.startTime, endTime: next.endTime },
+          { date: a.date, startTime: a.startTime, endTime: a.endTime },
+        ),
+    )
+    if (conflict) {
+      toast.warning(`Conflito de horário com "${conflict.title}"`)
+      return
+    }
+    try {
+      await updateActivity(activity.id, next)
+      toast.success('Atividade movida')
+      await loadActivities()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível mover a atividade')
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -230,15 +262,62 @@ export function AgendaPage() {
           </Select>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs">Filtrar por dia (opcional)</Label>
-            <Input
-              type="date"
-              value={dayFilter}
-              onChange={(e) => setDayFilter(e.target.value)}
-              className="w-full sm:w-44"
-            />
+          <div className="flex rounded-lg border p-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'week' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('week')}
+            >
+              Semana
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('list')}
+            >
+              Lista
+            </Button>
           </div>
+          {viewMode === 'week' ? (
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setWeekStart((d) => addDays(d, -7))}
+              >
+                ←
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setWeekStart(getWeekStart())}
+              >
+                Hoje
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setWeekStart((d) => addDays(d, 7))}
+              >
+                →
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Label className="text-xs">Filtrar por dia (opcional)</Label>
+              <Input
+                type="date"
+                value={dayFilter}
+                onChange={(e) => setDayFilter(e.target.value)}
+                className="w-full sm:w-44"
+              />
+            </div>
+          )}
           <Button disabled={!visitId || !canWrite} onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Nova atividade
@@ -259,6 +338,36 @@ export function AgendaPage() {
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full" />
           ))}
+        </div>
+      ) : viewMode === 'week' ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Semana de {format(weekStart, 'dd/MM/yyyy')}
+            {selectedVisit ? ` · ${selectedVisit.title}` : ''}
+          </p>
+          {activities.length === 0 ? (
+            <EmptyState
+              icon={Calendar}
+              title="Nenhuma atividade nesta visita"
+              description="Crie a primeira atividade ou mude para a visualização em lista."
+              action={
+                canWrite ? (
+                  <Button onClick={openCreate}>
+                    <Plus className="h-4 w-4" />
+                    Nova atividade
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <WeeklyAgenda
+              weekStart={weekStart}
+              activities={activities}
+              canWrite={canWrite}
+              onActivityClick={openEdit}
+              onMoveActivity={(activity, next) => void handleMoveActivity(activity, next)}
+            />
+          )}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState

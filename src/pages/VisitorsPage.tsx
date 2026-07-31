@@ -22,14 +22,14 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
-import { formatWeightKgInput, formatWeightKgNumber, getFirestoreErrorMessage, parseWeightKg } from '@/lib/utils'
+import { formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
 import { listVisitIdsForVisitor } from '@/services/visitVisitors'
 import { getVisit } from '@/services/visits'
 import type { Visitor } from '@/types'
 
 export function VisitorsPage() {
-  const { user, isAdmin, role } = useAuth()
+  const { user, isAdmin, role, canWrite } = useAuth()
   const [loading, setLoading] = useState(true)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [search, setSearch] = useState('')
@@ -37,6 +37,7 @@ export function VisitorsPage() {
   const [editing, setEditing] = useState<Visitor | null>(null)
   const [visitHistory, setVisitHistory] = useState<{ id: string; title: string }[]>([])
   const [saving, setSaving] = useState(false)
+  const [gifts, setGifts] = useState<{ name: string; quantity: string; notes: string }[]>([])
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
 
   const form = useForm<VisitorInput>({
@@ -81,13 +82,16 @@ export function VisitorsPage() {
       (v) =>
         v.name.toLowerCase().includes(term) ||
         v.document.toLowerCase().includes(term) ||
-        (v.company ?? '').toLowerCase().includes(term),
+        (v.company ?? '').toLowerCase().includes(term) ||
+        (v.gifts ?? []).some((g) => g.name.toLowerCase().includes(term)),
     )
   }, [visitors, search])
 
   const openCreate = () => {
+    if (!canWrite) return
     setEditing(null)
     setVisitHistory([])
+    setGifts([])
     form.reset({
       name: '',
       document: '',
@@ -105,7 +109,15 @@ export function VisitorsPage() {
   }
 
   const openEdit = async (visitor: Visitor) => {
+    if (!canWrite) return
     setEditing(visitor)
+    setGifts(
+      (visitor.gifts ?? []).map((g) => ({
+        name: g.name,
+        quantity: g.quantity != null ? String(g.quantity) : '',
+        notes: g.notes ?? '',
+      })),
+    )
     form.reset({
       name: visitor.name,
       document: visitor.document,
@@ -136,7 +148,7 @@ export function VisitorsPage() {
   }
 
   const onSubmit = form.handleSubmit(async (values) => {
-    if (!user) return
+    if (!user || !canWrite) return
     setSaving(true)
     const payload = {
       name: values.name,
@@ -150,6 +162,13 @@ export function VisitorsPage() {
       language: values.language,
       mobilityReduced: values.mobilityReduced,
       notes: values.notes,
+      gifts: gifts
+        .filter((g) => g.name.trim())
+        .map((g) => ({
+          name: g.name.trim(),
+          quantity: parseOptionalNumber(g.quantity),
+          notes: g.notes || undefined,
+        })),
     }
     try {
       if (editing) {
@@ -171,7 +190,7 @@ export function VisitorsPage() {
 
   const handleDeleteConfirm = () => {
     void deleteDialog.confirm(async (item) => {
-      if (!user) return
+      if (!user || !canWrite) return
       try {
         await deleteVisitor(item.id, user.uid)
         toastMovedToTrash('Visitante movido para a lixeira')
@@ -200,10 +219,12 @@ export function VisitorsPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Novo visitante
-            </Button>
+            {canWrite ? (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Novo visitante
+              </Button>
+            ) : null}
           </div>
         }
       />
@@ -223,10 +244,12 @@ export function VisitorsPage() {
                 title="Nenhum visitante"
                 description="Cadastre visitantes para associá-los às visitas."
                 action={
-                  <Button onClick={openCreate}>
-                    <Plus className="h-4 w-4" />
-                    Novo visitante
-                  </Button>
+                  canWrite ? (
+                    <Button onClick={openCreate}>
+                      <Plus className="h-4 w-4" />
+                      Novo visitante
+                    </Button>
+                  ) : undefined
                 }
               />
             </div>
@@ -245,6 +268,12 @@ export function VisitorsPage() {
                         {visitor.company || '—'}
                         {visitor.role ? ` · ${visitor.role}` : ''}
                       </p>
+                      {(visitor.gifts?.length ?? 0) > 0 ? (
+                        <p className="mt-1 text-xs text-primary">
+                          {visitor.gifts!.length} brinde(s):{' '}
+                          {visitor.gifts!.map((g) => g.name).join(', ')}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-xs text-muted-foreground">
                         {visitor.country || 'Brasil'}
                         {visitor.dietaryRestriction
@@ -253,24 +282,26 @@ export function VisitorsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => void openEdit(visitor)}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}
-                    >
-                      Excluir
-                    </Button>
-                  </div>
+                  {canWrite ? (
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => void openEdit(visitor)}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="flex-1"
+                        onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -285,7 +316,10 @@ export function VisitorsPage() {
                     <th className="px-4 py-3 font-medium">Peso</th>
                     <th className="px-4 py-3 font-medium">Nº calçado</th>
                     <th className="px-4 py-3 font-medium">Restrição alimentar</th>
-                    <th className="px-4 py-3 font-medium">Ações</th>
+                    <th className="px-4 py-3 font-medium">Brindes</th>
+                    {canWrite ? (
+                      <th className="px-4 py-3 font-medium">Ações</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -303,23 +337,30 @@ export function VisitorsPage() {
                         {visitor.dietaryRestriction || 'Nenhuma'}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void openEdit(visitor)}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}
-                          >
-                            Excluir
-                          </Button>
-                        </div>
+                        {(visitor.gifts?.length ?? 0) > 0
+                          ? visitor.gifts!.map((g) => g.name).join(', ')
+                          : '—'}
                       </td>
+                      {canWrite ? (
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void openEdit(visitor)}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}
+                            >
+                              Excluir
+                            </Button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -395,6 +436,74 @@ export function VisitorsPage() {
             <div className="space-y-2 sm:col-span-2">
               <Label>Observações</Label>
               <Textarea {...form.register('notes')} rows={3} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Brindes</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setGifts((prev) => [...prev, { name: '', quantity: '', notes: '' }])
+                  }
+                >
+                  Adicionar
+                </Button>
+              </div>
+              {gifts.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum brinde cadastrado.</p>
+              ) : (
+                <div className="space-y-2">
+                  {gifts.map((gift, index) => (
+                    <div key={index} className="grid gap-2 rounded-lg border p-2 sm:grid-cols-3">
+                      <Input
+                        placeholder="Nome"
+                        value={gift.name}
+                        onChange={(e) =>
+                          setGifts((prev) =>
+                            prev.map((g, i) =>
+                              i === index ? { ...g, name: e.target.value } : g,
+                            ),
+                          )
+                        }
+                      />
+                      <Input
+                        placeholder="Qtd"
+                        value={gift.quantity}
+                        onChange={(e) =>
+                          setGifts((prev) =>
+                            prev.map((g, i) =>
+                              i === index ? { ...g, quantity: e.target.value } : g,
+                            ),
+                          )
+                        }
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Obs"
+                          value={gift.notes}
+                          onChange={(e) =>
+                            setGifts((prev) =>
+                              prev.map((g, i) =>
+                                i === index ? { ...g, notes: e.target.value } : g,
+                              ),
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setGifts((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {editing && visitHistory.length > 0 ? (
               <div className="space-y-2 sm:col-span-2">

@@ -58,7 +58,7 @@ export async function listFinanceItemsByOwner(
   if (visits.length === 0) return []
 
   const itemsPerVisit = await Promise.all(
-    visits.map((visit) => listFinanceItems(visit.id, ownerId, isAdmin)),
+    visits.map((visit) => listFinanceItems(visit.id, visit.ownerId, isAdmin)),
   )
 
   return itemsPerVisit.flat()

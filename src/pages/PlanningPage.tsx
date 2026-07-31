@@ -50,7 +50,8 @@ import { calculateVisitProgress } from '@/lib/utils'
 import { listVisits, syncVisitProgress } from '@/services/visits'
 import { createTask, deleteTask, listTasks, updateTask } from '@/services/tasks'
 import { notifyVisitStakeholders } from '@/services/notifications'
-import type { Task, TaskStatus, Visit } from '@/types'
+import { getUsersByIds } from '@/services/users'
+import type { Task, TaskStatus, UserProfile, Visit } from '@/types'
 
 const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   backlog: 'Pendente',
@@ -188,20 +189,28 @@ export function PlanningPage() {
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState('todos')
+  const [teamMembers, setTeamMembers] = useState<UserProfile[]>([])
 
   const visitId = searchParams.get('visita') ?? ''
   const selectedVisit = visits.find((v) => v.id === visitId)
 
   const form = useForm<TaskInput>({
     resolver: zodResolver(taskSchema),
-    defaultValues: { title: '', dueDate: '', assigneeName: '', status: 'backlog' },
+    defaultValues: {
+      title: '',
+      dueDate: '',
+      assigneeName: '',
+      assigneeId: '',
+      status: 'backlog',
+    },
   })
 
   const refreshProgress = useCallback(async () => {
     if (!visitId || !user) return
-    const all = await listTasks(visitId, user.uid, isAdmin)
+    const ownerIdForQuery = selectedVisit?.ownerId ?? user.uid
+    const all = await listTasks(visitId, ownerIdForQuery, isAdmin)
     await syncVisitProgress(visitId, calculateVisitProgress(all))
-  }, [visitId, user, isAdmin])
+  }, [visitId, user, isAdmin, selectedVisit?.ownerId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -224,28 +233,55 @@ export function PlanningPage() {
       setTasks([])
       return
     }
+    const ownerIdForQuery = selectedVisit?.ownerId ?? user.uid
     try {
-      setTasks(await listTasks(visitId, user.uid, isAdmin))
+      setTasks(await listTasks(visitId, ownerIdForQuery, isAdmin))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar tarefas')
     }
-  }, [visitId, user, isAdmin])
+  }, [visitId, user, isAdmin, selectedVisit?.ownerId])
 
   useEffect(() => {
     void loadTasks()
   }, [loadTasks])
 
+  useEffect(() => {
+    if (!selectedVisit) {
+      setTeamMembers([])
+      return
+    }
+    const ids = [
+      selectedVisit.ownerId,
+      ...selectedVisit.teamMemberIds,
+    ]
+    void getUsersByIds(ids).then(setTeamMembers)
+  }, [selectedVisit])
+
   const filteredTasks = useMemo(() => {
     if (assigneeFilter === 'todos') return tasks
-    if (assigneeFilter === '_none') return tasks.filter((t) => !t.assigneeName)
-    return tasks.filter((t) => t.assigneeName === assigneeFilter)
+    if (assigneeFilter === '_none') {
+      return tasks.filter((t) => !t.assigneeId && !t.assigneeName)
+    }
+    return tasks.filter(
+      (t) => t.assigneeId === assigneeFilter || t.assigneeName === assigneeFilter,
+    )
   }, [tasks, assigneeFilter])
 
   const assigneeOptions = useMemo(() => {
-    const names = new Set(tasks.map((t) => t.assigneeName).filter(Boolean) as string[])
-    return Array.from(names).sort()
-  }, [tasks])
+    const fromTasks = tasks
+      .map((t) => ({ id: t.assigneeId, name: t.assigneeName }))
+      .filter((t) => t.id || t.name)
+    const map = new Map<string, string>()
+    for (const member of teamMembers) {
+      map.set(member.uid, member.name)
+    }
+    for (const item of fromTasks) {
+      if (item.id) map.set(item.id, item.name || item.id)
+      else if (item.name) map.set(item.name, item.name)
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+  }, [tasks, teamMembers])
 
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
@@ -310,7 +346,13 @@ export function PlanningPage() {
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ title: '', dueDate: '', assigneeName: '', status: 'backlog' })
+    form.reset({
+      title: '',
+      dueDate: '',
+      assigneeName: '',
+      assigneeId: '',
+      status: 'backlog',
+    })
     setOpen(true)
   }
 
@@ -320,6 +362,7 @@ export function PlanningPage() {
       title: task.title,
       dueDate: task.dueDate ?? '',
       assigneeName: task.assigneeName ?? '',
+      assigneeId: task.assigneeId ?? '',
       status: task.status,
     })
     setOpen(true)
@@ -353,6 +396,7 @@ export function PlanningPage() {
         await updateTask(editing.id, {
           title: values.title,
           dueDate: values.dueDate || undefined,
+          assigneeId: values.assigneeId || undefined,
           assigneeName: values.assigneeName || undefined,
           status: values.status,
         })
@@ -364,6 +408,7 @@ export function PlanningPage() {
           status: values.status,
           order: grouped[values.status].length,
           dueDate: values.dueDate || undefined,
+          assigneeId: values.assigneeId || undefined,
           assigneeName: values.assigneeName || undefined,
         })
         if (selectedVisit) {
@@ -441,9 +486,9 @@ export function PlanningPage() {
                 <SelectContent>
                   <SelectItem value="todos">Todos responsáveis</SelectItem>
                   <SelectItem value="_none">Sem responsável</SelectItem>
-                  {assigneeOptions.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
+                  {assigneeOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>
+                      {opt.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -481,34 +526,41 @@ export function PlanningPage() {
           </CardContent>
         </Card>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={onDragStart}
-          onDragEnd={(e) => void onDragEnd(e)}
-        >
-          <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
-            {COLUMNS.map((column) => (
-              <div key={column.id} className="min-w-[280px] shrink-0 lg:min-w-0">
-                <KanbanColumn
-                  id={column.id}
-                  label={column.label}
-                  tasks={grouped[column.id]}
-                  onEdit={openEdit}
-                  onDelete={handleDeleteRequest}
-                  canWrite={canWrite}
-                />
-              </div>
-            ))}
-          </div>
-          <DragOverlay>
-            {activeTask ? (
-              <div className="rounded-lg border bg-card p-3 shadow-lg">
-                <p className="text-sm font-medium">{activeTask.title}</p>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        <>
+          {tasks.length > 0 && filteredTasks.length === 0 ? (
+            <p className="mb-3 text-sm text-muted-foreground">
+              Nenhuma tarefa corresponde ao filtro de responsável.
+            </p>
+          ) : null}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={onDragStart}
+            onDragEnd={(e) => void onDragEnd(e)}
+          >
+            <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
+              {COLUMNS.map((column) => (
+                <div key={column.id} className="min-w-[280px] shrink-0 lg:min-w-0">
+                  <KanbanColumn
+                    id={column.id}
+                    label={column.label}
+                    tasks={grouped[column.id]}
+                    onEdit={openEdit}
+                    onDelete={handleDeleteRequest}
+                    canWrite={canWrite}
+                  />
+                </div>
+              ))}
+            </div>
+            <DragOverlay>
+              {activeTask ? (
+                <div className="rounded-lg border bg-card p-3 shadow-lg">
+                  <p className="text-sm font-medium">{activeTask.title}</p>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </>
       )}
 
       <Dialog
@@ -529,7 +581,31 @@ export function PlanningPage() {
             </div>
             <div className="space-y-2">
               <Label>Responsável</Label>
-              <Input {...form.register('assigneeName')} placeholder="Nome do responsável" />
+              <Select
+                value={form.watch('assigneeId') || '_none'}
+                onValueChange={(value) => {
+                  if (value === '_none') {
+                    form.setValue('assigneeId', '')
+                    form.setValue('assigneeName', '')
+                    return
+                  }
+                  const member = teamMembers.find((m) => m.uid === value)
+                  form.setValue('assigneeId', value)
+                  form.setValue('assigneeName', member?.name ?? value)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Sem responsável</SelectItem>
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.uid} value={member.uid}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Prazo</Label>

@@ -85,14 +85,15 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
 
       allow create: if isSignedIn()
         && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.name is string
-        && request.resource.data.role == 'user';
+        && request.resource.data.role in ['user', 'team', 'client'];
 
       allow update: if isSignedIn()
         && (
@@ -132,8 +133,11 @@ service cloud.firestore {
       allow delete: if isAdmin() || resource.data.ownerId == request.auth.uid;
     }
 
+    // get: autenticado (IDs vêm de visitVisitors já protegido).
+    // list: só dono/admin (CRM). Trade-off MVP para equipe/cliente no detalhe.
     match /visitors/{visitorId} {
-      allow read: if ownsOrAdmin();
+      allow get: if isSignedIn();
+      allow list: if ownsOrAdmin();
       allow create: if creatingOwnDoc()
         && request.resource.data.name is string
         && request.resource.data.document is string;
@@ -239,6 +243,49 @@ service cloud.firestore {
 
       allow delete: if isSignedIn()
         && resource.data.recipientId == request.auth.uid;
+    }
+
+    match /activityLogs/{logId} {
+      allow create: if isSignedIn()
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.entityType is string
+        && request.resource.data.entityId is string
+        && request.resource.data.action is string;
+      allow read: if isSignedIn() && (
+        isAdmin()
+        || resource.data.actorId == request.auth.uid
+        || (resource.data.visitId is string && canReadVisit(resource.data.visitId))
+      );
+      allow update, delete: if false;
+    }
+
+    match /invites/{inviteId} {
+      allow read: if resource.data.status == 'pending'
+        || (isSignedIn() && (resource.data.createdBy == request.auth.uid || isAdmin()));
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.token is string
+        && request.resource.data.role in ['team', 'client']
+        && request.resource.data.status == 'pending';
+      allow update: if isSignedIn()
+        && (
+          (resource.data.status == 'pending' && request.resource.data.status == 'accepted')
+          || resource.data.createdBy == request.auth.uid
+          || isAdmin()
+        );
+      allow delete: if isSignedIn()
+        && (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+
+    match /emailLogs/{logId} {
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.subject is string
+        && request.resource.data.to is list;
+      allow read: if isSignedIn()
+        && (isAdmin() || resource.data.createdBy == request.auth.uid);
+      allow update, delete: if false;
     }
 
     match /{document=**} {

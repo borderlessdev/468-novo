@@ -96,13 +96,15 @@ export function FinancePage() {
       setItems([])
       return
     }
+    const ownerIdForQuery =
+      visits.find((v) => v.id === visitId)?.ownerId ?? user.uid
     try {
-      setItems(await listFinanceItems(visitId, user.uid, isAdmin))
+      setItems(await listFinanceItems(visitId, ownerIdForQuery, isAdmin))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar financeiro')
     }
-  }, [visitId, user, isAdmin])
+  }, [visitId, user, isAdmin, visits])
 
   useEffect(() => {
     void loadItems()

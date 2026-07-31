@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -7,22 +7,57 @@ import { AuthLayout } from '@/components/layout/AuthLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
 import { registerSchema, type RegisterInput } from '@/lib/validations'
+import { getInviteByToken } from '@/services/invites'
+import type { Invite } from '@/types'
 
 export function RegisterPage() {
   const { register: registerUser } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite')
   const [loading, setLoading] = useState(false)
+  const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken))
+  const [invite, setInvite] = useState<Invite | null>(null)
+  const [inviteInvalid, setInviteInvalid] = useState(false)
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   })
 
+  useEffect(() => {
+    if (!inviteToken) {
+      setInviteLoading(false)
+      return
+    }
+    setInviteLoading(true)
+    void getInviteByToken(inviteToken)
+      .then((found) => {
+        if (!found) {
+          setInviteInvalid(true)
+          toast.error('Convite inválido ou expirado')
+          return
+        }
+        setInvite(found)
+        setInviteInvalid(false)
+        form.setValue('email', found.email)
+      })
+      .finally(() => setInviteLoading(false))
+  }, [inviteToken, form])
+
   const onSubmit = form.handleSubmit(async (values) => {
+    if (inviteToken && (inviteInvalid || !invite)) {
+      toast.error('Use um convite válido ou cadastre-se sem o parâmetro invite')
+      return
+    }
     setLoading(true)
     try {
-      await registerUser(values.name, values.email, values.password)
+      await registerUser(values.name, values.email, values.password, {
+        role: invite?.role ?? 'user',
+        inviteId: invite?.id,
+      })
       toast.success('Conta criada com sucesso')
       navigate('/')
     } catch (error) {
@@ -32,8 +67,51 @@ export function RegisterPage() {
     }
   })
 
+  if (inviteLoading) {
+    return (
+      <AuthLayout title="Criar conta" subtitle="Validando convite...">
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </AuthLayout>
+    )
+  }
+
+  if (inviteToken && inviteInvalid) {
+    return (
+      <AuthLayout
+        title="Convite inválido"
+        subtitle="Este link expirou ou já foi utilizado."
+      >
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            Peça um novo convite ao operador ou crie uma conta padrão.
+          </p>
+          <Button asChild className="w-full">
+            <Link to="/cadastro">Criar conta sem convite</Link>
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            Já tem conta?{' '}
+            <Link to="/login" className="font-medium text-primary hover:underline">
+              Entrar
+            </Link>
+          </p>
+        </div>
+      </AuthLayout>
+    )
+  }
+
   return (
-    <AuthLayout title="Criar conta" subtitle="Cadastre-se para começar a organizar visitas.">
+    <AuthLayout
+      title="Criar conta"
+      subtitle={
+        invite
+          ? `Convite como ${invite.role === 'team' ? 'equipe' : 'cliente'}.`
+          : 'Cadastre-se para começar a organizar visitas.'
+      }
+    >
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Nome</Label>
@@ -44,7 +122,12 @@ export function RegisterPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
-          <Input id="email" type="email" {...form.register('email')} />
+          <Input
+            id="email"
+            type="email"
+            {...form.register('email')}
+            readOnly={Boolean(invite)}
+          />
           {form.formState.errors.email ? (
             <p className="text-xs text-destructive">{form.formState.errors.email.message}</p>
           ) : null}

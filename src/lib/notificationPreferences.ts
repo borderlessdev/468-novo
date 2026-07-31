@@ -9,6 +9,7 @@ export interface NotificationPreferences {
   taskStatusChanged: boolean
   documentUploaded: boolean
   teamUpdated: boolean
+  activitySoon: boolean
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -20,6 +21,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   taskStatusChanged: true,
   documentUploaded: true,
   teamUpdated: true,
+  activitySoon: true,
 }
 
 export const NOTIFICATION_PREFERENCE_ITEMS: {
@@ -67,6 +69,11 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
     label: 'Equipe',
     description: 'Quando a equipe de uma visita for atualizada',
   },
+  {
+    key: 'activitySoon',
+    label: 'Agenda próxima',
+    description: 'Avisos de atividades nas próximas 24 horas',
+  },
 ]
 
 const TYPE_TO_PREFERENCE: Record<NotificationType, keyof NotificationPreferences> = {
@@ -78,6 +85,7 @@ const TYPE_TO_PREFERENCE: Record<NotificationType, keyof NotificationPreferences
   task_status_changed: 'taskStatusChanged',
   document_uploaded: 'documentUploaded',
   team_updated: 'teamUpdated',
+  activity_soon: 'activitySoon',
 }
 
 export function mergeNotificationPreferences(

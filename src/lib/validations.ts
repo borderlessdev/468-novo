@@ -21,7 +21,7 @@ export const resetPasswordSchema = z.object({
   email: z.email('E-mail inválido'),
 })
 
-export const visitSchema = z.object({
+const visitBaseSchema = z.object({
   title: z.string().min(2, 'Título obrigatório'),
   company: z.string().optional(),
   state: z.string().optional(),
@@ -30,10 +30,37 @@ export const visitSchema = z.object({
   endDate: z.string().min(1, 'Data fim obrigatória'),
   status: z.enum(['planejamento', 'em_andamento', 'concluida', 'cancelada']),
   objective: z.string().optional(),
+  language: z.string().optional(),
+  templateId: z.string().optional(),
   startWithChecklist: z.boolean(),
 })
 
-export const visitEditSchema = visitSchema.omit({ startWithChecklist: true })
+export const visitSchema = visitBaseSchema.refine(
+  (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+  {
+    message: 'Data fim deve ser igual ou posterior à data início',
+    path: ['endDate'],
+  },
+)
+
+export const visitEditSchema = visitBaseSchema
+  .omit({
+    startWithChecklist: true,
+    templateId: true,
+  })
+  .refine(
+    (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+    {
+      message: 'Data fim deve ser igual ou posterior à data início',
+      path: ['endDate'],
+    },
+  )
+
+export const visitorGiftSchema = z.object({
+  name: z.string().min(1, 'Nome do brinde obrigatório'),
+  quantity: z.string().optional(),
+  notes: z.string().optional(),
+})
 
 export const visitorSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
@@ -47,6 +74,7 @@ export const visitorSchema = z.object({
   language: z.string().optional(),
   mobilityReduced: z.boolean().optional(),
   notes: z.string().optional(),
+  gifts: z.array(visitorGiftSchema).optional(),
 })
 
 export const quickVisitorSchema = z.object({
@@ -70,7 +98,14 @@ export const taskSchema = z.object({
   title: z.string().min(2, 'Título obrigatório'),
   dueDate: z.string().optional(),
   assigneeName: z.string().optional(),
+  assigneeId: z.string().optional(),
   status: z.enum(['backlog', 'in_progress', 'completed']),
+})
+
+export const inviteSchema = z.object({
+  email: z.email('E-mail inválido'),
+  role: z.enum(['team', 'client']),
+  visitId: z.string().optional(),
 })
 
 export const financeItemSchema = z.object({
@@ -105,3 +140,4 @@ export type ActivityInput = z.infer<typeof activitySchema>
 export type TaskInput = z.infer<typeof taskSchema>
 export type FinanceItemInput = z.infer<typeof financeItemSchema>
 export type ProfileInput = z.infer<typeof profileSchema>
+export type InviteInput = z.infer<typeof inviteSchema>
