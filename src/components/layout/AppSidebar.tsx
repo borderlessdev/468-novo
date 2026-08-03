@@ -80,7 +80,7 @@ export function AppSidebar({
       />
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-all duration-200',
+          'fixed top-0 bottom-0 left-0 z-50 flex h-dvh min-h-dvh flex-col bg-sidebar text-sidebar-foreground transition-all duration-200',
           collapsed ? 'w-[72px]' : 'w-64',
           open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
@@ -136,7 +136,7 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto space-y-1 px-3 py-4">
           {items
             .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
             .map((item) => {

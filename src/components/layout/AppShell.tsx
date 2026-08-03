@@ -21,7 +21,7 @@ export function AppShell() {
 
   return (
     <VisitDialogProvider>
-      <div className="flex min-h-screen bg-background">
+      <div className="flex min-h-dvh bg-background">
         <AppSidebar
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
