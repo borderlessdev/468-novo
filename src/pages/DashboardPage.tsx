@@ -126,10 +126,26 @@ export function DashboardPage() {
       value: String(cycleVisits.length),
       hint: `Ciclo ${cycleLabel}`,
       icon: CalendarDays,
+      tone: 'bg-primary/8 text-primary dark:bg-primary/15',
     },
-    { label: 'Em planejamento', value: String(planning), icon: Clock3 },
-    { label: 'Em andamento', value: String(ongoing), icon: TrendingUp },
-    { label: 'Total de visitantes', value: String(visitorCount), icon: Users },
+    {
+      label: 'Em planejamento',
+      value: String(planning),
+      icon: Clock3,
+      tone: 'bg-warning/10 text-warning',
+    },
+    {
+      label: 'Em andamento',
+      value: String(ongoing),
+      icon: TrendingUp,
+      tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
+    },
+    {
+      label: 'Total de visitantes',
+      value: String(visitorCount),
+      icon: Users,
+      tone: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+    },
     ...(!isClient
       ? [
           {
@@ -137,19 +153,20 @@ export function DashboardPage() {
             value: formatCurrency(cycleSpend),
             hint: `Ciclo ${cycleLabel}`,
             icon: DollarSign,
+            tone: 'bg-brand/15 text-brand-foreground dark:text-brand',
           },
         ]
       : []),
   ]
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <PageHeader
         title="Dashboard"
-        description={`Visão geral das operações (Ciclo de medição: ${cycleLabel})`}
+        description={`Visão geral das operações · Ciclo ${cycleLabel}`}
         actions={
           <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card/80 p-3 sm:flex-row sm:items-end">
               <div className="space-y-1">
                 <Label htmlFor="cycle-start" className="text-xs text-muted-foreground">
                   Início do ciclo
@@ -192,24 +209,34 @@ export function DashboardPage() {
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 w-full" />
+          {Array.from({ length: isClient ? 4 : 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {kpis.map((kpi) => (
-            <Card key={kpi.label}>
+          {kpis.map((kpi, index) => (
+            <Card
+              key={kpi.label}
+              className="animate-fade-in-up overflow-hidden"
+              style={{ animationDelay: `${index * 40}ms` }}
+            >
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {kpi.label}
                 </CardTitle>
-                <kpi.icon className="h-4 w-4 text-muted-foreground" />
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg ${kpi.tone}`}
+                >
+                  <kpi.icon className="h-4 w-4" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-semibold">{kpi.value}</div>
+                <div className="font-display text-2xl font-semibold tracking-tight">
+                  {kpi.value}
+                </div>
                 {kpi.hint ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{kpi.hint}</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">{kpi.hint}</p>
                 ) : null}
               </CardContent>
             </Card>
@@ -219,13 +246,19 @@ export function DashboardPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Próximas Visitas</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Próximas visitas</CardTitle>
+            <Link
+              to="/visitas"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Ver todas
+            </Link>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-16 w-full rounded-lg" />
               ))
             ) : upcoming.length === 0 ? (
               <EmptyState
@@ -238,11 +271,13 @@ export function DashboardPage() {
                 <Link
                   key={visit.id}
                   to={`/visitas/${visit.id}`}
-                  className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                  className="group flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 px-4 py-3 transition-all hover:border-primary/20 hover:bg-muted/40 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium">{visit.title}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="font-medium transition-colors group-hover:text-primary">
+                      {visit.title}
+                    </p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
                       {formatDate(visit.startDate)}
                       {visit.city ? ` · ${visit.city}` : ''}
                     </p>
@@ -255,14 +290,16 @@ export function DashboardPage() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-warning" />
+          <CardHeader className="flex flex-row items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
+              <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+            </div>
             <CardTitle>Tarefas pendentes</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-16 w-full rounded-lg" />
               ))
             ) : tasks.length === 0 ? (
               <EmptyState
@@ -274,20 +311,22 @@ export function DashboardPage() {
               tasks.map((task) => {
                 const visit = visitById.get(task.visitId)
                 return (
-                <Link
-                  key={task.id}
-                  to={`/planejamento?visita=${task.visitId}`}
-                  className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium">{task.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {visit ? `${visit.title} · ` : ''}
-                      Prazo: {task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}
-                    </p>
-                  </div>
-                  <TaskStatusBadge status={task.status} />
-                </Link>
+                  <Link
+                    key={task.id}
+                    to={`/planejamento?visita=${task.visitId}`}
+                    className="group flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 px-4 py-3 transition-all hover:border-primary/20 hover:bg-muted/40 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium transition-colors group-hover:text-primary">
+                        {task.title}
+                      </p>
+                      <p className="mt-0.5 text-sm text-muted-foreground">
+                        {visit ? `${visit.title} · ` : ''}
+                        Prazo: {task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}
+                      </p>
+                    </div>
+                    <TaskStatusBadge status={task.status} />
+                  </Link>
                 )
               })
             )}

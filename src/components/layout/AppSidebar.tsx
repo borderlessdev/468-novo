@@ -3,7 +3,6 @@ import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
   Calendar,
-  Compass,
   DollarSign,
   LayoutDashboard,
   ListTodo,
@@ -73,14 +72,15 @@ export function AppSidebar({
     <>
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/40 lg:hidden',
-          open ? 'block' : 'hidden',
+          'fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px] transition-opacity lg:hidden',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
         onClick={onClose}
+        aria-hidden={!open}
       />
       <aside
         className={cn(
-          'fixed top-0 bottom-0 left-0 z-50 flex h-dvh min-h-dvh flex-col bg-sidebar text-sidebar-foreground transition-all duration-200',
+          'fixed top-0 bottom-0 left-0 z-50 flex h-dvh min-h-dvh flex-col bg-sidebar text-sidebar-foreground shadow-[4px_0_24px_rgba(0,0,0,0.12)] transition-all duration-200',
           collapsed ? 'w-[72px]' : 'w-64',
           open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
@@ -88,7 +88,7 @@ export function AppSidebar({
       >
         <div
           className={cn(
-            'flex h-16 items-center gap-2 border-b border-sidebar-foreground/10',
+            'flex h-16 items-center gap-2 border-b border-white/8',
             collapsed ? 'justify-center px-2' : 'px-3',
           )}
         >
@@ -98,30 +98,34 @@ export function AppSidebar({
               event.stopPropagation()
               onClose()
             }}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#D4A017] text-sidebar transition-opacity hover:opacity-90"
+            className={cn(
+              'flex shrink-0 items-center transition-opacity hover:opacity-90',
+              collapsed ? 'h-9 w-9 justify-center overflow-hidden rounded-lg' : 'min-w-0 flex-1',
+            )}
             aria-label="Ir para a página inicial"
             title="Página inicial"
           >
-            <Compass className="h-5 w-5" />
+            <img
+              src="/logo.png"
+              alt="Promover Experience"
+              className={cn(
+                'object-contain object-left mix-blend-lighten',
+                collapsed ? 'h-9 w-9 scale-[2.4] object-left' : 'h-10 w-auto max-w-[168px]',
+              )}
+            />
           </Link>
           {!collapsed ? (
-            <>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">Promover Experience</p>
-                <p className="truncate text-xs text-sidebar-foreground/70">Operações de visitas</p>
-              </div>
-              <button
-                type="button"
-                className="hidden cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onToggleCollapse()
-                }}
-                aria-label="Recolher menu"
-              >
-                <PanelLeft className="h-4 w-4" />
-              </button>
-            </>
+            <button
+              type="button"
+              className="hidden shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleCollapse()
+              }}
+              aria-label="Recolher menu"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
           ) : null}
           <button
             type="button"
@@ -136,36 +140,48 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto space-y-1 px-3 py-4">
+        <nav className="scrollbar-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5 py-4">
           {items
             .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
             .map((item) => {
-            const Icon = icons[item.icon]
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                onClick={() => {
-                  if (collapsed) onExpand()
-                  onClose()
-                }}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    collapsed && 'justify-center px-2',
-                    isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-white',
-                  )
-                }
-                title={item.label}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed ? <span>{item.label}</span> : null}
-              </NavLink>
-            )
-          })}
+              const Icon = icons[item.icon]
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  onClick={() => {
+                    if (collapsed) onExpand()
+                    onClose()
+                  }}
+                  className={({ isActive }) =>
+                    cn(
+                      'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                      collapsed && 'justify-center px-2',
+                      isActive
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                    )
+                  }
+                  title={item.label}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive ? (
+                        <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                      ) : null}
+                      <Icon
+                        className={cn(
+                          'h-4 w-4 shrink-0 transition-colors',
+                          isActive ? 'text-brand' : 'group-hover:text-white/90',
+                        )}
+                      />
+                      {!collapsed ? <span>{item.label}</span> : null}
+                    </>
+                  )}
+                </NavLink>
+              )
+            })}
         </nav>
 
         <div className="shrink-0">
@@ -175,7 +191,7 @@ export function AppSidebar({
             collapsed={collapsed}
             triggerRef={sairButtonRef}
           />
-          <div className="border-t border-sidebar-foreground/10 p-3">
+          <div className="border-t border-white/8 p-2.5">
             <button
               ref={sairButtonRef}
               type="button"
@@ -186,7 +202,7 @@ export function AppSidebar({
               }}
               className={cn(
                 'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                'bg-red-300/10 text-red-200 hover:bg-red-300/20 hover:text-red-100',
+                'text-red-300/80 hover:bg-red-400/10 hover:text-red-200',
                 collapsed && 'justify-center px-2',
               )}
               title="Sair da conta"

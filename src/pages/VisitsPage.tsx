@@ -57,7 +57,7 @@ export function VisitsPage() {
   }, [visits, statusFilter, stateFilter])
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <PageHeader
         title="Visitas"
         description="Gerenciar visitas corporativas"
@@ -73,7 +73,7 @@ export function VisitsPage() {
 
       <Card className="mb-4">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Filter className="h-4 w-4" />
             Filtros
           </div>
@@ -134,7 +134,7 @@ export function VisitsPage() {
                 <Link
                   key={visit.id}
                   to={`/visitas/${visit.id}`}
-                  className="block rounded-lg border border-border p-4 transition-colors hover:bg-muted/40"
+                  className="block rounded-xl border border-border/70 bg-muted/10 p-4 transition-all hover:border-primary/20 hover:bg-muted/40 hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -162,21 +162,24 @@ export function VisitsPage() {
             </div>
             <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-sm">
-                <thead className="border-b bg-muted/40 text-left text-muted-foreground">
+                <thead className="border-b border-border/80 bg-muted/30 text-left text-xs tracking-wide text-muted-foreground uppercase">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Estado</th>
-                    <th className="px-4 py-3 font-medium">Número da PV</th>
-                    <th className="px-4 py-3 font-medium">Título da visita</th>
-                    <th className="px-4 py-3 font-medium">Data início</th>
-                    <th className="px-4 py-3 font-medium">Data fim</th>
-                    <th className="px-4 py-3 font-medium">Local</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Progresso</th>
+                    <th className="px-4 py-3.5 font-medium">Estado</th>
+                    <th className="px-4 py-3.5 font-medium">Número da PV</th>
+                    <th className="px-4 py-3.5 font-medium">Título da visita</th>
+                    <th className="px-4 py-3.5 font-medium">Data início</th>
+                    <th className="px-4 py-3.5 font-medium">Data fim</th>
+                    <th className="px-4 py-3.5 font-medium">Local</th>
+                    <th className="px-4 py-3.5 font-medium">Status</th>
+                    <th className="px-4 py-3.5 font-medium">Progresso</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((visit) => (
-                    <tr key={visit.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr
+                      key={visit.id}
+                      className="border-b border-border/60 last:border-0 transition-colors hover:bg-muted/25"
+                    >
                       <td className="px-4 py-3">{visit.state || '—'}</td>
                       <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs">
                         {visit.pvNumber || '—'}

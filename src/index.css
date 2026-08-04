@@ -4,8 +4,9 @@
 
 @theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", "DM Sans", ui-serif, Georgia, serif;
 
-  --color-background: #f7f8f6;
+  --color-background: #f4f6f3;
   --color-foreground: #0f1f1c;
   --color-card: #ffffff;
   --color-card-foreground: #0f1f1c;
@@ -24,10 +25,12 @@
   --color-border: #d8e0dc;
   --color-input: #d8e0dc;
   --color-ring: #0f2f2a;
-  --color-sidebar: #0f2f2a;
+  --color-sidebar: #0c2924;
   --color-sidebar-foreground: #e8f0ed;
   --color-sidebar-accent: #1a433c;
   --color-sidebar-accent-foreground: #ffffff;
+  --color-brand: #d4a017;
+  --color-brand-foreground: #0f2f2a;
   --color-warning: #c47a0a;
   --color-warning-foreground: #fff8eb;
   --color-success: #1a6b4a;
@@ -38,11 +41,11 @@
 }
 
 .dark {
-  --color-background: #0a1210;
+  --color-background: #080f0d;
   --color-foreground: #e8f0ed;
-  --color-card: #111a17;
+  --color-card: #101916;
   --color-card-foreground: #e8f0ed;
-  --color-popover: #111a17;
+  --color-popover: #101916;
   --color-popover-foreground: #e8f0ed;
   --color-primary: #3d9b87;
   --color-primary-foreground: #0a1210;
@@ -57,10 +60,12 @@
   --color-border: #243530;
   --color-input: #243530;
   --color-ring: #3d9b87;
-  --color-sidebar: #0a1210;
+  --color-sidebar: #060c0a;
   --color-sidebar-foreground: #c5d5cf;
   --color-sidebar-accent: #152019;
   --color-sidebar-accent-foreground: #e8f0ed;
+  --color-brand: #e0b03a;
+  --color-brand-foreground: #0a1210;
   --color-warning: #e8a030;
   --color-warning-foreground: #1a1200;
   --color-success: #3d9b87;
@@ -80,12 +85,87 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-background);
+  background:
+    radial-gradient(ellipse 80% 50% at 0% -10%, rgba(15, 47, 42, 0.06), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(212, 160, 23, 0.05), transparent 45%),
+    var(--color-background);
   color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  background:
+    radial-gradient(ellipse 80% 50% at 0% -10%, rgba(61, 155, 135, 0.08), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(224, 176, 58, 0.04), transparent 45%),
+    var(--color-background);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-brand) 35%, transparent);
+  color: var(--color-foreground);
 }
 
 *:focus-visible {
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.stagger-1 {
+  animation-delay: 40ms;
+}
+.stagger-2 {
+  animation-delay: 80ms;
+}
+.stagger-3 {
+  animation-delay: 120ms;
+}
+.stagger-4 {
+  animation-delay: 160ms;
+}
+.stagger-5 {
+  animation-delay: 200ms;
+}
+
+/* Softer scrollbar for sidebar / panels */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-sidebar-foreground) 25%, transparent) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-sidebar-foreground) 25%, transparent);
+  border-radius: 999px;
 }
