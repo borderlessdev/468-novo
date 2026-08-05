@@ -27,6 +27,54 @@ import { listFinanceItemsByOwner } from '@/services/finance'
 import { listVisitVisitors } from '@/services/visitVisitors'
 import type { FinanceItem, Task, Visit } from '@/types'
 
+type KpiRecord = {
+  id: string
+  name: string
+  href: string
+}
+
+function KpiValue({ value, records }: { value: string; records?: KpiRecord[] }) {
+  if (!records) {
+    return <div className="font-display text-2xl font-semibold tracking-tight">{value}</div>
+  }
+
+  return (
+    <div className="group relative inline-block">
+      <button
+        type="button"
+        aria-label={`${value}. Ver registros`}
+        className="cursor-help border-b border-dashed border-current/35 font-display text-2xl font-semibold tracking-tight outline-none transition-colors hover:text-primary focus-visible:text-primary"
+      >
+        {value}
+      </button>
+      <div
+        role="dialog"
+        aria-label="Registros deste indicador"
+        className="pointer-events-none invisible absolute left-0 top-full z-50 mt-2 w-72 translate-y-1 rounded-xl border border-border bg-popover p-2 text-popover-foreground opacity-0 shadow-xl transition-all before:absolute before:-top-2 before:left-0 before:h-2 before:w-full group-hover:pointer-events-auto group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+      >
+        <p className="px-2 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
+          {records.length === 1 ? 'Visita' : 'Visitas'}
+        </p>
+        {records.length === 0 ? (
+          <p className="px-2 py-2 text-sm text-muted-foreground">Nenhum registro neste ciclo.</p>
+        ) : (
+          <div className="max-h-64 space-y-0.5 overflow-y-auto">
+            {records.map((record) => (
+              <Link
+                key={record.id}
+                to={record.href}
+                className="block truncate rounded-lg px-2 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-primary focus-visible:bg-muted focus-visible:text-primary focus-visible:outline-none"
+              >
+                {record.name}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function formatCycleLabel(startIso: string, endIso: string) {
   return `${formatDate(startIso)} a ${formatDate(endIso)}`
 }
@@ -112,8 +160,16 @@ export function DashboardPage() {
     }
   }, [cycleVisits, user, isAdmin])
 
-  const planning = cycleVisits.filter((v) => v.status === 'planejamento').length
-  const ongoing = cycleVisits.filter((v) => v.status === 'em_andamento').length
+  const planningVisits = cycleVisits.filter((v) => v.status === 'planejamento')
+  const ongoingVisits = cycleVisits.filter((v) => v.status === 'em_andamento')
+  const toKpiRecords = (items: Visit[]): KpiRecord[] =>
+    [...items]
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .map((visit) => ({
+        id: visit.id,
+        name: visit.title,
+        href: `/visitas/${visit.id}`,
+      }))
   const upcoming = [...cycleVisits]
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 5)
@@ -124,19 +180,22 @@ export function DashboardPage() {
     {
       label: 'Visitas no ciclo',
       value: String(cycleVisits.length),
+      records: toKpiRecords(cycleVisits),
       hint: `Ciclo ${cycleLabel}`,
       icon: CalendarDays,
       tone: 'bg-primary/8 text-primary dark:bg-primary/15',
     },
     {
       label: 'Em planejamento',
-      value: String(planning),
+      value: String(planningVisits.length),
+      records: toKpiRecords(planningVisits),
       icon: Clock3,
       tone: 'bg-warning/10 text-warning',
     },
     {
       label: 'Em andamento',
-      value: String(ongoing),
+      value: String(ongoingVisits.length),
+      records: toKpiRecords(ongoingVisits),
       icon: TrendingUp,
       tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
     },
@@ -218,7 +277,7 @@ export function DashboardPage() {
           {kpis.map((kpi, index) => (
             <Card
               key={kpi.label}
-              className="animate-fade-in-up overflow-hidden"
+              className="relative animate-fade-in-up hover:z-50 focus-within:z-50"
               style={{ animationDelay: `${index * 40}ms` }}
             >
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -232,9 +291,7 @@ export function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="font-display text-2xl font-semibold tracking-tight">
-                  {kpi.value}
-                </div>
+                <KpiValue value={kpi.value} records={kpi.records} />
                 {kpi.hint ? (
                   <p className="mt-1.5 text-xs text-muted-foreground">{kpi.hint}</p>
                 ) : null}

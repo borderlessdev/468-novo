@@ -64,6 +64,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       status: 'planejamento',
       objective: '',
       language: '',
+      pvNumber: '',
       templateId: '',
       startWithChecklist: true,
     },
@@ -149,6 +150,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           endDate: values.endDate,
           objective: values.objective,
           language: values.language,
+          pvNumber: values.pvNumber,
         })
       } else {
         visitId = await createVisit(user.uid, {
@@ -161,6 +163,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           status: values.status,
           objective: values.objective,
           language: values.language,
+          pvNumber: values.pvNumber,
           progress: 0,
           teamMemberIds: [],
         })
@@ -257,6 +260,19 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
             <div className="space-y-2">
               <Label htmlFor="company">Empresa</Label>
               <Input id="company" {...form.register('company')} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pvNumber">Número da PV *</Label>
+              <Input
+                id="pvNumber"
+                placeholder="Informe o número da PV"
+                {...form.register('pvNumber')}
+              />
+              {form.formState.errors.pvNumber ? (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.pvNumber.message}
+                </p>
+              ) : null}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">

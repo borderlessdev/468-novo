@@ -139,7 +139,7 @@ export async function createVisitFromTemplate(
   templateId: string,
   ownerId: string,
   overrides: Pick<Visit, 'title' | 'startDate' | 'endDate'> &
-    Partial<Pick<Visit, 'company' | 'state' | 'city' | 'objective' | 'language'>>,
+    Partial<Pick<Visit, 'company' | 'state' | 'city' | 'objective' | 'language' | 'pvNumber'>>,
 ): Promise<string> {
   const template = await getVisit(templateId)
   if (!template || !template.isTemplate) throw new Error('Template não encontrado')
@@ -154,6 +154,7 @@ export async function createVisitFromTemplate(
     status: 'planejamento',
     objective: overrides.objective ?? template.objective,
     language: overrides.language ?? template.language,
+    pvNumber: overrides.pvNumber,
     progress: 0,
     teamMemberIds: [],
     clientUserIds: [],

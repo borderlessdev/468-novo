@@ -31,6 +31,7 @@ const visitBaseSchema = z.object({
   status: z.enum(['planejamento', 'em_andamento', 'concluida', 'cancelada']),
   objective: z.string().optional(),
   language: z.string().optional(),
+  pvNumber: z.string().trim().min(1, 'Número da PV obrigatório').optional(),
   templateId: z.string().optional(),
   startWithChecklist: z.boolean(),
 })
