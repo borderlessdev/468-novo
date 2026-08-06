@@ -24,7 +24,7 @@ export function AuthLayout({
       </div>
 
       {/* Brand panel — desktop */}
-      <aside className="relative hidden w-[42%] flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground lg:flex xl:w-[46%]">
+      <aside className="relative hidden w-[42%] flex-col justify-between overflow-hidden bg-primary px-3 py-10 text-primary-foreground lg:flex xl:w-[46%]">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand/20 blur-3xl" />
           <div className="absolute right-0 bottom-0 h-80 w-80 rounded-full bg-brand/15 blur-3xl" />

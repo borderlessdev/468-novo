@@ -1,4 +1,5 @@
 import { Menu } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
@@ -53,7 +54,11 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
 
       <div className="flex items-center gap-2 sm:gap-3">
         <NotificationBell />
-        <div className="flex items-center gap-2.5 rounded-full border border-border/70 bg-muted/40 py-1 pr-3 pl-1">
+        <Link
+          to="/perfil"
+          className="flex items-center gap-2.5 rounded-full border border-border/70 bg-muted/40 py-1 pr-3 pl-1 hover:opacity-95"
+          aria-label="Abrir perfil"
+        >
           <Avatar className="h-8 w-8 ring-2 ring-brand/20">
             {profile?.photoURL ? (
               <AvatarImage src={profile.photoURL} alt={profile.name} />
@@ -65,7 +70,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
           <span className="hidden max-w-[120px] truncate text-sm font-medium sm:inline">
             {profile?.name ?? 'Usuário'}
           </span>
-        </div>
+        </Link>
       </div>
     </header>
   )

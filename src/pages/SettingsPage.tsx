@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import {
   Bell,
@@ -27,9 +25,7 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme, type Theme } from '@/contexts/ThemeContext'
-import {
-  mergeModulePermissions,
-} from '@/lib/access'
+import { mergeModulePermissions } from '@/lib/access'
 import {
   mergeNotificationPreferences,
   NOTIFICATION_PREFERENCE_ITEMS,
@@ -37,7 +33,7 @@ import {
 } from '@/lib/notificationPreferences'
 import { TRASH_RETENTION_DAYS } from '@/lib/trash'
 import { cn } from '@/lib/utils'
-import { profileSchema, type ProfileInput } from '@/lib/validations'
+import { type ProfileInput } from '@/lib/validations'
 import { createInvite } from '@/services/invites'
 import { listEmailLogs } from '@/services/emailLogs'
 import {
@@ -115,13 +111,7 @@ export function SettingsPage() {
   )
   const [savingPrefs, setSavingPrefs] = useState(false)
 
-  const form = useForm<ProfileInput>({
-    resolver: zodResolver(profileSchema),
-    values: {
-      name: profile?.name ?? '',
-      photoURL: profile?.photoURL ?? '',
-    },
-  })
+  // profile editing moved to Profile page
 
   useEffect(() => {
     setNotificationPrefs(mergeNotificationPreferences(profile?.notificationPreferences))
@@ -183,21 +173,7 @@ export function SettingsPage() {
     }
   }
 
-  const onSubmitProfile = form.handleSubmit(async (values) => {
-    setSavingProfile(true)
-    try {
-      await updateProfileData({
-        name: values.name,
-        photoURL: values.photoURL || undefined,
-      })
-      toast.success('Perfil atualizado')
-    } catch (error) {
-      console.error(error)
-      toast.error('Não foi possível atualizar o perfil')
-    } finally {
-      setSavingProfile(false)
-    }
-  })
+  // profile update handled on /perfil
 
   const handleNotificationToggle = async (
     key: keyof NotificationPreferences,
@@ -239,36 +215,6 @@ export function SettingsPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Perfil</CardTitle>
-            <CardDescription>Informações básicas da sua conta.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={onSubmitProfile} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome</Label>
-                <Input {...form.register('name')} />
-              </div>
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input value={profile?.email ?? ''} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>URL da foto</Label>
-                <Input {...form.register('photoURL')} placeholder="https://" />
-              </div>
-              <div className="space-y-2">
-                <Label>Papel</Label>
-                <Input value={profile?.role ?? 'user'} disabled />
-              </div>
-              <Button type="submit" disabled={savingProfile}>
-                {savingProfile ? 'Salvando...' : 'Salvar alterações'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

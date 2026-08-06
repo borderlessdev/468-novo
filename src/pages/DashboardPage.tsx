@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   CalendarDays,
@@ -34,43 +35,107 @@ type KpiRecord = {
 }
 
 function KpiValue({ value, records }: { value: string; records?: KpiRecord[] }) {
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false)
+  const hideTooltipTimeoutRef = useRef<number | null>(null)
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const portalContainerRef = useRef<HTMLDivElement | null>(null)
+  const [coords, setCoords] = useState<{ left: number; top: number } | null>(null)
+
+  useEffect(() => {
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+    portalContainerRef.current = div
+    return () => {
+      if (div.parentNode) div.parentNode.removeChild(div)
+    }
+  }, [])
+
+  const clearHideTooltipTimeout = useCallback(() => {
+    if (hideTooltipTimeoutRef.current !== null) {
+      window.clearTimeout(hideTooltipTimeoutRef.current)
+      hideTooltipTimeoutRef.current = null
+    }
+  }, [])
+
+  const showTooltip = useCallback(() => {
+    clearHideTooltipTimeout()
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setCoords({ left: rect.left, top: rect.bottom })
+    }
+    setIsTooltipVisible(true)
+  }, [clearHideTooltipTimeout])
+
+  const hideTooltip = useCallback(() => {
+    clearHideTooltipTimeout()
+    hideTooltipTimeoutRef.current = window.setTimeout(() => {
+      setIsTooltipVisible(false)
+    }, 1000)
+  }, [clearHideTooltipTimeout])
+
+  useEffect(() => {
+    return () => {
+      clearHideTooltipTimeout()
+    }
+  }, [clearHideTooltipTimeout])
+
   if (!records) {
     return <div className="font-display text-2xl font-semibold tracking-tight">{value}</div>
   }
 
+  const tooltipNode = (
+    <div
+      role="dialog"
+      aria-label="Registros deste indicador"
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
+      className="w-72 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-xl transition-all before:absolute before:-top-2 before:left-0 before:h-2 before:w-full"
+      style={{
+        position: 'fixed',
+        left: coords?.left ?? 0,
+        top: coords?.top ?? 0,
+        zIndex: 99999,
+      }}
+    >
+      <p className="px-2 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
+        {records.length === 1 ? 'Visita' : 'Visitas'}
+      </p>
+      {records.length === 0 ? (
+        <p className="px-2 py-2 text-sm text-muted-foreground">Nenhum registro neste ciclo.</p>
+      ) : (
+        <div className="max-h-64 space-y-0.5 overflow-y-auto">
+          {records.map((record) => (
+            <Link
+              key={record.id}
+              to={record.href}
+              className="block truncate rounded-lg px-2 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-primary focus-visible:bg-muted focus-visible:text-primary focus-visible:outline-none"
+            >
+              {record.name}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div className="group relative inline-block">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={`${value}. Ver registros`}
+        aria-expanded={isTooltipVisible}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
         className="cursor-help border-b border-dashed border-current/35 font-display text-2xl font-semibold tracking-tight outline-none transition-colors hover:text-primary focus-visible:text-primary"
       >
         {value}
       </button>
-      <div
-        role="dialog"
-        aria-label="Registros deste indicador"
-        className="pointer-events-none invisible absolute left-0 top-full z-50 mt-2 w-72 translate-y-1 rounded-xl border border-border bg-popover p-2 text-popover-foreground opacity-0 shadow-xl transition-all before:absolute before:-top-2 before:left-0 before:h-2 before:w-full group-hover:pointer-events-auto group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
-      >
-        <p className="px-2 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
-          {records.length === 1 ? 'Visita' : 'Visitas'}
-        </p>
-        {records.length === 0 ? (
-          <p className="px-2 py-2 text-sm text-muted-foreground">Nenhum registro neste ciclo.</p>
-        ) : (
-          <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {records.map((record) => (
-              <Link
-                key={record.id}
-                to={record.href}
-                className="block truncate rounded-lg px-2 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-primary focus-visible:bg-muted focus-visible:text-primary focus-visible:outline-none"
-              >
-                {record.name}
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+      {portalContainerRef.current && isTooltipVisible
+        ? createPortal(tooltipNode, portalContainerRef.current)
+        : null}
     </div>
   )
 }
