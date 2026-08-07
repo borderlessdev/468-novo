@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Filter, Plus } from 'lucide-react'
+import { CalendarDays, Columns3, Filter, LayoutGrid, List, MapPin, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/PageHeader'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
@@ -21,7 +21,15 @@ import { BRAZILIAN_STATES } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
 import { listVisits } from '@/services/visits'
 import type { Visit, VisitStatus } from '@/types'
-import { MapPin } from 'lucide-react'
+
+type ViewMode = 'table' | 'cards' | 'status'
+
+const STATUS_COLUMNS: Array<{ value: VisitStatus; label: string }> = [
+  { value: 'planejamento', label: 'Planejamento' },
+  { value: 'em_andamento', label: 'Em andamento' },
+  { value: 'concluida', label: 'Concluídas' },
+  { value: 'cancelada', label: 'Canceladas' },
+]
 
 export function VisitsPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
@@ -30,6 +38,15 @@ export function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('todos')
   const [stateFilter, setStateFilter] = useState<string>('todos')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('visits-view-mode')
+    return saved === 'table' || saved === 'cards' || saved === 'status' ? saved : 'table'
+  })
+
+  const changeViewMode = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('visits-view-mode', mode)
+  }
 
   const load = useCallback(async () => {
     if (!user) return
@@ -72,7 +89,7 @@ export function VisitsPage() {
       />
 
       <Card className="mb-4">
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Filter className="h-4 w-4" />
             Filtros
@@ -102,10 +119,30 @@ export function VisitsPage() {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1 lg:ml-auto" aria-label="Modo de visualização">
+            {([
+              { value: 'table', label: 'Tabela', icon: List },
+              { value: 'cards', label: 'Cards', icon: LayoutGrid },
+              { value: 'status', label: 'Por status', icon: Columns3 },
+            ] as const).map(({ value, label, icon: Icon }) => (
+              <Button
+                key={value}
+                type="button"
+                variant={viewMode === value ? 'secondary' : 'ghost'}
+                size="sm"
+                className="flex-1 gap-2 lg:flex-none"
+                onClick={() => changeViewMode(value)}
+                aria-pressed={viewMode === value}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{label}</span>
+              </Button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={viewMode === 'status' ? 'border-0 bg-transparent shadow-none' : undefined}>
         <CardContent className="p-0">
           {loading ? (
             <div className="space-y-3 p-4">
@@ -119,13 +156,66 @@ export function VisitsPage() {
                 icon={MapPin}
                 title="Nenhuma visita encontrada"
                 description="Ajuste os filtros ou crie uma nova visita."
-                action={
+                action={canWrite ? (
                   <Button onClick={() => setOpen(true)}>
                     <Plus className="h-4 w-4" />
                     Nova Visita
                   </Button>
-                }
+                ) : undefined}
               />
+            </div>
+          ) : viewMode === 'cards' ? (
+            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((visit) => (
+                <Link
+                  key={visit.id}
+                  to={`/visitas/${visit.id}`}
+                  className="group flex min-h-52 flex-col rounded-xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 font-semibold group-hover:text-primary">{visit.title}</p>
+                      {visit.pvNumber ? <p className="mt-1 font-mono text-xs text-muted-foreground">PV {visit.pvNumber}</p> : null}
+                    </div>
+                    <VisitStatusBadge status={visit.status} />
+                  </div>
+                  <div className="mt-5 space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />{formatDate(visit.startDate)} — {formatDate(visit.endDate)}</div>
+                    <div className="flex items-center gap-2"><MapPin className="h-4 w-4" />{[visit.city, visit.state].filter(Boolean).join(' · ') || 'Local não informado'}</div>
+                  </div>
+                  <div className="mt-auto pt-5">
+                    <div className="mb-2 flex justify-between text-xs text-muted-foreground"><span>Progresso</span><span>{visit.progress}%</span></div>
+                    <Progress value={visit.progress} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : viewMode === 'status' ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {STATUS_COLUMNS.map((column) => {
+                const columnVisits = filtered.filter((visit) => visit.status === column.value)
+                return (
+                  <section key={column.value} className="rounded-xl border bg-muted/20 p-3">
+                    <header className="mb-3 flex items-center justify-between px-1">
+                      <h2 className="text-sm font-semibold">{column.label}</h2>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{columnVisits.length}</span>
+                    </header>
+                    <div className="space-y-3">
+                      {columnVisits.length === 0 ? (
+                        <div className="rounded-lg border border-dashed p-5 text-center text-xs text-muted-foreground">Nenhuma visita</div>
+                      ) : columnVisits.map((visit) => (
+                        <Link key={visit.id} to={`/visitas/${visit.id}`} className="block rounded-lg border bg-card p-3 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                          <p className="line-clamp-2 text-sm font-medium">{visit.title}</p>
+                          {visit.pvNumber ? <p className="mt-1 font-mono text-[11px] text-muted-foreground">PV {visit.pvNumber}</p> : null}
+                          <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" />{formatDate(visit.startDate)}</div>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{[visit.city, visit.state].filter(Boolean).join(' · ') || '—'}</div>
+                          <div className="mt-3 flex items-center gap-2"><Progress value={visit.progress} className="flex-1" /><span className="text-[11px] text-muted-foreground">{visit.progress}%</span></div>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )
+              })}
             </div>
           ) : (
             <>

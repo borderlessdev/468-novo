@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { Plus, Search, Users } from 'lucide-react'
+import { Building2, Columns3, Gift, Globe2, LayoutGrid, List, Plus, Search, Utensils, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
@@ -28,17 +28,28 @@ import { listVisitIdsForVisitor } from '@/services/visitVisitors'
 import { getVisit } from '@/services/visits'
 import type { Visitor } from '@/types'
 
+type ViewMode = 'table' | 'cards' | 'company'
+
 export function VisitorsPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
   const [loading, setLoading] = useState(true)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('visitors-view-mode')
+    return saved === 'table' || saved === 'cards' || saved === 'company' ? saved : 'table'
+  })
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Visitor | null>(null)
   const [visitHistory, setVisitHistory] = useState<{ id: string; title: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [gifts, setGifts] = useState<{ name: string; quantity: string; notes: string }[]>([])
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
+
+  const changeViewMode = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('visitors-view-mode', mode)
+  }
 
   const form = useForm<VisitorInput>({
     resolver: zodResolver(visitorSchema),
@@ -229,7 +240,33 @@ export function VisitorsPage() {
         }
       />
 
-      <Card>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} {filtered.length === 1 ? 'visitante' : 'visitantes'}
+        </p>
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1" aria-label="Modo de visualização">
+          {([
+            { value: 'table', label: 'Tabela', icon: List },
+            { value: 'cards', label: 'Cards', icon: LayoutGrid },
+            { value: 'company', label: 'Por empresa', icon: Columns3 },
+          ] as const).map(({ value, label, icon: Icon }) => (
+            <Button
+              key={value}
+              type="button"
+              variant={viewMode === value ? 'secondary' : 'ghost'}
+              size="sm"
+              className="gap-2"
+              onClick={() => changeViewMode(value)}
+              aria-pressed={viewMode === value}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{label}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <Card className={viewMode === 'company' ? 'border-0 bg-transparent shadow-none' : undefined}>
         <CardContent className="p-0">
           {loading ? (
             <div className="space-y-3 p-4">
@@ -252,6 +289,72 @@ export function VisitorsPage() {
                   ) : undefined
                 }
               />
+            </div>
+          ) : viewMode === 'cards' ? (
+            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((visitor) => (
+                <article key={visitor.id} className="flex min-h-56 flex-col rounded-xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
+                      {visitor.name.trim().charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="truncate font-semibold">{visitor.name}</h2>
+                      <p className="truncate text-sm text-muted-foreground">{visitor.role || 'Cargo não informado'}</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2"><Building2 className="h-4 w-4" />{visitor.company || 'Empresa não informada'}</div>
+                    <div className="flex items-center gap-2"><Globe2 className="h-4 w-4" />{visitor.country || 'País não informado'}</div>
+                    {visitor.dietaryRestriction ? <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400"><Utensils className="mt-0.5 h-4 w-4 shrink-0" />{visitor.dietaryRestriction}</div> : null}
+                    {(visitor.gifts?.length ?? 0) > 0 ? <div className="flex items-start gap-2 text-primary"><Gift className="mt-0.5 h-4 w-4 shrink-0" />{visitor.gifts!.map((gift) => gift.name).join(', ')}</div> : null}
+                  </div>
+                  {canWrite ? (
+                    <div className="mt-auto flex gap-2 pt-5">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => void openEdit(visitor)}>Editar</Button>
+                      <Button size="sm" variant="destructive" className="flex-1" onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}>Excluir</Button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : viewMode === 'company' ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from(new Set(filtered.map((visitor) => visitor.company?.trim() || 'Sem empresa')))
+                .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                .map((company) => {
+                  const companyVisitors = filtered.filter((visitor) => (visitor.company?.trim() || 'Sem empresa') === company)
+                  return (
+                    <section key={company} className="rounded-xl border bg-muted/20 p-3">
+                      <header className="mb-3 flex items-center justify-between gap-2 px-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Building2 className="h-4 w-4 shrink-0 text-primary" />
+                          <h2 className="truncate text-sm font-semibold">{company}</h2>
+                        </div>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{companyVisitors.length}</span>
+                      </header>
+                      <div className="space-y-3">
+                        {companyVisitors.map((visitor) => (
+                          <article key={visitor.id} className="rounded-lg border bg-card p-3 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                            <div className="flex items-start gap-2">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{visitor.name.trim().charAt(0).toUpperCase() || '?'}</div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">{visitor.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{visitor.role || visitor.country || 'Sem detalhes'}</p>
+                              </div>
+                            </div>
+                            {canWrite ? (
+                              <div className="mt-3 flex gap-2 border-t pt-3">
+                                <Button size="sm" variant="ghost" className="h-7 flex-1" onClick={() => void openEdit(visitor)}>Editar</Button>
+                                <Button size="sm" variant="ghost" className="h-7 flex-1 text-destructive hover:text-destructive" onClick={() => deleteDialog.requestDelete({ id: visitor.id, name: visitor.name })}>Excluir</Button>
+                              </div>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
             </div>
           ) : (
             <>

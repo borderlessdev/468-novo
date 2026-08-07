@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { Plus, Trash2, Paperclip } from 'lucide-react'
+import { Building2, CalendarDays, CheckCircle2, Columns3, LayoutGrid, List, Plus, Trash2, Paperclip, ReceiptText } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
@@ -48,12 +48,18 @@ import {
 import { notifyVisitStakeholders } from '@/services/notifications'
 import type { FinanceItem, Visit } from '@/types'
 
+type ViewMode = 'table' | 'cards' | 'invoice'
+
 export function FinancePage() {
   const { user, isAdmin, role, canWrite, profile } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [items, setItems] = useState<FinanceItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('finance-view-mode')
+    return saved === 'table' || saved === 'cards' || saved === 'invoice' ? saved : 'table'
+  })
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<FinanceItem | null>(null)
   const [saving, setSaving] = useState(false)
@@ -89,7 +95,7 @@ export function FinancePage() {
         setLoading(false)
       }
     })()
-  }, [user, isAdmin])
+  }, [user, isAdmin, role])
 
   const loadItems = useCallback(async () => {
     if (!visitId || !user) {
@@ -114,6 +120,11 @@ export function FinancePage() {
     () => items.reduce((sum, item) => sum + (item.serviceValue ?? 0), 0),
     [items],
   )
+
+  const changeViewMode = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('finance-view-mode', mode)
+  }
 
   const resetNfAttachmentState = () => {
     setPendingNfFile(null)
@@ -304,7 +315,25 @@ export function FinancePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {items.length} {items.length === 1 ? 'lançamento' : 'lançamentos'}
+        </p>
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1" aria-label="Modo de visualização">
+          {([
+            { value: 'table', label: 'Tabela', icon: List },
+            { value: 'cards', label: 'Cards', icon: LayoutGrid },
+            { value: 'invoice', label: 'Por nota fiscal', icon: Columns3 },
+          ] as const).map(({ value, label, icon: Icon }) => (
+            <Button key={value} type="button" variant={viewMode === value ? 'secondary' : 'ghost'} size="sm" className="gap-2" onClick={() => changeViewMode(value)} aria-pressed={viewMode === value}>
+              <Icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{label}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <Card className={viewMode === 'invoice' ? 'border-0 bg-transparent shadow-none' : undefined}>
         <CardHeader>
           <CardTitle className="text-base">
             Planilha de status financeiro
@@ -324,6 +353,59 @@ export function FinancePage() {
             <p className="p-6 text-sm text-muted-foreground">
               Nenhum item. Clique em &quot;Nova linha&quot; para adicionar.
             </p>
+          ) : viewMode === 'cards' ? (
+            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {items.map((item) => (
+                <article key={item.id} className="flex min-h-64 flex-col rounded-xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ReceiptText className="h-5 w-5" /></div>
+                    <span className={item.nfReceived ? 'rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400' : 'rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400'}>
+                      {item.nfReceived ? 'NF recebida' : 'NF pendente'}
+                    </span>
+                  </div>
+                  <h2 className="mt-4 line-clamp-2 font-semibold">{item.serviceName}</h2>
+                  <p className="mt-1 text-2xl font-semibold text-primary">{formatCurrency(item.serviceValue)}</p>
+                  <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2"><Building2 className="h-4 w-4" />{item.winningCompany || 'Empresa não informada'}</div>
+                    <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Vencimento: {formatDate(item.nfDueDate)}</div>
+                    {item.attachmentName ? <div className="flex items-center gap-2"><Paperclip className="h-4 w-4" /><span className="truncate">{item.attachmentName}</span></div> : null}
+                  </div>
+                  {canWrite ? (
+                    <div className="mt-auto flex gap-2 pt-5">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(item)}>Editar</Button>
+                      <Button size="sm" variant="destructive" onClick={() => deleteDialog.requestDelete({ id: item.id, name: item.serviceName })}><Trash2 className="h-4 w-4" /><span className="sr-only">Excluir</span></Button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : viewMode === 'invoice' ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {([
+                { received: false, title: 'Notas pendentes', icon: ReceiptText, tone: 'text-amber-600' },
+                { received: true, title: 'Notas recebidas', icon: CheckCircle2, tone: 'text-emerald-600' },
+              ] as const).map((group) => {
+                const groupItems = items.filter((item) => item.nfReceived === group.received)
+                const subtotal = groupItems.reduce((sum, item) => sum + (item.serviceValue ?? 0), 0)
+                const Icon = group.icon
+                return (
+                  <section key={group.title} className="rounded-xl border bg-muted/20 p-3">
+                    <header className="mb-3 flex items-start justify-between gap-3 px-1">
+                      <div className="flex items-center gap-2"><Icon className={`h-4 w-4 ${group.tone}`} /><div><h2 className="text-sm font-semibold">{group.title}</h2><p className="text-xs text-muted-foreground">{formatCurrency(subtotal)}</p></div></div>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{groupItems.length}</span>
+                    </header>
+                    <div className="space-y-3">
+                      {groupItems.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">Nenhum lançamento</div> : groupItems.map((item) => (
+                        <article key={item.id} className="rounded-lg border bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.serviceName}</p><p className="mt-1 truncate text-xs text-muted-foreground">{item.winningCompany || 'Empresa não informada'}</p></div><p className="shrink-0 text-sm font-semibold">{formatCurrency(item.serviceValue)}</p></div>
+                          <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3"><span className="text-xs text-muted-foreground">Vencimento: {formatDate(item.nfDueDate)}</span>{canWrite ? <Button size="sm" variant="ghost" className="h-7" onClick={() => openEdit(item)}>Editar</Button> : null}</div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
           ) : (
             <>
             <div className="space-y-3 p-4 md:hidden">
