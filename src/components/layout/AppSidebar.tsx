@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
@@ -63,6 +63,25 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const [logoutOpen, setLogoutOpen] = useState(false)
   const sairButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeButtonRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, onClose])
 
   const expandIfCollapsed = () => {
     if (collapsed) onExpand()
@@ -79,6 +98,7 @@ export function AppSidebar({
         aria-hidden={!open}
       />
       <aside
+        aria-label="Navegação principal"
         className={cn(
           'fixed top-0 bottom-0 left-0 z-50 flex h-dvh min-h-dvh flex-col bg-sidebar text-sidebar-foreground shadow-[4px_0_24px_rgba(0,0,0,0.12)] transition-all duration-200',
           collapsed ? 'w-[72px]' : 'w-64',
@@ -128,6 +148,7 @@ export function AppSidebar({
             </button>
           ) : null}
           <button
+            ref={closeButtonRef}
             type="button"
             className="cursor-pointer rounded-md p-1 text-sidebar-foreground/80 lg:hidden"
             onClick={(event) => {

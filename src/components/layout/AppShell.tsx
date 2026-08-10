@@ -22,6 +22,12 @@ export function AppShell() {
   return (
     <VisitDialogProvider>
       <div className="flex min-h-dvh bg-background">
+        <a
+          href="#conteudo-principal"
+          className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition-transform focus:translate-y-0"
+        >
+          Pular para o conteúdo
+        </a>
         <AppSidebar
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
@@ -39,8 +45,15 @@ export function AppShell() {
           )}
         >
           <AppHeader onMenuClick={() => setMobileOpen(true)} />
-          <main className="flex-1 p-4 md:p-6 lg:p-8" key={refreshKey}>
-            <Outlet />
+          <main
+            id="conteudo-principal"
+            tabIndex={-1}
+            className="flex-1 overflow-x-hidden p-4 md:p-6 lg:p-8"
+            key={refreshKey}
+          >
+            <div className="mx-auto w-full max-w-[1600px]">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>

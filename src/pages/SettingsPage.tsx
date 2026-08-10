@@ -33,7 +33,6 @@ import {
 } from '@/lib/notificationPreferences'
 import { TRASH_RETENTION_DAYS } from '@/lib/trash'
 import { cn } from '@/lib/utils'
-import { type ProfileInput } from '@/lib/validations'
 import { createInvite } from '@/services/invites'
 import { listEmailLogs } from '@/services/emailLogs'
 import {
@@ -89,7 +88,6 @@ function ThemePreview({ variant }: { variant: Theme }) {
 export function SettingsPage() {
   const {
     profile,
-    updateProfileData,
     updateNotificationPreferences,
     resetPassword,
     isClient,
@@ -98,7 +96,6 @@ export function SettingsPage() {
     user,
   } = useAuth()
   const { theme, setTheme } = useTheme()
-  const [savingProfile, setSavingProfile] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'team' | 'client'>('team')
   const [inviting, setInviting] = useState(false)
@@ -253,6 +250,8 @@ export function SettingsPage() {
                   <button
                     key={value}
                     type="button"
+                    aria-pressed={selected}
+                    aria-label={`Usar tema ${label}`}
                     onClick={() => setTheme(value)}
                     className={cn(
                       'group flex flex-col gap-2.5 rounded-xl border p-2.5 text-left transition-all',
@@ -356,23 +355,33 @@ export function SettingsPage() {
               Envia link de cadastro para equipe ou cliente.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleInvite()
+              }}
+            >
             <div className="space-y-2">
-              <Label>E-mail</Label>
+              <Label htmlFor="invite-email">E-mail</Label>
               <Input
+                id="invite-email"
                 type="email"
+                required
+                autoComplete="email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="pessoa@empresa.com"
               />
             </div>
             <div className="space-y-2">
-              <Label>Perfil</Label>
+              <Label htmlFor="invite-role">Perfil</Label>
               <Select
                 value={inviteRole}
                 onValueChange={(v) => setInviteRole(v as 'team' | 'client')}
               >
-                <SelectTrigger>
+                <SelectTrigger id="invite-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -381,13 +390,13 @@ export function SettingsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={() => void handleInvite()} disabled={inviting}>
+            <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
               {inviting ? 'Enviando...' : 'Convidar'}
             </Button>
             {lastInviteLink ? (
-              <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
-                <Label>Link do convite</Label>
-                <Input readOnly value={lastInviteLink} className="font-mono text-xs" />
+              <div className="space-y-2 rounded-lg border bg-muted/40 p-3" role="status">
+                <Label htmlFor="invite-link">Link do convite</Label>
+                <Input id="invite-link" readOnly value={lastInviteLink} className="font-mono text-xs" />
                 <Button
                   type="button"
                   variant="outline"
@@ -401,6 +410,7 @@ export function SettingsPage() {
                 </Button>
               </div>
             ) : null}
+            </form>
           </CardContent>
         </Card>
       ) : null}
@@ -438,6 +448,7 @@ export function SettingsPage() {
                           <label key={key} className="flex items-center justify-between text-sm">
                             <span>{label}</span>
                             <Switch
+                              aria-label={`${label} para ${u.name}`}
                               checked={perms[key]}
                               onCheckedChange={(checked) =>
                                 void handleModuleToggle(u.uid, key, checked)

@@ -55,7 +55,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-      <Toaster richColors position="top-right" />
+      <Toaster richColors closeButton position="top-right" />
       </AuthProvider>
     </ThemeProvider>
   )
