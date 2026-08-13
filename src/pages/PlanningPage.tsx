@@ -226,7 +226,7 @@ export function PlanningPage() {
         setLoading(false)
       }
     })()
-  }, [user, isAdmin])
+  }, [user, isAdmin, role])
 
   const loadTasks = useCallback(async () => {
     if (!visitId || !user) {
@@ -320,27 +320,38 @@ export function PlanningPage() {
     )
     try {
       await updateTask(task.id, { status: newStatus })
-      if (selectedVisit && user) {
-        try {
-          await notifyVisitStakeholders(selectedVisit, {
-            type: 'task_status_changed',
-            title: 'Tarefa atualizada',
-            body: `"${task.title}" — ${TASK_STATUS_LABELS[newStatus]}`,
-            visitId: selectedVisit.id,
-            entityId: task.id,
-            href: `/planejamento?visita=${selectedVisit.id}`,
-            actorId: user.uid,
-            actorName: profile?.name,
-          })
-        } catch (error) {
-          console.warn('Failed to send task_status_changed notification', error)
-        }
-      }
-      await refreshProgress()
     } catch (error) {
       console.error(error)
       toast.error('Falha ao mover tarefa')
-      await loadTasks()
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)),
+      )
+      return
+    }
+
+    if (selectedVisit && user) {
+      try {
+        await notifyVisitStakeholders(selectedVisit, {
+          type: 'task_status_changed',
+          title: 'Tarefa atualizada',
+          body: `"${task.title}" — ${TASK_STATUS_LABELS[newStatus]}`,
+          visitId: selectedVisit.id,
+          entityId: task.id,
+          href: `/planejamento?visita=${selectedVisit.id}`,
+          actorId: user.uid,
+          actorName: profile?.name,
+        })
+      } catch (error) {
+        console.warn('Failed to send task_status_changed notification', error)
+      }
+    }
+
+    try {
+      await refreshProgress()
+    } catch (error) {
+      // O status da tarefa já foi persistido; uma falha no progresso agregado
+      // não deve desfazer o Kanban nem informar que a movimentação falhou.
+      console.warn('Failed to sync visit progress after moving task', error)
     }
   }
 

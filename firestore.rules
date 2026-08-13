@@ -54,15 +54,19 @@ service cloud.firestore {
       return status in ['backlog', 'in_progress', 'completed'];
     }
 
+    function isCurrentlyDeleted() {
+      return 'isDeleted' in resource.data && resource.data.isDeleted == true;
+    }
+
     function isSoftDeleteUpdate() {
-      return resource.data.isDeleted != true
+      return !isCurrentlyDeleted()
         && request.resource.data.isDeleted == true
         && request.resource.data.deletedBy == request.auth.uid
         && request.resource.data.expiresAt is timestamp;
     }
 
     function isRestoreUpdate() {
-      return resource.data.isDeleted == true
+      return isCurrentlyDeleted()
         && request.resource.data.isDeleted == false;
     }
 
@@ -122,10 +126,10 @@ service cloud.firestore {
 
       allow update: if isAdmin()
         || (resource.data.ownerId == request.auth.uid && unchangedOwnerId() && (
-          resource.data.isDeleted != true || isRestoreUpdate()
+          !isCurrentlyDeleted() || isRestoreUpdate()
         ))
         || (request.auth.uid in resource.data.teamMemberIds && unchangedOwnerId() && (
-          resource.data.isDeleted != true || isRestoreUpdate()
+          !isCurrentlyDeleted() || isRestoreUpdate()
         ))
         || (resource.data.ownerId == request.auth.uid && canTrashUpdate())
         || (request.auth.uid in resource.data.teamMemberIds && canTrashUpdate());
@@ -142,7 +146,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.document is string;
       allow update: if (ownsOrAdmin() && unchangedOwnerId() && (
-          resource.data.isDeleted != true || isRestoreUpdate()
+          !isCurrentlyDeleted() || isRestoreUpdate()
         ))
         || (ownsOrAdmin() && canTrashUpdate());
       allow delete: if ownsOrAdmin();
@@ -165,7 +169,7 @@ service cloud.firestore {
         && request.resource.data.startTime is string
         && request.resource.data.endTime is string;
       allow update: if (canWriteChild() && unchangedOwnerId() && (
-          resource.data.isDeleted != true || isRestoreUpdate()
+          !isCurrentlyDeleted() || isRestoreUpdate()
         ))
         || (canWriteChild() && canTrashUpdate());
       allow delete: if canWriteChild();
@@ -179,7 +183,7 @@ service cloud.firestore {
         && validTaskStatus(request.resource.data.status)
         && request.resource.data.order is number;
       allow update: if (canWriteChild() && unchangedOwnerId() && (
-          resource.data.isDeleted != true || isRestoreUpdate()
+          !isCurrentlyDeleted() || isRestoreUpdate()
         ))
         || (canWriteChild() && canTrashUpdate());
       allow delete: if canWriteChild();
@@ -192,7 +196,7 @@ service cloud.firestore {
         && request.resource.data.serviceName is string
         && request.resource.data.nfReceived is bool;
       allow update: if (canWriteChild() && unchangedOwnerId() && (
-          resource.data.isDeleted != true || isRestoreUpdate()
+          !isCurrentlyDeleted() || isRestoreUpdate()
         ))
         || (canWriteChild() && canTrashUpdate());
       allow delete: if canWriteChild();
