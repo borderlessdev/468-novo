@@ -54,7 +54,7 @@ export const DEFAULT_CHECKLIST = [
 export const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: 'LayoutDashboard' },
   { to: '/visitas', label: 'Visitas', icon: 'MapPin' },
-  { to: '/agenda', label: 'Agenda', icon: 'Calendar' },
+  { to: '/agenda', label: 'Programação', icon: 'Calendar' },
   { to: '/visitantes', label: 'Visitantes', icon: 'Users' },
   { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
   { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },

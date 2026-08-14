@@ -71,7 +71,7 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
   },
   {
     key: 'activitySoon',
-    label: 'Agenda próxima',
+    label: 'Programação próxima',
     description: 'Avisos de atividades nas próximas 24 horas',
   },
 ]

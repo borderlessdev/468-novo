@@ -7,7 +7,7 @@ export const TRASH_RETENTION_DAYS = 30
 export const TRASH_CATEGORY_LABELS: Record<TrashEntityType, string> = {
   visit: 'Visitas',
   visitor: 'Visitantes',
-  activity: 'Agenda',
+  activity: 'Programação',
   task: 'Tarefas',
   financeItem: 'Financeiro',
   document: 'Documentos',

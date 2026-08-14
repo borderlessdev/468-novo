@@ -501,7 +501,7 @@ export function VisitDetailPage() {
         <Button variant="outline" className="justify-start" asChild>
           <Link to={`/agenda?visita=${visit.id}`}>
             <Calendar className="h-4 w-4" />
-            Agenda
+            Programação
           </Link>
         </Button>
         {isNavAllowed('/planejamento', role, isAdmin, profile?.modulePermissions) ? (
