@@ -104,11 +104,28 @@ export async function permanentDeleteEntity(
 ): Promise<void> {
   const col = collections[entityType]
 
-  if (entityType === 'document') {
+  if (entityType === 'document' || entityType === 'financeItem') {
     const snap = await getDoc(doc(col, id))
     if (snap.exists()) {
-      const storagePath = snap.data().storagePath
-      if (typeof storagePath === 'string' && storagePath) {
+      const data = snap.data()
+      const storagePaths = new Set<string>()
+      if (entityType === 'document' && typeof data.storagePath === 'string') {
+        storagePaths.add(data.storagePath)
+      }
+      if (entityType === 'financeItem') {
+        if (typeof data.attachmentPath === 'string') storagePaths.add(data.attachmentPath)
+        if (typeof data.invoiceAttachment?.storagePath === 'string') {
+          storagePaths.add(data.invoiceAttachment.storagePath)
+        }
+        if (Array.isArray(data.budgetAttachments)) {
+          for (const attachment of data.budgetAttachments) {
+            if (typeof attachment?.storagePath === 'string') {
+              storagePaths.add(attachment.storagePath)
+            }
+          }
+        }
+      }
+      for (const storagePath of storagePaths) {
         try {
           await deleteObject(ref(storage, storagePath))
         } catch {

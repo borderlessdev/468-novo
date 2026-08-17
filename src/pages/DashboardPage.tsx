@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CalendarDays,
@@ -34,109 +33,30 @@ type KpiRecord = {
   href: string
 }
 
-function KpiValue({ value, records }: { value: string; records?: KpiRecord[] }) {
-  const [isTooltipVisible, setIsTooltipVisible] = useState(false)
-  const hideTooltipTimeoutRef = useRef<number | null>(null)
-  const buttonRef = useRef<HTMLButtonElement | null>(null)
-  const portalContainerRef = useRef<HTMLDivElement | null>(null)
-  const [coords, setCoords] = useState<{ left: number; top: number } | null>(null)
-
-  useEffect(() => {
-    const div = document.createElement('div')
-    document.body.appendChild(div)
-    portalContainerRef.current = div
-    return () => {
-      if (div.parentNode) div.parentNode.removeChild(div)
-    }
-  }, [])
-
-  const clearHideTooltipTimeout = useCallback(() => {
-    if (hideTooltipTimeoutRef.current !== null) {
-      window.clearTimeout(hideTooltipTimeoutRef.current)
-      hideTooltipTimeoutRef.current = null
-    }
-  }, [])
-
-  const showTooltip = useCallback(() => {
-    clearHideTooltipTimeout()
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect()
-      setCoords({ left: rect.left, top: rect.bottom })
-    }
-    setIsTooltipVisible(true)
-  }, [clearHideTooltipTimeout])
-
-  const hideTooltip = useCallback(() => {
-    clearHideTooltipTimeout()
-    hideTooltipTimeoutRef.current = window.setTimeout(() => {
-      setIsTooltipVisible(false)
-    }, 1000)
-  }, [clearHideTooltipTimeout])
-
-  useEffect(() => {
-    return () => {
-      clearHideTooltipTimeout()
-    }
-  }, [clearHideTooltipTimeout])
-
+function KpiValue({
+  value,
+  records,
+  onPreview,
+}: {
+  value: string
+  records?: KpiRecord[]
+  onPreview?: (records: KpiRecord[]) => void
+}) {
   if (!records) {
     return <div className="font-display text-2xl font-semibold tracking-tight">{value}</div>
   }
 
-  const tooltipNode = (
-    <div
-      role="dialog"
-      aria-label="Registros deste indicador"
-      onMouseEnter={showTooltip}
-      onMouseLeave={hideTooltip}
-      className="w-72 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-xl transition-all before:absolute before:-top-2 before:left-0 before:h-2 before:w-full"
-      style={{
-        position: 'fixed',
-        left: coords?.left ?? 0,
-        top: coords?.top ?? 0,
-        zIndex: 99999,
-      }}
-    >
-      <p className="px-2 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
-        {records.length === 1 ? 'Visita' : 'Visitas'}
-      </p>
-      {records.length === 0 ? (
-        <p className="px-2 py-2 text-sm text-muted-foreground">Nenhum registro neste ciclo.</p>
-      ) : (
-        <div className="max-h-64 space-y-0.5 overflow-y-auto">
-          {records.map((record) => (
-            <Link
-              key={record.id}
-              to={record.href}
-              className="block truncate rounded-lg px-2 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-primary focus-visible:bg-muted focus-visible:text-primary focus-visible:outline-none"
-            >
-              {record.name}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-
   return (
-    <div className="group relative inline-block">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={`${value}. Ver registros`}
-        aria-expanded={isTooltipVisible}
-        onMouseEnter={showTooltip}
-        onMouseLeave={hideTooltip}
-        onFocus={showTooltip}
-        onBlur={hideTooltip}
-        className="cursor-help border-b border-dashed border-current/35 font-display text-2xl font-semibold tracking-tight outline-none transition-colors hover:text-primary focus-visible:text-primary"
-      >
-        {value}
-      </button>
-      {portalContainerRef.current && isTooltipVisible
-        ? createPortal(tooltipNode, portalContainerRef.current)
-        : null}
-    </div>
+    <button
+      type="button"
+      aria-label={`${value}. Exibir visitas no painel Próximas visitas`}
+      onMouseEnter={() => onPreview?.(records)}
+      onFocus={() => onPreview?.(records)}
+      onClick={() => onPreview?.(records)}
+      className="cursor-pointer border-b border-dashed border-current/35 font-display text-2xl font-semibold tracking-tight outline-none transition-colors hover:text-primary focus-visible:text-primary"
+    >
+      {value}
+    </button>
   )
 }
 
@@ -154,6 +74,7 @@ export function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [financeItems, setFinanceItems] = useState<FinanceItem[]>([])
   const [visitorCount, setVisitorCount] = useState(0)
+  const [previewRecordIds, setPreviewRecordIds] = useState<string[] | null>(null)
 
   const cycleLabel = formatCycleLabel(cycleStart, cycleEnd)
   const isDefaultCycle =
@@ -240,6 +161,12 @@ export function DashboardPage() {
     .slice(0, 5)
 
   const visitById = useMemo(() => new Map(visits.map((v) => [v.id, v])), [visits])
+  const displayedVisits = previewRecordIds
+    ? previewRecordIds.flatMap((id) => {
+        const visit = visitById.get(id)
+        return visit ? [visit] : []
+      })
+    : upcoming
 
   const kpis = [
     {
@@ -356,7 +283,11 @@ export function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <KpiValue value={kpi.value} records={kpi.records} />
+                <KpiValue
+                  value={kpi.value}
+                  records={kpi.records}
+                  onPreview={(records) => setPreviewRecordIds(records.map((record) => record.id))}
+                />
                 {kpi.hint ? (
                   <p className="mt-1.5 text-xs text-muted-foreground">{kpi.hint}</p>
                 ) : null}
@@ -382,14 +313,14 @@ export function DashboardPage() {
               Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-16 w-full rounded-lg" />
               ))
-            ) : upcoming.length === 0 ? (
+            ) : displayedVisits.length === 0 ? (
               <EmptyState
                 icon={MapPin}
                 title="Nenhuma visita no ciclo"
                 description="Ajuste o período do ciclo ou crie uma nova visita."
               />
             ) : (
-              upcoming.map((visit) => (
+              displayedVisits.map((visit) => (
                 <Link
                   key={visit.id}
                   to={`/visitas/${visit.id}`}

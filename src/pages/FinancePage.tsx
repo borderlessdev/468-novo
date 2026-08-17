@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { Building2, CalendarDays, CheckCircle2, Columns3, LayoutGrid, List, Plus, Trash2, Paperclip, ReceiptText } from 'lucide-react'
+import { Building2, CalendarDays, CheckCircle2, Columns3, ExternalLink, FileText, LayoutGrid, List, Loader2, Plus, Trash2, Paperclip, ReceiptText, Upload, X } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
@@ -42,13 +42,178 @@ import {
   getFinanceAttachmentUrl,
   listFinanceItems,
   removeFinanceAttachment,
+  removeFinanceFile,
   updateFinanceItem,
   uploadFinanceAttachment,
+  uploadFinanceFile,
 } from '@/services/finance'
 import { notifyVisitStakeholders } from '@/services/notifications'
-import type { FinanceItem, Visit } from '@/types'
+import type { FinanceAttachment, FinanceItem, Visit } from '@/types'
 
 type ViewMode = 'table' | 'cards' | 'invoice'
+
+function formatFileSize(size: number) {
+  if (!size) return ''
+  return size < 1024 * 1024
+    ? `${Math.ceil(size / 1024)} KB`
+    : `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function FinanceFiles({
+  item,
+  canWrite,
+  onChanged,
+}: {
+  item: FinanceItem
+  canWrite: boolean
+  onChanged: () => Promise<void>
+}) {
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const budgets = item.budgetAttachments ?? []
+  const invoice = item.invoiceAttachment
+
+  const openFile = async (attachment: FinanceAttachment) => {
+    try {
+      const url = await getFinanceAttachmentUrl(attachment.storagePath)
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível abrir o arquivo')
+    }
+  }
+
+  const upload = async (file: File, kind: 'budget' | 'invoice') => {
+    setBusyKey(kind)
+    try {
+      await uploadFinanceFile(item, file, kind)
+      toast.success(kind === 'budget' ? 'Orçamento enviado' : 'Nota fiscal enviada')
+      await onChanged()
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Falha no envio')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const remove = async (
+    attachment: FinanceAttachment,
+    kind: 'budget' | 'invoice',
+  ) => {
+    setBusyKey(attachment.id)
+    try {
+      await removeFinanceFile(item, attachment, kind)
+      toast.success(kind === 'budget' ? 'Orçamento removido' : 'Nota fiscal removida')
+      await onChanged()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível remover o arquivo')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const fileRow = (attachment: FinanceAttachment, kind: 'budget' | 'invoice') => (
+    <div
+      key={attachment.id}
+      className="flex min-w-0 items-center gap-1 rounded-md border bg-muted/20 py-1 pl-2 pr-1"
+    >
+      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <button
+        type="button"
+        className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:text-primary hover:underline"
+        title={`${attachment.name}${attachment.size ? ` · ${formatFileSize(attachment.size)}` : ''}`}
+        onClick={() => void openFile(attachment)}
+      >
+        {attachment.name}
+      </button>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-6 w-6"
+        title="Abrir arquivo"
+        onClick={() => void openFile(attachment)}
+      >
+        <ExternalLink className="h-3 w-3" />
+      </Button>
+      {canWrite ? (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-destructive hover:text-destructive"
+          title="Remover arquivo"
+          disabled={busyKey !== null}
+          onClick={() => void remove(attachment, kind)}
+        >
+          {busyKey === attachment.id ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <X className="h-3 w-3" />
+          )}
+        </Button>
+      ) : null}
+    </div>
+  )
+
+  return (
+    <div className="grid min-w-64 gap-3 sm:grid-cols-2">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium">Orçamentos</span>
+          <span className="text-[11px] text-muted-foreground">{budgets.length}/3</span>
+        </div>
+        {budgets.length ? (
+          <div className="space-y-1">{budgets.map((file) => fileRow(file, 'budget'))}</div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Nenhum arquivo</p>
+        )}
+        {canWrite && budgets.length < 3 ? (
+          <label className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              className="sr-only"
+              disabled={busyKey !== null}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void upload(file, 'budget')
+                event.target.value = ''
+              }}
+            />
+            {busyKey === 'budget' ? <Loader2 className="animate-spin" /> : <Upload />}
+            Enviar orçamento
+          </label>
+        ) : null}
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium">Nota fiscal</span>
+          <span className="text-[11px] text-muted-foreground">{invoice ? '1/1' : '0/1'}</span>
+        </div>
+        {invoice ? fileRow(invoice, 'invoice') : <p className="text-xs text-muted-foreground">Nenhum arquivo</p>}
+        {canWrite && !invoice ? (
+          <label className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 px-2 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-500/10 dark:text-amber-400">
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              className="sr-only"
+              disabled={busyKey !== null}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void upload(file, 'invoice')
+                event.target.value = ''
+              }}
+            />
+            {busyKey === 'invoice' ? <Loader2 className="animate-spin" /> : <ReceiptText />}
+            Enviar nota fiscal
+          </label>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 export function FinancePage() {
   const { user, isAdmin, role, canWrite, profile } = useAuth()
@@ -370,6 +535,9 @@ export function FinancePage() {
                     <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Vencimento: {formatDate(item.nfDueDate)}</div>
                     {item.attachmentName ? <div className="flex items-center gap-2"><Paperclip className="h-4 w-4" /><span className="truncate">{item.attachmentName}</span></div> : null}
                   </div>
+                  <div className="mt-4 border-t pt-4">
+                    <FinanceFiles item={item} canWrite={canWrite} onChanged={loadItems} />
+                  </div>
                   {canWrite ? (
                     <div className="mt-auto flex gap-2 pt-5">
                       <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(item)}>Editar</Button>
@@ -398,6 +566,9 @@ export function FinancePage() {
                       {groupItems.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">Nenhum lançamento</div> : groupItems.map((item) => (
                         <article key={item.id} className="rounded-lg border bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
                           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.serviceName}</p><p className="mt-1 truncate text-xs text-muted-foreground">{item.winningCompany || 'Empresa não informada'}</p></div><p className="shrink-0 text-sm font-semibold">{formatCurrency(item.serviceValue)}</p></div>
+                          <div className="mt-3 border-t pt-3">
+                            <FinanceFiles item={item} canWrite={canWrite} onChanged={loadItems} />
+                          </div>
                           <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3"><span className="text-xs text-muted-foreground">Vencimento: {formatDate(item.nfDueDate)}</span>{canWrite ? <Button size="sm" variant="ghost" className="h-7" onClick={() => openEdit(item)}>Editar</Button> : null}</div>
                         </article>
                       ))}
@@ -423,51 +594,14 @@ export function FinancePage() {
                       <p>Comprovante: {item.attachmentName}</p>
                     ) : null}
                   </div>
+                  <div className="mt-4 border-t pt-4">
+                    <FinanceFiles item={item} canWrite={canWrite} onChanged={loadItems} />
+                  </div>
                   {canWrite ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
                         Editar
                       </Button>
-                      <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
-                        <input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png,.webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            void (async () => {
-                              try {
-                                await uploadFinanceAttachment(item, file)
-                                toast.success('Comprovante anexado')
-                                await loadItems()
-                              } catch (error) {
-                                toast.error(
-                                  error instanceof Error ? error.message : 'Falha no upload',
-                                )
-                              }
-                              e.target.value = ''
-                            })()
-                          }}
-                        />
-                        <Paperclip className="h-4 w-4" />
-                        Anexar
-                      </label>
-                      {item.attachmentPath ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            void (async () => {
-                              await removeFinanceAttachment(item)
-                              toast.success('Comprovante removido')
-                              await loadItems()
-                            })()
-                          }}
-                        >
-                          Remover anexo
-                        </Button>
-                      ) : null}
                       <Button
                         size="sm"
                         variant="destructive"
@@ -496,7 +630,7 @@ export function FinancePage() {
                     <th className="whitespace-nowrap px-4 py-3 font-medium">
                       Vencimento do pagamento da nota fiscal
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">Comprovante da nota fiscal</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Arquivos</th>
                     <th className="whitespace-nowrap px-4 py-3 text-center font-medium">Ações</th>
                   </tr>
                 </thead>
@@ -511,72 +645,13 @@ export function FinancePage() {
                       <td className="whitespace-nowrap px-4 py-3">{item.winningCompany || '—'}</td>
                       <td className="whitespace-nowrap px-4 py-3">{item.nfReceived ? 'Sim' : 'Não'}</td>
                       <td className="whitespace-nowrap px-4 py-3">{formatDate(item.nfDueDate)}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        {item.attachmentName ? (
-                          <Button
-                            size="sm"
-                            variant="link"
-                            className="h-auto p-0"
-                            onClick={() => {
-                              void (async () => {
-                                if (!item.attachmentPath) return
-                                const url = await getFinanceAttachmentUrl(item.attachmentPath)
-                                window.open(url, '_blank', 'noopener,noreferrer')
-                              })()
-                            }}
-                          >
-                            {item.attachmentName}
-                          </Button>
-                        ) : (
-                          '—'
-                        )}
+                      <td className="px-4 py-3 align-top">
+                        <FinanceFiles item={item} canWrite={canWrite} onChanged={loadItems} />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
                           {canWrite ? (
                           <>
-                          <label
-                            title="Anexar comprovante"
-                            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md hover:bg-muted"
-                          >
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png,.webp"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (!file) return
-                                void (async () => {
-                                  try {
-                                    await uploadFinanceAttachment(item, file)
-                                    toast.success('Comprovante anexado')
-                                    await loadItems()
-                                  } catch (error) {
-                                    toast.error(
-                                      error instanceof Error ? error.message : 'Falha no upload',
-                                    )
-                                  }
-                                  e.target.value = ''
-                                })()
-                              }}
-                            />
-                            <Paperclip className="h-4 w-4" />
-                          </label>
-                          {item.attachmentPath ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => {
-                                void (async () => {
-                                  await removeFinanceAttachment(item)
-                                  toast.success('Comprovante removido')
-                                  await loadItems()
-                                })()
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          ) : null}
                           <Button
                             size="sm"
                             variant="outline"

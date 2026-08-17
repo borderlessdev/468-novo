@@ -6,6 +6,8 @@ import { EmptyState } from '@/components/shared/PageHeader'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -31,6 +33,12 @@ const STATUS_COLUMNS: Array<{ value: VisitStatus; label: string }> = [
   { value: 'cancelada', label: 'Canceladas' },
 ]
 
+function dateValue(value: string, endOfDay = false) {
+  if (!value) return null
+  const time = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
 export function VisitsPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
   const { setOpen } = useVisitDialog()
@@ -38,6 +46,8 @@ export function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('todos')
   const [stateFilter, setStateFilter] = useState<string>('todos')
+  const [startDateFilter, setStartDateFilter] = useState('')
+  const [endDateFilter, setEndDateFilter] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('visits-view-mode')
     return saved === 'table' || saved === 'cards' || saved === 'status' ? saved : 'table'
@@ -65,13 +75,23 @@ export function VisitsPage() {
   }, [load])
 
   const filtered = useMemo(() => {
+    const periodStart = dateValue(startDateFilter)
+    const periodEnd = dateValue(endDateFilter, true)
+
     return visits.filter((visit) => {
       const statusOk =
         statusFilter === 'todos' || visit.status === (statusFilter as VisitStatus)
       const stateOk = stateFilter === 'todos' || visit.state === stateFilter
-      return statusOk && stateOk
+      const visitStart = dateValue(visit.startDate)
+      const visitEnd = dateValue(visit.endDate, true)
+      const startsWithinPeriod =
+        periodStart === null || (visitStart !== null && visitStart >= periodStart)
+      const endsWithinPeriod =
+        periodEnd === null || (visitEnd !== null && visitEnd <= periodEnd)
+
+      return statusOk && stateOk && startsWithinPeriod && endsWithinPeriod
     })
-  }, [visits, statusFilter, stateFilter])
+  }, [visits, statusFilter, stateFilter, startDateFilter, endDateFilter])
 
   return (
     <div className="animate-fade-in">
@@ -89,8 +109,8 @@ export function VisitsPage() {
       />
 
       <Card className="mb-4">
-        <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-end">
+          <div className="flex h-9 items-center gap-2 text-sm font-medium text-muted-foreground">
             <Filter className="h-4 w-4" />
             Filtros
           </div>
@@ -119,6 +139,30 @@ export function VisitsPage() {
               ))}
             </SelectContent>
           </Select>
+          <div className="w-full space-y-1 sm:w-40">
+            <Label htmlFor="visits-start-date" className="text-xs text-muted-foreground">
+              Data de início
+            </Label>
+            <Input
+              id="visits-start-date"
+              type="date"
+              value={startDateFilter}
+              max={endDateFilter || undefined}
+              onChange={(event) => setStartDateFilter(event.target.value)}
+            />
+          </div>
+          <div className="w-full space-y-1 sm:w-40">
+            <Label htmlFor="visits-end-date" className="text-xs text-muted-foreground">
+              Data final
+            </Label>
+            <Input
+              id="visits-end-date"
+              type="date"
+              value={endDateFilter}
+              min={startDateFilter || undefined}
+              onChange={(event) => setEndDateFilter(event.target.value)}
+            />
+          </div>
           <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1 lg:ml-auto" aria-label="Modo de visualização">
             {([
               { value: 'table', label: 'Tabela', icon: List },

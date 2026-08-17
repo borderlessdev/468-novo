@@ -161,9 +161,20 @@ export interface FinanceItem extends SoftDeletable {
   nfDueDate?: string
   attachmentPath?: string
   attachmentName?: string
+  budgetAttachments?: FinanceAttachment[]
+  invoiceAttachment?: FinanceAttachment
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
+}
+
+export interface FinanceAttachment {
+  id: string
+  name: string
+  storagePath: string
+  contentType: string
+  size: number
+  uploadedAt: string
 }
 
 export type DocumentCategory =

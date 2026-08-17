@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   serverTimestamp,
   updateDoc,
@@ -10,11 +11,41 @@ import { db, storage } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import { softDeleteEntity } from '@/services/trash'
 import { listVisits } from '@/services/visits'
-import type { FinanceItem, UserRole } from '@/types'
+import type { FinanceAttachment, FinanceItem, UserRole } from '@/types'
 
 const col = collection(db, 'financeItems')
 
 function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
+  const mapAttachment = (value: unknown): FinanceAttachment | undefined => {
+    if (!value || typeof value !== 'object') return undefined
+    const attachment = value as Record<string, unknown>
+    if (!attachment.storagePath || !attachment.name) return undefined
+    return {
+      id: String(attachment.id ?? attachment.storagePath),
+      name: String(attachment.name),
+      storagePath: String(attachment.storagePath),
+      contentType: String(attachment.contentType ?? ''),
+      size: Number(attachment.size ?? 0),
+      uploadedAt: String(attachment.uploadedAt ?? ''),
+    }
+  }
+  const budgetAttachments = Array.isArray(data.budgetAttachments)
+    ? data.budgetAttachments.flatMap((value) => {
+        const attachment = mapAttachment(value)
+        return attachment ? [attachment] : []
+      })
+    : []
+  const storedInvoiceAttachment = mapAttachment(data.invoiceAttachment)
+  const legacyInvoiceAttachment = data.attachmentPath
+    ? {
+        id: String(data.attachmentPath),
+        name: String(data.attachmentName ?? 'Nota fiscal'),
+        storagePath: String(data.attachmentPath),
+        contentType: '',
+        size: 0,
+        uploadedAt: '',
+      }
+    : undefined
   return {
     id,
     visitId: String(data.visitId ?? ''),
@@ -28,6 +59,8 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
     nfDueDate: data.nfDueDate ? String(data.nfDueDate) : undefined,
     attachmentPath: data.attachmentPath ? String(data.attachmentPath) : undefined,
     attachmentName: data.attachmentName ? String(data.attachmentName) : undefined,
+    budgetAttachments,
+    invoiceAttachment: storedInvoiceAttachment ?? legacyInvoiceAttachment,
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
@@ -80,6 +113,8 @@ export async function createFinanceItem(
     nfDueDate: data.nfDueDate ?? null,
     attachmentPath: data.attachmentPath ?? null,
     attachmentName: data.attachmentName ?? null,
+    budgetAttachments: data.budgetAttachments ?? [],
+    invoiceAttachment: data.invoiceAttachment ?? null,
     ownerId,
     isDeleted: false,
     createdAt: serverTimestamp(),
@@ -105,16 +140,92 @@ export async function deleteFinanceItem(id: string, deletedBy: string): Promise<
 const FINANCE_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const FINANCE_MAX_SIZE = 10 * 1024 * 1024
 
+export type FinanceAttachmentKind = 'budget' | 'invoice'
+
+function validateFinanceFile(file: File) {
+  if (!FINANCE_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('Use PDF, JPG, PNG ou WEBP.')
+  }
+  if (file.size >= FINANCE_MAX_SIZE) {
+    throw new Error('Arquivo muito grande. Máximo 10 MB.')
+  }
+}
+
+function safeFileName(name: string) {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+}
+
+export async function uploadFinanceFile(
+  item: FinanceItem,
+  file: File,
+  kind: FinanceAttachmentKind,
+): Promise<void> {
+  validateFinanceFile(file)
+  if (kind === 'budget' && (item.budgetAttachments?.length ?? 0) >= 3) {
+    throw new Error('Cada linha permite no máximo 3 orçamentos.')
+  }
+  if (kind === 'invoice' && item.invoiceAttachment) {
+    throw new Error('Remova a nota fiscal atual antes de enviar outra.')
+  }
+
+  const id = crypto.randomUUID()
+  const folder = kind === 'budget' ? 'budgets' : 'invoice'
+  const storagePath = `visits/${item.visitId}/finance/${item.id}/${folder}/${id}-${safeFileName(file.name)}`
+  const attachment: FinanceAttachment = {
+    id,
+    name: file.name,
+    storagePath,
+    contentType: file.type,
+    size: file.size,
+    uploadedAt: new Date().toISOString(),
+  }
+
+  await uploadBytes(ref(storage, storagePath), file, { contentType: file.type })
+  try {
+    if (kind === 'budget') {
+      await updateFinanceItem(item.id, {
+        budgetAttachments: [...(item.budgetAttachments ?? []), attachment],
+      })
+    } else {
+      await updateFinanceItem(item.id, {
+        invoiceAttachment: attachment,
+        attachmentPath: attachment.storagePath,
+        attachmentName: attachment.name,
+      })
+    }
+  } catch (error) {
+    await deleteObject(ref(storage, storagePath)).catch(() => undefined)
+    throw error
+  }
+}
+
+export async function removeFinanceFile(
+  item: FinanceItem,
+  attachment: FinanceAttachment,
+  kind: FinanceAttachmentKind,
+): Promise<void> {
+  if (kind === 'budget') {
+    await updateFinanceItem(item.id, {
+      budgetAttachments: (item.budgetAttachments ?? []).filter(
+        (current) => current.id !== attachment.id,
+      ),
+    })
+  } else {
+    await updateDoc(doc(col, item.id), {
+      invoiceAttachment: deleteField(),
+      attachmentPath: deleteField(),
+      attachmentName: deleteField(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+  await deleteObject(ref(storage, attachment.storagePath)).catch(() => undefined)
+}
+
 export async function uploadFinanceAttachment(
   item: FinanceItem,
   file: File,
 ): Promise<void> {
-  if (!FINANCE_ALLOWED_TYPES.includes(file.type)) {
-    throw new Error('Use PDF, JPG ou PNG.')
-  }
-  if (file.size > FINANCE_MAX_SIZE) {
-    throw new Error('Arquivo muito grande. Máximo 10 MB.')
-  }
+  validateFinanceFile(file)
 
   const storagePath = `visits/${item.visitId}/finance/${item.id}/${file.name}`
   await uploadBytes(ref(storage, storagePath), file, { contentType: file.type })
@@ -136,8 +247,10 @@ export async function removeFinanceAttachment(item: FinanceItem): Promise<void> 
       // ignore missing file
     }
   }
-  await updateFinanceItem(item.id, {
-    attachmentPath: undefined,
-    attachmentName: undefined,
+  await updateDoc(doc(col, item.id), {
+    invoiceAttachment: deleteField(),
+    attachmentPath: deleteField(),
+    attachmentName: deleteField(),
+    updatedAt: serverTimestamp(),
   })
 }
