@@ -4,8 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { addDays, format } from 'date-fns'
-import { Calendar, MapPin, Plus, Upload } from 'lucide-react'
+import { addDays, format, parseISO } from 'date-fns'
+import { Calendar, MapPin, Plus, Search, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { WeeklyAgenda, getWeekStart } from '@/components/agenda/WeeklyAgenda'
@@ -31,26 +31,16 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { activitySchema, type ActivityInput } from '@/lib/validations'
 import { activitiesOverlap, formatDate } from '@/lib/utils'
+import { parseProgrammingWorkbook, type ImportedActivity } from '@/lib/programmingImport'
 import { listVisits } from '@/services/visits'
 import {
   createActivity,
+  createActivities,
   deleteActivity,
   listActivities,
   updateActivity,
 } from '@/services/activities'
 import type { Activity, Visit } from '@/types'
-
-type ImportedActivity = Pick<
-  Activity,
-  | 'title'
-  | 'description'
-  | 'location'
-  | 'date'
-  | 'startTime'
-  | 'endTime'
-  | 'responsibleNames'
-  | 'visitorNames'
->
 
 export function AgendaPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
@@ -60,6 +50,7 @@ export function AgendaPage() {
   const [loading, setLoading] = useState(true)
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [dayFilter, setDayFilter] = useState('')
+  const [eventSearch, setEventSearch] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'week'>('week')
   const [weekStart, setWeekStart] = useState(() => getWeekStart())
   const [open, setOpen] = useState(false)
@@ -123,10 +114,28 @@ export function AgendaPage() {
     void loadActivities()
   }, [loadActivities])
 
+  const searchedActivities = useMemo(() => {
+    const normalizeSearch = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR')
+    const search = normalizeSearch(eventSearch.trim())
+    if (!search) return activities
+    return activities.filter((activity) =>
+      normalizeSearch(activity.title).includes(search),
+    )
+  }, [activities, eventSearch])
+
+  useEffect(() => {
+    if (!eventSearch.trim() || searchedActivities.length === 0) return
+    setWeekStart(getWeekStart(parseISO(searchedActivities[0].date)))
+  }, [eventSearch, searchedActivities])
+
   const filtered = useMemo(() => {
-    if (!dayFilter) return activities
-    return activities.filter((a) => a.date === dayFilter)
-  }, [activities, dayFilter])
+    if (!dayFilter) return searchedActivities
+    return searchedActivities.filter((activity) => activity.date === dayFilter)
+  }, [searchedActivities, dayFilter])
 
   const selectedVisit = visits.find((v) => v.id === visitId)
 
@@ -252,73 +261,8 @@ export function AgendaPage() {
     setImporting(true)
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      if (!sheet) throw new Error('O arquivo não possui uma planilha válida')
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
-      if (rows.length === 0) throw new Error('O arquivo não possui atividades')
-
-      const normalize = (value: string) =>
-        value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
-      const aliases = {
-        title: ['titulo', 'atividade', 'evento', 'nome'],
-        date: ['data', 'dia'],
-        startTime: ['inicio', 'hora inicio', 'horario inicio', 'de'],
-        endTime: ['fim', 'hora fim', 'horario fim', 'ate'],
-        description: ['descricao', 'observacao', 'detalhes'],
-        location: ['local', 'localizacao'],
-        responsibleNames: ['responsaveis', 'responsavel'],
-        visitorNames: ['visitantes', 'visitante'],
-      }
-      const read = (row: Record<string, unknown>, field: keyof typeof aliases) => {
-        const entry = Object.entries(row).find(([key]) => aliases[field].includes(normalize(key)))
-        return entry?.[1] ?? ''
-      }
-      const toDate = (value: unknown) => {
-        if (value instanceof Date && !Number.isNaN(value.getTime())) return format(value, 'yyyy-MM-dd')
-        const text = String(value).trim()
-        const br = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
-        if (br) return `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`
-        return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ''
-      }
-      const toTime = (value: unknown) => {
-        if (value instanceof Date && !Number.isNaN(value.getTime())) return format(value, 'HH:mm')
-        if (typeof value === 'number') {
-          const minutes = Math.round((value % 1) * 24 * 60)
-          return `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
-        }
-        const match = String(value).trim().match(/^(\d{1,2}):([0-5]\d)/)
-        return match ? `${match[1].padStart(2, '0')}:${match[2]}` : ''
-      }
-      const toNames = (value: unknown) =>
-        String(value).split(/[,;\n]/).map((name) => name.trim()).filter(Boolean)
-
-      const parsed = rows.map((row, index) => {
-        const date = toDate(read(row, 'date'))
-        const start = toTime(read(row, 'startTime'))
-        const end = toTime(read(row, 'endTime'))
-        const title = String(read(row, 'title')).trim()
-        if (!title || !date || !start || !end || end <= start) {
-          throw new Error(`Linha ${index + 2}: confira título, data e horários`)
-        }
-        return {
-          title,
-          date,
-          startTime: `${date}T${start}:00`,
-          endTime: `${date}T${end}:00`,
-          description: String(read(row, 'description')).trim(),
-          location: String(read(row, 'location')).trim(),
-          responsibleNames: toNames(read(row, 'responsibleNames')),
-          visitorNames: toNames(read(row, 'visitorNames')),
-        }
-      })
-
-      const imported = parsed.map((item, index) => ({ ...item, id: `import-${index}` }))
-      const combined = [...activities, ...imported]
-      for (let index = activities.length; index < combined.length; index += 1) {
-        const item = combined[index]
-        const conflict = combined.slice(0, index).find((other) => activitiesOverlap(item, other))
-        if (conflict) throw new Error(`Conflito de horário: ${item.title} e ${conflict.title}`)
-      }
+      const fallbackYear = Number(selectedVisit?.startDate.slice(0, 4)) || new Date().getFullYear()
+      const parsed = parseProgrammingWorkbook(workbook, fallbackYear)
 
       setImportPreview(parsed)
       setImportFileName(file.name)
@@ -337,10 +281,9 @@ export function AgendaPage() {
     if (!user || !visitId || importPreview.length === 0) return
     setSavingImport(true)
     try {
-      await Promise.all(
-        importPreview.map((activity) =>
-          createActivity(user.uid, { visitId, ...activity }),
-        ),
+      await createActivities(
+        user.uid,
+        importPreview.map((activity) => ({ visitId, ...activity })),
       )
       toast.success(`${importPreview.length} atividade(s) salva(s)`)
       setImportOpen(false)
@@ -413,9 +356,10 @@ export function AgendaPage() {
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setWeekStart((d) => addDays(d, -7))}
+                aria-label="Voltar um dia"
+                onClick={() => setWeekStart((d) => addDays(d, -1))}
               >
-                ←
+                ← Dia
               </Button>
               <Button
                 type="button"
@@ -429,9 +373,10 @@ export function AgendaPage() {
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setWeekStart((d) => addDays(d, 7))}
+                aria-label="Avançar um dia"
+                onClick={() => setWeekStart((d) => addDays(d, 1))}
               >
-                →
+                Dia →
               </Button>
             </div>
           ) : (
@@ -471,6 +416,20 @@ export function AgendaPage() {
         </div>
       </div>
 
+      {visitId ? (
+        <div className="relative mb-4 max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={eventSearch}
+            onChange={(event) => setEventSearch(event.target.value)}
+            placeholder="Pesquisar evento pelo título..."
+            aria-label="Pesquisar evento pelo título"
+            className="pl-9"
+          />
+        </div>
+      ) : null}
+
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : !visitId ? (
@@ -488,14 +447,15 @@ export function AgendaPage() {
       ) : viewMode === 'week' ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Semana de {format(weekStart, 'dd/MM/yyyy')}
+            Período de {format(weekStart, 'dd/MM/yyyy')} a{' '}
+            {format(addDays(weekStart, 6), 'dd/MM/yyyy')}
             {selectedVisit ? ` · ${selectedVisit.title}` : ''}
           </p>
-          {activities.length === 0 ? (
+          {searchedActivities.length === 0 ? (
             <EmptyState
               icon={Calendar}
-              title="Nenhuma atividade nesta visita"
-              description="Crie a primeira atividade ou mude para a visualização em lista."
+              title={eventSearch ? 'Nenhum evento encontrado' : 'Nenhuma atividade nesta visita'}
+              description={eventSearch ? 'Tente pesquisar por outro título.' : 'Crie a primeira atividade ou mude para a visualização em lista.'}
               action={
                 canWrite ? (
                   <Button onClick={openCreate}>
@@ -508,7 +468,7 @@ export function AgendaPage() {
           ) : (
             <WeeklyAgenda
               weekStart={weekStart}
-              activities={activities}
+              activities={searchedActivities}
               canWrite={canWrite}
               onActivityClick={openEdit}
               onMoveActivity={(activity, next) => void handleMoveActivity(activity, next)}
@@ -610,7 +570,7 @@ export function AgendaPage() {
       )}
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Conferir programação extraída</DialogTitle>
           </DialogHeader>
@@ -721,13 +681,31 @@ export function AgendaPage() {
               <Label>Visitantes (vírgula)</Label>
               <Input {...form.register('visitorNames')} />
             </div>
-            <div className="flex justify-end gap-2 sm:col-span-2">
+            <div className="flex flex-col-reverse gap-2 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                {editing && canWrite ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      const activity = editing
+                      setOpen(false)
+                      setEditing(null)
+                      deleteDialog.requestDelete({ id: activity.id, name: activity.title })
+                    }}
+                  >
+                    Mover para lixeira
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving ? 'Salvando...' : 'Salvar'}
               </Button>
+              </div>
             </div>
           </form>
         </DialogContent>

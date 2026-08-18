@@ -1,5 +1,6 @@
 import {
   addDoc,
+  writeBatch,
   collection,
   doc,
   serverTimestamp,
@@ -63,6 +64,24 @@ export async function createActivity(
     updatedAt: serverTimestamp(),
   })
   return ref.id
+}
+
+export async function createActivities(
+  ownerId: string,
+  activities: Array<Omit<Activity, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>>,
+): Promise<void> {
+  if (activities.length > 500) throw new Error('O arquivo excede o limite de 500 atividades')
+  const batch = writeBatch(db)
+  for (const activity of activities) {
+    batch.set(doc(col), {
+      ...activity,
+      ownerId,
+      isDeleted: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+  await batch.commit()
 }
 
 export async function updateActivity(

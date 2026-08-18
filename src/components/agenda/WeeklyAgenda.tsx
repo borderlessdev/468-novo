@@ -13,8 +13,6 @@ import { ptBR } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import type { Activity } from '@/types'
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 8) // 8..20
-
 function timeToMinutes(iso: string): number {
   const d = parseISO(iso)
   if (Number.isNaN(d.getTime())) return 0
@@ -45,9 +43,6 @@ function DraggableActivity({
     data: { activity },
     disabled: Boolean(disabled),
   })
-  const top = ((timeToMinutes(activity.startTime) - 8 * 60) / 60) * 48
-  const height = (durationMinutes(activity.startTime, activity.endTime) / 60) * 48
-
   return (
     <button
       type="button"
@@ -56,19 +51,13 @@ function DraggableActivity({
       {...(disabled ? {} : attributes)}
       onClick={onClick}
       className={cn(
-        'absolute left-1 right-1 z-10 overflow-hidden rounded-md border bg-primary/15 px-1.5 py-1 text-left text-[11px] text-primary',
+        'w-full rounded-md border bg-primary/10 px-2 py-2 text-left text-xs font-medium leading-snug text-primary shadow-sm transition-colors hover:bg-primary/15',
         isDragging && 'opacity-60',
         disabled ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing',
       )}
-      style={{
-        top,
-        height: Math.max(24, height),
-        transform: transform
-          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-          : undefined,
-      }}
+      style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined }}
     >
-      <span className="font-medium line-clamp-2">{activity.title}</span>
+      {activity.title}
     </button>
   )
 }
@@ -89,18 +78,10 @@ function DayColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'relative min-w-[120px] flex-1 border-l border-border',
+        'min-h-32 min-w-[150px] flex-1 space-y-2 border-l border-border p-2',
         isOver && 'bg-primary/5',
       )}
-      style={{ height: HOURS.length * 48 }}
     >
-      {HOURS.map((hour) => (
-        <div
-          key={hour}
-          className="absolute left-0 right-0 border-t border-border/60"
-          style={{ top: (hour - 8) * 48, height: 48 }}
-        />
-      ))}
       {activities.map((activity) => (
         <DraggableActivity
           key={activity.id}
@@ -185,19 +166,7 @@ export function WeeklyAgenda({
           </p>
         ) : null}
         <div className="overflow-x-auto rounded-xl border border-border">
-          <div className="flex min-w-[800px]">
-            <div className="w-14 shrink-0 border-r border-border bg-muted/30">
-              <div className="h-10 border-b border-border" />
-              {HOURS.map((hour) => (
-                <div
-                  key={hour}
-                  className="flex h-12 items-start justify-end pr-2 text-[10px] text-muted-foreground"
-                >
-                  {String(hour).padStart(2, '0')}:00
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-1">
+          <div className="flex min-w-[1050px] items-stretch">
               {days.map((day) => {
                 const date = format(day, 'yyyy-MM-dd')
                 return (
@@ -214,7 +183,6 @@ export function WeeklyAgenda({
                   </div>
                 )
               })}
-            </div>
           </div>
         </div>
       </div>
