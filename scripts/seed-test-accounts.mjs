@@ -16,13 +16,13 @@ import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || 'AIzaSyCA-HlVUO68fozpAFSLz3XPM7OhM4Me1A8',
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || 'borderless-e4a6a.firebaseapp.com',
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'borderless-e4a6a',
+  apiKey: process.env.VITE_FIREBASE_API_KEY || 'AIzaSyDfrFNQHOZfweb-V-O2sssoVQIwupVVgxc',
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || 'programa-visitas-72be9.firebaseapp.com',
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'programa-visitas-72be9',
   storageBucket:
-    process.env.VITE_FIREBASE_STORAGE_BUCKET || 'borderless-e4a6a.firebasestorage.app',
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '774098896837',
-  appId: process.env.VITE_FIREBASE_APP_ID || '1:774098896837:web:6805173af4fb817246edac',
+    process.env.VITE_FIREBASE_STORAGE_BUCKET || 'programa-visitas-72be9.firebasestorage.app',
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '112848844249',
+  appId: process.env.VITE_FIREBASE_APP_ID || '1:112848844249:web:1a8f5b0d8e6bec6bc315c8',
 }
 
 const ACCOUNTS = [

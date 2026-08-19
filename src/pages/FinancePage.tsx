@@ -174,7 +174,7 @@ function FinanceFiles({
             <input
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp"
-              className="sr-only"
+              className="hidden"
               disabled={busyKey !== null}
               onChange={(event) => {
                 const file = event.target.files?.[0]
@@ -198,7 +198,7 @@ function FinanceFiles({
             <input
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp"
-              className="sr-only"
+              className="hidden"
               disabled={busyKey !== null}
               onChange={(event) => {
                 const file = event.target.files?.[0]
@@ -227,6 +227,7 @@ export function FinancePage() {
   })
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<FinanceItem | null>(null)
+  const [viewingItem, setViewingItem] = useState<FinanceItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [pendingNfFile, setPendingNfFile] = useState<File | null>(null)
   const [removePendingAttachment, setRemovePendingAttachment] = useState(false)
@@ -616,8 +617,8 @@ export function FinancePage() {
                 </div>
               ))}
             </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-max min-w-full text-sm">
+            <div className="w-full overflow-x-auto md:block hidden">
+              <table className="min-w-full text-sm">
                 <thead className="border-y bg-muted/40 text-left text-muted-foreground">
                   <tr>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Serviços contratados</th>
@@ -636,7 +637,11 @@ export function FinancePage() {
                 </thead>
                 <tbody>
                   {items.map((item) => (
-                    <tr key={item.id} className="border-b last:border-0">
+                    <tr
+                      key={item.id}
+                      className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
+                      onClick={() => setViewingItem(item)}
+                    >
                       <td className="whitespace-nowrap px-4 py-3 font-medium">{item.serviceName}</td>
                       <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget1)}</td>
                       <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget2)}</td>
@@ -645,10 +650,10 @@ export function FinancePage() {
                       <td className="whitespace-nowrap px-4 py-3">{item.winningCompany || '—'}</td>
                       <td className="whitespace-nowrap px-4 py-3">{item.nfReceived ? 'Sim' : 'Não'}</td>
                       <td className="whitespace-nowrap px-4 py-3">{formatDate(item.nfDueDate)}</td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-4 py-3 align-top" onClick={(e) => e.stopPropagation()}>
                         <FinanceFiles item={item} canWrite={canWrite} onChanged={loadItems} />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           {canWrite ? (
                           <>
@@ -801,7 +806,7 @@ export function FinancePage() {
                       ref={nfFileInputRef}
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      className="sr-only"
+                      className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null
                         setPendingNfFile(file)
@@ -839,6 +844,67 @@ export function FinancePage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingItem} onOpenChange={(value) => !value && setViewingItem(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{viewingItem?.serviceName}</DialogTitle>
+          </DialogHeader>
+          {viewingItem ? (
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <p className="text-muted-foreground">Primeiro orçamento</p>
+                <p className="font-medium">{formatCurrency(viewingItem.budget1)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Segundo orçamento</p>
+                <p className="font-medium">{formatCurrency(viewingItem.budget2)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Terceiro orçamento</p>
+                <p className="font-medium">{formatCurrency(viewingItem.budget3)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Valor do serviço</p>
+                <p className="font-medium">{formatCurrency(viewingItem.serviceValue)}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-muted-foreground">Empresa vencedora</p>
+                <p className="font-medium">{viewingItem.winningCompany || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Nota fiscal recebida</p>
+                <p className="font-medium">{viewingItem.nfReceived ? 'Sim' : 'Não'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Vencimento do pagamento da NF</p>
+                <p className="font-medium">{formatDate(viewingItem.nfDueDate)}</p>
+              </div>
+              <div className="sm:col-span-2 border-t pt-3">
+                <p className="mb-2 text-muted-foreground">Arquivos</p>
+                <FinanceFiles item={viewingItem} canWrite={canWrite} onChanged={loadItems} />
+              </div>
+              <div className="flex justify-end gap-2 sm:col-span-2">
+                <Button type="button" variant="outline" onClick={() => setViewingItem(null)}>
+                  Fechar
+                </Button>
+                {canWrite ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const item = viewingItem
+                      setViewingItem(null)
+                      if (item) openEdit(item)
+                    }}
+                  >
+                    Editar
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 
