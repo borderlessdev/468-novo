@@ -54,6 +54,14 @@ service cloud.firestore {
       return status in ['backlog', 'in_progress', 'completed'];
     }
 
+    function signedInRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isClientUser() {
+      return isSignedIn() && signedInRole() == 'client';
+    }
+
     function isCurrentlyDeleted() {
       return 'isDeleted' in resource.data && resource.data.isDeleted == true;
     }
@@ -212,6 +220,16 @@ service cloud.firestore {
       allow delete: if canWriteChild();
     }
 
+    match /documentPlaceholders/{id} {
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
+        && request.resource.data.visitId is string
+        && request.resource.data.title is string
+        && request.resource.data.category is string;
+      allow update: if canWriteChild() && unchangedOwnerId();
+      allow delete: if canWriteChild();
+    }
+
     // Firebase Extension "Trigger Email" — fila de envio (SMTP/SendGrid/etc.)
     match /mail/{mailId} {
       allow create: if isSignedIn()
@@ -280,6 +298,25 @@ service cloud.firestore {
         );
       allow delete: if isSignedIn()
         && (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+
+    match /playbooks/{playbookId} {
+      allow read: if ownsOrAdmin();
+
+      allow create: if creatingOwnDoc()
+        && !isClientUser()
+        && request.resource.data.name is string
+        && request.resource.data.visitType is string
+        && request.resource.data.items is list;
+
+      allow update: if ownsOrAdmin()
+        && !isClientUser()
+        && unchangedOwnerId()
+        && request.resource.data.name is string
+        && request.resource.data.visitType is string
+        && request.resource.data.items is list;
+
+      allow delete: if ownsOrAdmin() && !isClientUser();
     }
 
     match /emailLogs/{logId} {

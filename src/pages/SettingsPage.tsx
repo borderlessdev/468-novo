@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   Bell,
+  ClipboardList,
   KeyRound,
   Monitor,
   Moon,
@@ -276,6 +277,32 @@ export function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {!isClient ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5" />
+                Playbooks
+              </CardTitle>
+              <CardDescription>
+                Modelos operacionais por tipo de visita, com tarefas, atividades e documentos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Crie checklists de preparação e encerramento reutilizáveis. A aplicação na visita
+                será feita a partir destes modelos.
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/configuracoes/playbooks">
+                  <ClipboardList className="h-4 w-4" />
+                  Gerenciar playbooks
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {!isClient ? (
           <Card>

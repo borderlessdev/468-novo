@@ -1,0 +1,71 @@
+DIA 08 — Desvios e pendencias financeiras
+=========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Dias 6 e 7 feitos (aprovação + previsto/contratado/realizado).
+Implemente SOMENTE o dia 8. Não comece o portal do visitante (dia 9).
+
+Estado atual:
+- approvalStatus, actualValue, financeMetrics.
+- OperationsPage (dia 4) já lista NFs que pedem atenção.
+- Alertas finance_nf_due e finance_nf_overdue (dias originais + dia 5).
+- FinancePage com totais previstos/contratados/realizados.
+
+Objetivo do dia:
+1. Helper de desvio em src/lib/financeMetrics.ts (ou estender o existente):
+
+   - desvioContratadoVsPrevisto = (contratado - previsto) / previsto  (se previsto > 0)
+   - desvioRealizadoVsContratado = (realizado - contratado) / contratado (se contratado > 0)
+   - Flag "acima do previsto" se contratado > previsto
+   - Flag "estouro realizado" se realizado > contratado
+
+2. Na FinancePage, por linha:
+   - Mostrar % de desvio (contratado vs previsto) com cor (neutro / alerta se > 10%).
+   - Indicar pendências da linha: sem aprovação, NF vencida, NF não recebida com vencimento próximo
+     (reusar a lógica do dia 4/5, não duplicar números mágicos — extraia constantes se ainda
+     estiverem soltas).
+
+3. Cards/resumo no topo:
+   - Qtd linhas pendentes de aprovação
+   - Qtd NFs vencidas
+   - Soma do estouro (realizado - contratado, só onde positivo)
+
+4. Na Central /operacoes (OperationsPage):
+   - Bloco "Pendências financeiras":
+     * linhas pending de aprovação (link /financeiro?visita=)
+     * linhas com desvio acima de 10% (contratado vs previsto)
+     * NFs vencidas (pode fundir com o bloco de NF que já existe, sem duplicar a mesma linha
+       em dois cards — prefira um bloco só, com tags: Vencida | A vencer | Sem aprovação | Desvio)
+
+5. Alertas: se ainda não existir notificação para "pendente de aprovação há X dias", NÃO crie
+   scanner novo a menos que seja trivial. Priorize a UI. Os alertas de NF do dia 5 já cobrem vencimento.
+
+Fora de escopo:
+- Portal do visitante.
+- Relatório PDF de desvio.
+- Aprovação multinível.
+
+Restrições:
+- Não quebrar filtros/views da FinancePage.
+- Cliente fora.
+- npm run build deve passar.
+
+Entregáveis:
+- % desvio na linha + resumo + bloco na Central com tags de pendência.
+
+---
+
+Checklist manual:
+[ ] Linha previsto 800 / contratado 1000 mostra desvio positivo (~25%) em destaque
+[ ] Linha pending aparece no resumo "pendentes de aprovação" e na Central
+[ ] NF vencida tagged na Central
+[ ] Aprovar a linha some da lista de pendentes (depois de recarregar)
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/lib/financeMetrics.ts, src/pages/FinancePage.tsx,
+  src/pages/OperationsPage.tsx.
+- Extraia limiares (10%, 7 dias) para constantes nomeadas.

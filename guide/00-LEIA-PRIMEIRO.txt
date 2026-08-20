@@ -1,0 +1,145 @@
+GUIA 14 DIAS — 5 MODULOS OPERACIONAIS
+======================================
+Promover Experience (repo 468-novo)
+
+Pasta com prompts prontos para colar no Cursor (modo Agent).
+Cada arquivo = 1 dia de trabalho. Nao pule a ordem.
+
+Como usar
+---------
+1. Abra o Cursor no repositorio 468-novo.
+2. Trabalhe 1 arquivo por dia (dia-01.txt, dia-02.txt, ...).
+3. Cole o conteudo inteiro no chat em modo Agent.
+4. So avance para o proximo dia depois do checklist manual do arquivo.
+5. Se o Agent nao terminar o dia, continue no mesmo arquivo no dia seguinte.
+   Nao cole o dia N+1 em cima de trabalho pela metade.
+
+O que este guia NAO faz
+-----------------------
+Estes arquivos sao instrucoes. Colar o prompt e o Agent que implementa.
+Nao altere este guia enquanto implementa, a menos que o codigo mude de nome.
+
+Mapa dos 14 dias
+----------------
+Dias 1-3   Playbooks de visitas e checklists automaticos
+  dia-01   Modelo de playbook (colecao, tipos, CRUD em Configuracoes)
+  dia-02   Aplicar playbook (gerar tarefas, atividades, prazos relativos)
+  dia-03   Checklists preparacao/encerramento + ligacao com templates
+
+Dias 4-5   Central de operacoes e automacoes
+  dia-04   Tela /operacoes (pendencias agregadas)
+  dia-05   Alertas automaticos (estender notificacoes existentes)
+
+Dias 6-8   Financeiro com aprovacao e orcamento
+  dia-06   Fluxo de aprovacao (1 nivel)
+  dia-07   Previsto / contratado / realizado + comparacao de orcamentos
+  dia-08   Indicadores de desvio e pendencias (Financeiro + Central)
+
+Dias 9-11  Portal do visitante e jornada digital
+  dia-09   Link seguro (token) + rota publica + rules
+  dia-10   Confirmacao, dados do visitante, agenda e instrucoes
+  dia-11   Base de QR, crachá e pesquisa de satisfacao
+
+Dias 12-14 Integracao Google Calendar (Outlook so esqueleto)
+  dia-12   OAuth Google + conexao em Configuracoes
+  dia-13   Sync das atividades da visita + conflitos
+  dia-14   Atualizacao continua, token expirado, fecho e regressao
+
+O que JA existe no codigo (nao reinventar)
+------------------------------------------
+Stack: React 19 + Vite + TypeScript + Firebase (Auth, Firestore, Storage).
+Sem Cloud Functions hoje. firebase.json so tem firestore, storage e hosting.
+
+Visitas
+- CRUD, detalhe, status, progresso, equipe/clientes
+- Templates (isTemplate) e duplicar visita
+- Arquivos: src/services/visits.ts, src/services/visitClone.ts,
+  src/features/visits/NewVisitDialog.tsx, src/pages/VisitDetailPage.tsx,
+  src/pages/VisitsPage.tsx
+
+Tarefas
+- Kanban, prazo, assigneeId/assigneeName, checklist fixo DEFAULT_CHECKLIST
+- Arquivos: src/services/tasks.ts, src/pages/PlanningPage.tsx,
+  src/lib/constants.ts
+
+Agenda
+- CRUD de atividades, calendario semanal, conflito interno na mesma visita
+- Arquivos: src/services/activities.ts, src/pages/AgendaPage.tsx,
+  src/components/agenda/WeeklyAgenda.tsx
+
+Visitantes
+- CRM, vinculo visita, brindes
+- Arquivos: src/services/visitors.ts, src/services/visitVisitors.ts,
+  src/pages/VisitorsPage.tsx
+
+Financeiro
+- budget1/2/3, serviceValue, winningCompany, nfReceived, nfDueDate, anexos
+- Arquivos: src/services/finance.ts, src/pages/FinancePage.tsx
+
+Documentos
+- Upload por categoria na visita
+- Arquivos: src/services/documents.ts
+
+Notificacoes
+- Sino, preferencias, scanDueReminders no cliente (AppShell)
+- Tipos: visit_created, visit_status_changed, task_created, task_status_changed,
+  task_due_soon, document_uploaded, finance_nf_due, team_updated, activity_soon
+- Arquivos: src/services/notifications.ts, src/services/notificationReminders.ts,
+  src/lib/notificationPreferences.ts, src/hooks/useNotifications.ts,
+  src/components/layout/AppShell.tsx
+
+Convites (padrao para o portal)
+- Token, expiracao, link /cadastro?invite=
+- Arquivos: src/services/invites.ts
+
+Auth / rotas
+- ProtectedRoute, roles user/team/client/admin
+- Arquivos: src/App.tsx, src/lib/access.ts, src/contexts/AuthContext.tsx
+
+Rules
+- firestore.rules e storage.rules — todo dia que criar colecao NOVA
+  precisa atualizar rules. Deploy: npm run deploy:rules
+
+Recortes globais (vale para todos os dias)
+------------------------------------------
+- Dias 1-11: SEM Cloud Functions. Alertas continuam no browser.
+- Portal: token + rota publica. Sem login de visitante e sem app nativo.
+- Calendario: Google funcional. Outlook = tipos + botao "em breve".
+- Aprovacao financeira: 1 nivel (pendente / aprovado / rejeitado).
+- Playbook: gera tarefas, atividades e metadados de documento.
+  NAO copia arquivos do Storage.
+- Reutilizar UI existente (Card, Dialog, Button, PageHeader, badges).
+- npm run build deve passar ao fim de CADA dia.
+- Nao quebrar o que ja funciona (Kanban, templates atuais, financeiro, convites).
+- Cliente (role client) continua sem escrita operacional.
+- Nao commitar .env, service-account.json nem tokens OAuth.
+
+Regras de ouro para o Agent
+---------------------------
+- Mexer so no que o dia pede. Nao "ja adiantar" o dia seguinte.
+- Se um arquivo citado mudou de nome, procure o equivalente e siga.
+- Types em src/types/index.ts. Validacoes em src/lib/validations.ts.
+- Services em src/services/. Paginas em src/pages/.
+- Depois de criar colecao: firestore.rules + firestore.indexes.json se precisar.
+- Preferir soft-delete se a entidade for irma de visit/task/finance.
+
+Dependencias externas (so dias 9+ e 12+)
+-----------------------------------------
+Dia 9+: rules publicas por token — revisar com cuidado (nao abrir a visita inteira).
+Dia 12+: projeto Firebase com Functions, OAuth Google Cloud Console,
+  variaveis GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (nao commitar).
+
+Checklist de regressao final (dia 14)
+-------------------------------------
+[ ] Criar visita a partir de playbook
+[ ] Checklists de preparacao e encerramento visiveis
+[ ] Central /operacoes lista atrasos, visitas, docs, NFs
+[ ] Notificacoes novas aparecem no sino
+[ ] Aprovar/rejeitar linha financeira
+[ ] Ver previsto vs contratado vs realizado
+[ ] Gerar link do portal e abrir sem login
+[ ] Visitante confirma e edita dados
+[ ] QR / crachá / pesquisa abrem
+[ ] Conectar Google Calendar (se credenciais existirem)
+[ ] Atividade da agenda cria/atualiza evento
+[ ] npm run build passa

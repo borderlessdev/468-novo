@@ -139,6 +139,22 @@
       ]
     },
     {
+      "collectionGroup": "documentPlaceholders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visitId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "documentPlaceholders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "visitId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "visitVisitors",
       "queryScope": "COLLECTION",
       "fields": [

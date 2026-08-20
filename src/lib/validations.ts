@@ -33,6 +33,7 @@ const visitBaseSchema = z.object({
   language: z.string().optional(),
   pvNumber: z.string().trim().min(1, 'Número da PV obrigatório').optional(),
   templateId: z.string().optional(),
+  playbookId: z.string().optional(),
   startWithChecklist: z.boolean(),
 })
 
@@ -48,6 +49,7 @@ export const visitEditSchema = visitBaseSchema
   .omit({
     startWithChecklist: true,
     templateId: true,
+    playbookId: true,
   })
   .refine(
     (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
@@ -120,6 +122,36 @@ export const financeItemSchema = z.object({
   nfDueDate: z.string().optional(),
 })
 
+export const playbookItemSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(['task', 'activity', 'document']),
+  phase: z.enum(['preparacao', 'durante', 'encerramento']),
+  title: z.string().min(2, 'Título obrigatório'),
+  description: z.string().optional(),
+  offsetDays: z.coerce.number().int('Use um número inteiro de dias'),
+  durationMinutes: z.preprocess(
+    (value) => (value === '' || value == null ? undefined : value),
+    z.number().int().positive().optional(),
+  ),
+  startTime: z.preprocess(
+    (value) => (value === '' || value == null ? undefined : value),
+    z.string().optional(),
+  ),
+  location: z.string().optional(),
+  documentCategory: z
+    .enum(['contrato', 'boarding', 'briefing', 'comprovante', 'outro'])
+    .optional(),
+  assigneeName: z.string().optional(),
+  order: z.coerce.number().int(),
+})
+
+export const playbookSchema = z.object({
+  name: z.string().min(2, 'Nome obrigatório'),
+  visitType: z.string().min(2, 'Tipo de visita obrigatório'),
+  description: z.string().optional(),
+  items: z.array(playbookItemSchema),
+})
+
 export const profileSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   photoURL: z.union([z.url('URL inválida'), z.literal('')]).optional(),
@@ -142,3 +174,5 @@ export type TaskInput = z.infer<typeof taskSchema>
 export type FinanceItemInput = z.infer<typeof financeItemSchema>
 export type ProfileInput = z.infer<typeof profileSchema>
 export type InviteInput = z.infer<typeof inviteSchema>
+export type PlaybookInput = z.infer<typeof playbookSchema>
+export type PlaybookItemInput = z.infer<typeof playbookItemSchema>

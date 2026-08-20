@@ -22,6 +22,7 @@ import {
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -68,8 +70,19 @@ import {
 import { deleteVisit, getVisit, syncVisitProgress, updateVisit } from '@/services/visits'
 import { writeActivityLog, listActivityLogsForVisit } from '@/services/activityLogs'
 import { duplicateVisit, saveVisitAsTemplate } from '@/services/visitClone'
+import { applyPlaybookToVisit } from '@/services/playbookApply'
+import { listPlaybooks } from '@/services/playbooks'
+import { listDocumentPlaceholders } from '@/services/documentPlaceholders'
 import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
-import type { ActivityLog, DocumentCategory, Visitor, Visit, VisitDocument } from '@/types'
+import type {
+  ActivityLog,
+  DocumentCategory,
+  DocumentPlaceholder,
+  Playbook,
+  Visit,
+  VisitDocument,
+  Visitor,
+} from '@/types'
 
 const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
   { value: 'contrato', label: 'Contrato' },
@@ -91,7 +104,9 @@ export function VisitDetailPage() {
   const [linkedVisitors, setLinkedVisitors] = useState<Visitor[]>([])
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([])
   const [documents, setDocuments] = useState<VisitDocument[]>([])
+  const [placeholders, setPlaceholders] = useState<DocumentPlaceholder[]>([])
   const [pendingTasks, setPendingTasks] = useState(0)
+  const [taskCount, setTaskCount] = useState(0)
   const [financeTotal, setFinanceTotal] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [docCategory, setDocCategory] = useState<DocumentCategory>('outro')
@@ -103,6 +118,10 @@ export function VisitDetailPage() {
   const [clientIdsInput, setClientIdsInput] = useState('')
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
   const [cloning, setCloning] = useState(false)
+  const [playbooks, setPlaybooks] = useState<Playbook[]>([])
+  const [playbookOpen, setPlaybookOpen] = useState(false)
+  const [selectedPlaybookId, setSelectedPlaybookId] = useState('')
+  const [applyingPlaybook, setApplyingPlaybook] = useState(false)
   const deleteVisitDialog = useConfirmDelete<{ id: string; name: string }>()
   const deleteDocDialog = useConfirmDelete<VisitDocument>()
 
@@ -146,6 +165,7 @@ export function VisitDetailPage() {
         listTasks(id, ownerIdForQuery, isAdmin),
         listFinanceItems(id, ownerIdForQuery, isAdmin),
         listDocuments(id, ownerIdForQuery, isAdmin),
+        listDocumentPlaceholders(id, ownerIdForQuery, isAdmin),
       ])
 
       const failed = results.filter((result) => result.status === 'rejected')
@@ -161,6 +181,7 @@ export function VisitDetailPage() {
       const tasks = results[2].status === 'fulfilled' ? results[2].value : []
       const finance = results[3].status === 'fulfilled' ? results[3].value : []
       const docs = results[4].status === 'fulfilled' ? results[4].value : []
+      const pendingDocs = results[5].status === 'fulfilled' ? results[5].value : []
 
       let linked: Visitor[]
       try {
@@ -174,6 +195,8 @@ export function VisitDetailPage() {
       setLinkedVisitors(linked)
       setAllVisitors(visitors)
       setDocuments(docs)
+      setPlaceholders(pendingDocs)
+      setTaskCount(tasks.length)
       setPendingTasks(tasks.filter((t) => t.status !== 'completed').length)
       setFinanceTotal(
         finance.reduce((sum, item) => sum + (item.serviceValue ?? 0), 0),
@@ -326,6 +349,48 @@ export function VisitDetailPage() {
     }
   }
 
+  const openPlaybookDialog = async () => {
+    if (!user) return
+    try {
+      const items = await listPlaybooks(user.uid, isAdmin)
+      setPlaybooks(items)
+      setSelectedPlaybookId(items[0]?.id ?? '')
+      setPlaybookOpen(true)
+      if (items.length === 0) {
+        toast.error('Crie um playbook em Configurações antes de aplicar')
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível carregar os playbooks')
+    }
+  }
+
+  const handleApplyPlaybook = async () => {
+    if (!user || !id || !visit || !selectedPlaybookId) return
+    setApplyingPlaybook(true)
+    try {
+      const result = await applyPlaybookToVisit({
+        playbookId: selectedPlaybookId,
+        visitId: id,
+        ownerId: user.uid,
+        startDate: visit.startDate,
+        isAdmin,
+        actorId: user.uid,
+        actorName: profile?.name,
+      })
+      toast.success(
+        `Playbook aplicado: ${result.tasks} tarefa(s), ${result.activities} atividade(s), ${result.documents} documento(s)`,
+      )
+      setPlaybookOpen(false)
+      await load()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível aplicar o playbook')
+    } finally {
+      setApplyingPlaybook(false)
+    }
+  }
+
   const handleUpload = async (file: File) => {
     if (!user || !id) return
     setUploading(true)
@@ -433,6 +498,15 @@ export function VisitDetailPage() {
             </Button>
             {canWrite ? (
               <>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={!user}
+                  onClick={() => void openPlaybookDialog()}
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Aplicar playbook
+                </Button>
                 <Button
                   variant="outline"
                   className="w-full sm:w-auto"
@@ -752,11 +826,30 @@ export function VisitDetailPage() {
                   {uploading ? 'Enviando...' : 'Upload'}
                 </Button>
               </div>
-              {documents.length === 0 ? (
+              {placeholders.length > 0 ? (
+                <ul className="space-y-2">
+                  {placeholders.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2 text-sm"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">{item.category}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline">Pendente</Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {documents.length === 0 && placeholders.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Nenhum documento. Requer Firebase Storage habilitado.
                 </p>
-              ) : (
+              ) : documents.length === 0 ? null : (
                 <ul className="space-y-2">
                   {documents.map((doc) => (
                     <li
@@ -791,10 +884,22 @@ export function VisitDetailPage() {
                 </ul>
               )}
               </>
-              ) : documents.length === 0 ? (
+              ) : documents.length === 0 && placeholders.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum documento.</p>
               ) : (
                 <ul className="space-y-2">
+                  {placeholders.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2 text-sm"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <p className="truncate font-medium">{item.title}</p>
+                      </div>
+                      <Badge variant="outline">Pendente</Badge>
+                    </li>
+                  ))}
                   {documents.map((doc) => (
                     <li
                       key={doc.id}
@@ -873,6 +978,59 @@ export function VisitDetailPage() {
                   : isFirestoreEmailEnabled()
                     ? 'Enviar e-mail'
                     : 'Preparar envio'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={playbookOpen} onOpenChange={setPlaybookOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aplicar playbook</DialogTitle>
+            <DialogDescription>
+              Os itens serão adicionados a esta visita. Nada existente será substituído.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {playbooks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhum playbook cadastrado. Crie um em Configurações.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <Label>Playbook</Label>
+                <Select value={selectedPlaybookId} onValueChange={setSelectedPlaybookId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {playbooks.map((playbook) => (
+                      <SelectItem key={playbook.id} value={playbook.id}>
+                        {playbook.name}
+                        {playbook.visitType ? ` · ${playbook.visitType}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {taskCount > 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+                Esta visita já tem {taskCount} tarefa(s). O playbook vai adicionar itens, não
+                substituir os atuais.
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setPlaybookOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={applyingPlaybook || !selectedPlaybookId}
+                onClick={() => void handleApplyPlaybook()}
+              >
+                {applyingPlaybook ? 'Aplicando...' : 'Aplicar'}
               </Button>
             </div>
           </div>

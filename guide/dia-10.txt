@@ -1,0 +1,84 @@
+DIA 10 — Jornada do visitante no portal
+=======================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Dia 9 entregou /portal/:token somente leitura.
+Implemente SOMENTE o dia 10. QR/crachá/pesquisa são o dia 11.
+
+Estado atual:
+- visitGuestLinks com snapshot (visitTitle, dates, visitorName) e visitorId/visitId.
+- GuestPortalPage pública.
+- Visitor tem name, document, company, dietaryRestriction, mobilityReduced, language, notes, etc.
+- Activities da visita: src/services/activities.ts (ainda exigem auth nas rules).
+- Visita ainda não tem texto de "instruções de chegada".
+
+Objetivo do dia:
+1. Campo novo na Visit: `arrivalInstructions?: string` (texto livre).
+   Editar no VisitDetailPage. Incluir o texto no SNAPSHOT do guest link na criação
+   (e, se o operador clicar "atualizar snapshot" ou ao re-gerar, refrescar).
+   Não abra a coleção visits ao público.
+2. Snapshot do link deve incluir o necessário para o portal funcionar offline-auth:
+   - arrivalInstructions
+   - agenda resumida: array de { date, startTime, endTime, title, location }
+     (copiar das activities no momento de gerar o link)
+   - dados editáveis do visitante: name, document, company, role, dietaryRestriction,
+     mobilityReduced, language, notes (espelho)
+   - confirmationStatus: 'pending' | 'confirmed' | 'declined' (no próprio link)
+3. Página /portal/:token:
+   - Confirmar presença / Recusar (grava confirmationStatus no visitGuestLinks).
+   - Formulário para atualizar os campos do visitante listados acima (validação mínima).
+   - Bloco agenda (somente leitura, do snapshot).
+   - Bloco instruções de chegada.
+4. Rules: permitir update PÚBLICO do documento visitGuestLinks SOMENTE nestes campos:
+   confirmationStatus, visitorDraft (ou campos snapshot do visitante), updatedAt.
+   Proibir mudar visitId, visitorId, token, expiresAt, revoked, ownerId.
+   Expirado ou revoked = update negado.
+5. Espelhar no CRM: quando o visitante salvar, o operador precisa ver os dados.
+   Opções (escolha a mais segura que funcionar):
+   a) Cloud Function — NÃO neste dia (Functions só no 12).
+   b) Gravar visitorDraft no link; no detalhe da visita autenticado, botão
+      "Aplicar dados do portal" que chama updateVisitor.
+   c) Callable/anon write em visitors — EVITAR (abre o CRM).
+   Prefira (b): o portal só escreve no visitGuestLinks; o operador aplica no Visitor.
+   Mostre badge "atualização pendente" no detalhe se visitorDraft.updatedAt > lastAppliedAt.
+6. Notificar o owner (createNotification) quando confirmationStatus mudar — só se
+   o portal autenticado não existir. Sem auth no portal, o cliente NÃO consegue
+   createNotification (rules exigem signed in). Então: NÃO notifique do portal
+   a menos que use um campo "unseen" no link e o scanDueReminders do operador leia
+   links com confirmationStatus recém-alterado. Faça um scan simples no reminder:
+   guest_confirmed:{linkId}:{status} para o ownerId.
+
+Fora de escopo:
+- QR, crachá, pesquisa (dia 11).
+- Re-sincronizar agenda em tempo real no link (snapshot na geração basta;
+  botão "Atualizar dados do link" no detalhe é suficiente).
+
+Restrições:
+- Anônimo não escreve em visitors, visits, activities.
+- npm run build deve passar.
+- Mobile usável no portal (form empilhado).
+
+Entregáveis:
+- Portal com confirmar + editar rascunho + agenda/instruções (snapshot).
+- Campo arrivalInstructions na visita.
+- Operador aplica rascunho no CRM.
+- Alerta opcional via scan no AppShell.
+
+---
+
+Checklist manual:
+[ ] Operador preenche instruções de chegada e gera (ou atualiza) o link
+[ ] Anônimo vê agenda e instruções
+[ ] Anônimo confirma presença; operador vê status Confirmado no detalhe
+[ ] Anônimo altera restrição alimentar; detalhe mostra "atualização pendente"
+[ ] Operador clica aplicar; VisitorsPage/detalhe reflete o dado
+[ ] Link expirado/revogado não salva
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/pages/GuestPortalPage.tsx, src/services/visitGuestLinks.ts,
+  src/pages/VisitDetailPage.tsx, src/services/visitors.ts, src/types/index.ts,
+  firestore.rules, src/services/notificationReminders.ts.

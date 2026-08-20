@@ -1,0 +1,84 @@
+DIA 03 — Checklists por fase + templates
+========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Dias 1 e 2 feitos (CRUD de playbook + applyPlaybookToVisit).
+Implemente SOMENTE o dia 3. Não comece a Central de operações (dia 4).
+
+Estado atual (depois do dia 2):
+- Playbook items têm phase: preparacao | durante | encerramento.
+- applyPlaybookToVisit gera tasks/activities/document placeholders.
+- NewVisitDialog ainda tem startWithChecklist + DEFAULT_CHECKLIST em src/lib/constants.ts.
+- Templates de visita (isTemplate) e saveVisitAsTemplate existem no detalhe.
+- VisitDetailPage mostra tarefas pendentes, não agrupa por fase.
+- Task/Activity ainda não guardam phase — se o dia 2 não gravou phase no filho, grave agora.
+
+Objetivo do dia:
+1. Persistir `phase` nos registros gerados:
+   - Task: campo opcional phase (PlaybookPhase).
+   - Activity: campo opcional phase.
+   - Placeholder de documento: campo phase.
+   Atualizar types, createTask/createActivity/applyPlaybookToVisit, firestore.rules se validarem campos.
+   Itens criados à mão (sem playbook) podem ficar sem phase (tratar como "durante" na UI).
+2. Na VisitDetailPage, seção "Checklists da visita" com 2 blocos visíveis:
+   - Preparação (phase preparacao)
+   - Encerramento (phase encerramento)
+   Cada bloco: lista das tarefas daquela fase com checkbox (completed <-> backlog/in_progress).
+   Mostrar prazo e responsável. Link "ver no Planejamento".
+   Atividades da fase: só título + data (não viram checkbox).
+   Placeholders de documento: título + categoria + indicação se o arquivo real já existe
+   (se o matching for difícil, só listar o placeholder).
+3. NewVisitDialog:
+   - Select de playbook como forma principal de "começar com checklist".
+   - Se playbook selecionado: aplicar playbook; NÃO usar DEFAULT_CHECKLIST.
+   - Se nenhum playbook e startWithChecklist=true: manter DEFAULT_CHECKLIST (retrocompat).
+   - Label claro: "Modelo operacional (playbook)" vs "Template de visita" (isTemplate).
+     São coisas diferentes; os dois selects podem coexistir. Se os dois forem escolhidos:
+     cria a partir do template de visita e DEPOIS aplica o playbook (pode duplicar tarefas —
+     nesse caso desabilite a combinação: ou template OU playbook, não os dois).
+4. "Salvar como playbook" no detalhe da visita (além de "salvar como template"):
+   - Cria um Playbook com name "Playbook: {titulo}", visitType opcional.
+   - Converte tarefas existentes em items kind=task (offsetDays = dueDate - startDate, ou 0).
+   - Converte atividades em items kind=activity (offsetDays = activity.date - startDate).
+   - Placeholders/documentos em items kind=document.
+   - phase: usar a gravada; senão 'durante'.
+   - Não copiar arquivos do Storage.
+5. DEFAULT_CHECKLIST pode permanecer como fallback. Não precisa remover a constante.
+
+Fora de escopo:
+- Central /operacoes (dia 4).
+- Notificações novas.
+- Financeiro.
+
+Restrições:
+- Não quebrar saveVisitAsTemplate (templates de visita continuam).
+- Reutilizar Checkbox, Card, Button.
+- Cliente só lê os checklists, não marca (canWrite).
+- npm run build deve passar.
+- Mobile: os dois blocos empilhados.
+
+Entregáveis:
+- Checklists de preparação e encerramento no detalhe da visita.
+- NewVisitDialog alinhado a playbooks.
+- Salvar visita como playbook.
+
+---
+
+Checklist manual:
+[ ] Criar visita a partir de um playbook (sem DEFAULT_CHECKLIST duplicado)
+[ ] No detalhe, ver tarefas de preparação e de encerramento em blocos separados
+[ ] Marcar item de preparação como concluído; recarregar; permanece
+[ ] Salvar visita como playbook; o novo playbook aparece em Configurações
+[ ] Criar outra visita com esse playbook novo e conferir os itens
+[ ] Template de visita (isTemplate) ainda funciona
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/pages/VisitDetailPage.tsx, src/features/visits/NewVisitDialog.tsx,
+  src/services/playbooks.ts, src/services/playbookApply.ts, src/services/tasks.ts,
+  src/types/index.ts, src/lib/constants.ts.
+- Fase "durante" pode aparecer num terceiro bloco compacto ou só no Planejamento/Agenda.
+  Obrigatório no detalhe: preparação e encerramento.

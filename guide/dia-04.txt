@@ -1,0 +1,80 @@
+DIA 04 — Central de operacoes (UI)
+===================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Playbooks (dias 1–3) já estão no ar.
+Implemente SOMENTE o dia 4: a tela de pendências. Não crie tipos novos de notificação (dia 5).
+
+Estado atual:
+- Dashboard (src/pages/DashboardPage.tsx): KPIs do ciclo 20→19, próximas visitas, tarefas pendentes (até 8).
+- listPendingTasks, listVisits, listFinanceItemsByOwner já existem.
+- Documentos: listDocuments por visita.
+- Financeiro: nfReceived, nfDueDate, serviceValue.
+- Sidebar: src/components/layout/AppSidebar.tsx + NAV_ITEMS em src/lib/constants.ts.
+- Rotas: src/App.tsx. Permissões: src/lib/access.ts (cliente não vê financeiro).
+- scanDueReminders já avisa tarefa a vencer em 3 dias e NF em 7 dias — só no sino, sem tela agregada.
+
+Objetivo do dia:
+1. Rota autenticada `/operacoes` com página src/pages/OperationsPage.tsx.
+2. Item no sidebar e em NAV_ITEMS: label "Operações", ícone tipo Radio/Activity/ClipboardList
+   (use um ícone lucide já usado no projeto se possível). Posição: depois de Dashboard ou antes de Relatórios.
+3. Acesso: user, team, admin. Cliente NÃO entra (isNavAllowed). Se abrir a URL, redirecionar.
+4. A página agrega, com cards/listas clicáveis (link para a entidade):
+
+   a) Tarefas atrasadas
+      - status !== completed e dueDate < hoje (yyyy-MM-dd local).
+      - Mostrar título, visita, prazo, responsável.
+      - Link /planejamento?visita={visitId}
+
+   b) Visitas próximas (próximos 7 dias)
+      - startDate entre hoje e hoje+7, status não cancelada.
+      - Título, datas, status. Link /visitas/{id}
+
+   c) Documentos pendentes
+      - Placeholders do playbook ainda sem arquivo, SE existirem.
+      - Senão: visitas em planejamento/em_andamento com ZERO documentos na coleção documents.
+      - Não inventar matching frágil demais. Documente no código o critério usado.
+
+   d) Notas fiscais que exigem atenção
+      - nfReceived === false E (nfDueDate <= hoje+7 OU nfDueDate ausente em linha com serviceValue).
+      - Título do serviço, visita, vencimento. Link /financeiro?visita={visitId}
+
+5. Reusar as queries já existentes. Evite N+1 sem necessidade; padrão do Dashboard
+   (listVisits + listar filhos por visita) é aceitável.
+6. EmptyState quando cada bloco estiver vazio.
+7. Header: PageHeader "Central de operações" + descrição curta.
+8. Mobile: blocos empilhados. Desktop: grid 2 colunas ok.
+
+Fora de escopo:
+- Novos NotificationType / scanDueReminders (dia 5).
+- Indicadores financeiros de desvio (dia 8) — só NFs e pendências simples hoje.
+- Cloud Functions.
+- Filtros avançados / salvar preferências.
+
+Restrições:
+- Não substituir o Dashboard; a Central é tela nova.
+- Não quebrar NAV_ITEMS / isNavAllowed (cliente e modulePermissions).
+- npm run build deve passar.
+
+Entregáveis:
+- Rota + página + item no menu.
+- Quatro blocos de pendência com links.
+
+---
+
+Checklist manual:
+[ ] Menu mostra Operações (operador/equipe). Cliente não vê.
+[ ] Com dados de teste, tarefas com prazo ontem aparecem em Atrasadas
+[ ] Visita que começa em 3 dias aparece em Próximas
+[ ] NF sem recebida e vencimento em 2 dias aparece
+[ ] Clique leva à tela certa
+[ ] Listas vazias mostram EmptyState, não erro
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/pages/OperationsPage.tsx, src/App.tsx, src/lib/constants.ts,
+  src/components/layout/AppSidebar.tsx, src/lib/access.ts,
+  src/pages/DashboardPage.tsx (espelhar o jeito de carregar dados).

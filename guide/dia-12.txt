@@ -1,0 +1,86 @@
+DIA 12 — Conexao Google Calendar (OAuth)
+========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Portal (dias 9–11) já existe.
+Implemente SOMENTE o dia 12: conectar/desconectar Google. Não sincronize atividades ainda (dia 13).
+Outlook neste dia: apenas tipos + UI "Em breve" (não implemente OAuth Microsoft).
+
+Estado atual:
+- Agenda interna: src/pages/AgendaPage.tsx, src/services/activities.ts, WeeklyAgenda.
+- firebase.json NÃO tem Cloud Functions.
+- Sem pacotes googleapis / OAuth.
+- Tokens NÃO podem ir para o cliente além do fluxo OAuth de consentimento.
+- SettingsPage já tem seções de conta/notificações.
+
+Objetivo do dia:
+1. Infra Firebase Functions (1ª vez neste repo):
+   - Pasta functions/ (Node + TypeScript) com scripts de build/deploy.
+   - Atualizar firebase.json com "functions".
+   - NÃO commitar client secret. Usar functions config / .env da pasta functions
+     (functions/.env no .gitignore) / Secret Manager.
+   - Documentar no próprio dia (comentário no README da functions ou no 00 não precisa
+     ser editado): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirect URI
+     `https://<region>-<project>.cloudfunctions.net/googleCalendarOAuthCallback`
+     e também localhost para emulador se der tempo.
+2. Coleção `calendarConnections`:
+   - ownerId (uid)
+   - provider: 'google' | 'outlook'
+   - google: refreshToken (NUNCA enviar ao cliente), email da conta, connectedAt
+   - outlook: não preencher hoje
+   Rules: somente o dono lê um documento "público" SEM o refreshToken.
+     Melhor: a Function grava o refreshToken em campo que o cliente não precisa ler.
+     Exponha ao cliente só { provider, email, connected: true } via get mascarado
+     OU coleção calendarConnectionPublic + secrets só no Admin SDK.
+     Padrão recomendado: Functions usam Admin SDK; rules do cliente:
+     allow read: resource.data.ownerId == uid e NÃO incluir refreshToken no doc que o
+     cliente lê. Se for um único doc, as rules Firestore não mascaram campos —
+     então use dois docs OU só acesse o status via HTTPS callable `getCalendarStatus`.
+     Prefira callable getCalendarStatus + connect/disconnect para não vazar token.
+3. Fluxo OAuth Google:
+   - Callable ou HTTPS `googleCalendarOAuthStart` devolve a URL de consentimento
+     (scope calendar.events).
+   - Callback troca code por tokens, salva refreshToken (Admin SDK), redireciona
+     o usuário de volta ao app `/configuracoes?calendar=connected`.
+   - `googleCalendarDisconnect` revoga token se possível e apaga a conexão.
+4. UI em Configurações:
+   - Card "Calendários externos"
+   - Google: botão Conectar / Desconectar + e-mail conectado.
+   - Outlook: botão desabilitado "Em breve".
+5. Types CalendarProvider, CalendarConnectionStatus em src/types/index.ts.
+6. Se o ambiente não tiver credenciais Google, a UI mostra:
+   "Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET nas Functions" — app não quebra.
+
+Fora de escopo:
+- Criar/atualizar eventos (dia 13).
+- Sync bidirecional, webhooks, watch channels.
+- OAuth Microsoft.
+
+Restrições:
+- Refresh token só no servidor (Admin SDK).
+- npm run build do frontend deve passar mesmo sem functions emuladas.
+- Não commitar secrets.
+- Cliente (role client) não conecta calendário.
+
+Entregáveis:
+- functions/ mínimas + OAuth Google + card em Configurações + Outlook "Em breve".
+
+---
+
+Checklist manual:
+[ ] Configurações mostra card Calendários
+[ ] Sem credenciais: mensagem clara, sem crash
+[ ] Com credenciais: Conectar abre consentimento Google e volta connected
+[ ] Desconectar limpa o status
+[ ] Outlook visível como Em breve
+[ ] Refresh token não aparece no Network do browser (só o status)
+[ ] npm run build (frontend) passa
+
+Notas:
+- Escopos mínimos: https://www.googleapis.com/auth/calendar.events
+- Projeto Firebase: borderless-e4a6a (README).
+- Arquivos-chave: functions/, firebase.json, src/pages/SettingsPage.tsx,
+  src/services/calendar.ts (callables), .gitignore.

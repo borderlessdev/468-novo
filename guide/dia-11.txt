@@ -1,0 +1,68 @@
+DIA 11 — QR, credencial e pesquisa (base)
+=========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Portal com confirmação e dados (dias 9–10) já funciona.
+Implemente SOMENTE o dia 11. Não comece Google Calendar (dia 12).
+
+Estado atual:
+- /portal/:token com snapshot, confirmação, visitorDraft.
+- Sem QR, sem crachá, sem NPS.
+
+Objetivo do dia (estrutura inicial, não produto de credenciamento):
+1. QR Code
+   - Na página do portal e no detalhe (operador): QR apontando para a mesma URL do link.
+   - Biblioteca leve (ex: qrcode.react ou gerar via API de SVG). Adicione a dependência se precisar.
+   - Download/impressão simples (abrir em nova vista "imprimir") é opcional.
+2. Credencial (crachá digital)
+   - Rota pública `/portal/:token/cracha` OU uma seção/tab no próprio portal.
+   - Mostra: nome do visitante, empresa, título da visita, datas, QR.
+   - Visual simples (card A6/A7 CSS), sem PDF profissional.
+3. Pesquisa de satisfação
+   - Coleção `visitFeedbacks`: visitId, guestLinkId, visitorId?, rating (1–5),
+     comment?, submittedAt, token (para dedupe).
+   - Formulário no portal (depois da visita ou sempre disponível): nota + comentário.
+   - Rules: create público se existir guest link válido (na prática: create autenticado
+     é difícil sem login). Permitir create sem auth SOMENTE se:
+       request.resource.data.guestLinkId is string
+       e os campos são só rating/comment/visitId/guestLinkId/submittedAt
+     Sem list público. Operador lista por visitId (auth + canReadVisit).
+   - Um feedback por guestLinkId (na UI; rules de unicidade no Firestore são limitadas —
+     cheque na leitura e ignore duplicata na UI do operador).
+4. No detalhe da visita autenticado: média das notas + lista de comentários (sem PII extra).
+5. Não construir catraca, check-in por câmera, crachá impresso em lote.
+
+Fora de escopo:
+- OAuth / Google Calendar (dia 12).
+- App mobile nativo.
+- E-mail automático da pesquisa.
+
+Restrições:
+- Não abrir list de visitFeedbacks ao mundo.
+- npm run build deve passar.
+- Portal continua sem AppShell.
+
+Entregáveis:
+- QR no portal e no detalhe.
+- Vista de crachá.
+- Formulário de satisfação + lista/média no detalhe da visita.
+
+---
+
+Checklist manual:
+[ ] QR no portal aponta para a URL atual (escanear ou inspecionar)
+[ ] Vista crachá mostra nome + QR
+[ ] Enviar nota 5 + comentário sem estar logado
+[ ] Operador vê a média no detalhe
+[ ] Segundo envio do mesmo link: UI impede ou avisa duplicata
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/pages/GuestPortalPage.tsx (ou GuestBadgePage / GuestFeedback),
+  src/services/visitFeedbacks.ts, src/pages/VisitDetailPage.tsx, firestore.rules,
+  package.json (dep do QR).
+- Prefira uma lib pequena. Não use iframe de gerador externo que vaze o token em referrer
+  se puder evitar.

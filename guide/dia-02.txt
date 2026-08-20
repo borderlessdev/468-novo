@@ -1,0 +1,83 @@
+DIA 02 — Aplicar playbook na visita
+===================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. O dia 1 já entregou a coleção `playbooks` e o CRUD.
+Implemente SOMENTE o dia 2. Não mexa em checklists de preparação/encerramento na UI (dia 3).
+
+Estado atual (depois do dia 1):
+- Playbooks com items (task | activity | document), phase, offsetDays, assigneeName.
+- src/services/visitClone.ts clona atividades (desloca datas) e tarefas (dueDate sempre undefined).
+- createVisitFromTemplate NÃO usa playbook.
+- NewVisitDialog.tsx: template de visita OU DEFAULT_CHECKLIST via createTasksBatch.
+- createTask / createActivity já existem.
+- Documentos: src/services/documents.ts só cria com arquivo no Storage — playbook NÃO deve uploadar arquivo.
+
+Objetivo do dia:
+1. Criar src/services/playbookApply.ts (ou função no service de playbooks) `applyPlaybookToVisit`.
+   Entrada: playbookId, visitId, ownerId, startDate da visita (ISO yyyy-MM-dd).
+   Para cada item, na ordem:
+   - kind task: createTask com title, assigneeName, dueDate = startDate + offsetDays,
+     status backlog, order crescente. Se dueDate cair fora, ainda assim gravar a data calculada.
+   - kind activity: createActivity com title, description, location, date = startDate + offsetDays,
+     startTime/endTime a partir de startTime + durationMinutes (default 60 min).
+     Se startTime ausente, usar 09:00. Formato de tempo igual ao restante do app
+     (Agenda usa `${date}T${HH:mm}:00`).
+     responsibleNames: [assigneeName] se houver.
+   - kind document: NÃO fazer upload. Criar um registro "placeholder" reutilizando a coleção
+     `documents` SOMENTE se der para ter um doc sem arquivo; caso as rules exijam storagePath,
+     criar coleção `documentPlaceholders` (visitId, title, category, phase, ownerId) com rules
+     iguais às de documents. Prefira a opção mais simples que compile e respeite rules.
+2. Função auxiliar addDays(isoDate, offsetDays) — visitClone.ts já tem addDays/diffDays privados;
+   extrair para src/lib/date.ts (ou similar) e reusar no clone + no apply, sem duplicar lógica.
+3. Botão no detalhe da visita (VisitDetailPage.tsx): "Aplicar playbook".
+   - Dialog: select de playbooks do owner.
+   - Confirmar. Se a visita já tiver tarefas, avisar ("vão ser adicionadas, não substituídas") e seguir.
+   - Toast de sucesso com contagem (N tarefas, M atividades, K documentos).
+4. Opcional mas desejável: ao criar visita no NewVisitDialog, se o usuário escolher um playbook
+   (select separado do template de visita), chamar applyPlaybookToVisit depois do createVisit.
+   NÃO remova o DEFAULT_CHECKLIST ainda (dia 3). Se playbook for escolhido, NÃO aplicar o checklist fixo
+   no mesmo create (evita duplicar tarefas).
+5. Prazos relativos: dueDate e activity.date sempre derivados de visit.startDate + offsetDays.
+   Se a visita mudar de data depois, NÃO reagendar automaticamente hoje.
+6. Registrar activityLog resumido: action apply_playbook, visitId, summary com nome do playbook.
+
+Fora de escopo:
+- UI de checklists por fase na visita (dia 3).
+- Salvar visita como playbook (dia 3).
+- Substituir DEFAULT_CHECKLIST de vez (dia 3, se o select de playbook já existir, só não apague a constante).
+- Copiar arquivos do Storage.
+- Cloud Functions.
+
+Restrições:
+- Reusar createTask, createActivity, listPlaybooks.
+- Não quebrar createVisitFromTemplate.
+- Cliente não aplica playbook.
+- npm run build deve passar.
+- Se criar coleção nova: atualizar firestore.rules.
+
+Entregáveis:
+- applyPlaybookToVisit funcionando.
+- Botão no detalhe da visita.
+- Select opcional no NewVisitDialog sem remover o checklist/template atuais.
+
+---
+
+Checklist manual:
+[ ] Criar visita vazia
+[ ] Aplicar playbook pelo detalhe
+[ ] Tarefas aparecem no Planejamento com dueDate correto (ex: offset -7 = 7 dias antes do início)
+[ ] Atividades aparecem na Agenda no dia calculado, com horário
+[ ] Placeholder de documento visível (detalhe ou lista combinada)
+[ ] Aplicar de novo soma itens (não apaga os anteriores)
+[ ] Criar visita nova escolhendo playbook no dialog (se implementado) não duplica DEFAULT_CHECKLIST
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/services/playbookApply.ts, src/services/visitClone.ts,
+  src/pages/VisitDetailPage.tsx, src/features/visits/NewVisitDialog.tsx,
+  src/services/tasks.ts, src/services/activities.ts.
+- Datas: usar meio-dia local ou T00:00:00 de forma consistente com visitClone (T00:00:00).

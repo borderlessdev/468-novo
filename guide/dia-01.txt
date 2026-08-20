@@ -1,0 +1,95 @@
+DIA 01 — Modelo de playbook (CRUD)
+===================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt se ainda não leu.
+Implemente SOMENTE o dia 1. Não aplique o playbook na visita hoje (isso é o dia 2).
+
+Estado atual:
+- Visitas podem ser marcadas como template (isTemplate) em src/services/visits.ts.
+- saveVisitAsTemplate / createVisitFromTemplate / duplicateVisit em src/services/visitClone.ts.
+- Checklist fixo DEFAULT_CHECKLIST em src/lib/constants.ts (8 tarefas genéricas).
+- NewVisitDialog.tsx escolhe um template de visita OU o checklist fixo.
+- Não existe coleção playbooks. Não existe tipo de visita (institucional, técnica, etc.).
+- Configurações: src/pages/SettingsPage.tsx (tema, convites, notificações, permissões).
+- Types: src/types/index.ts. Rules: firestore.rules.
+
+Objetivo do dia:
+1. Criar o modelo de dados de playbook (coleção Firestore `playbooks`), NÃO reutilizar visita-template como playbook (templates de visita continuam existindo).
+2. Tipos TypeScript em src/types/index.ts:
+
+   PlaybookPhase = 'preparacao' | 'durante' | 'encerramento'
+   PlaybookItemKind = 'task' | 'activity' | 'document'
+
+   PlaybookItem:
+   - id: string
+   - kind: PlaybookItemKind
+   - phase: PlaybookPhase
+   - title: string
+   - description?: string
+   - offsetDays: number  (relativo à startDate da visita; negativo = antes)
+   - durationMinutes?: number  (só activity)
+   - startTime?: string        (só activity, HH:mm opcional)
+   - location?: string         (só activity)
+   - documentCategory?: DocumentCategory  (só document — metadado, sem arquivo)
+   - assigneeName?: string
+   - order: number
+
+   Playbook:
+   - id, name, description?, visitType (string livre, ex: "Institucional")
+   - items: PlaybookItem[]
+   - ownerId, createdAt, updatedAt
+   - isDeleted? (soft-delete se o padrão do projeto encaixar; senão delete real ok neste CRUD)
+
+3. Service src/services/playbooks.ts: create, listByOwner, get, update, delete.
+   Listar só os do owner (admin vê todos, igual visitas).
+4. Validação Zod em src/lib/validations.ts (nome obrigatório, items com title/kind/phase/offsetDays).
+5. Rules em firestore.rules:
+   - read: dono ou admin
+   - create: autenticado e ownerId == auth.uid
+   - update/delete: dono ou admin
+   - Não permitir cliente criar playbook.
+6. UI de CRUD em Configurações (nova seção ou subpágina /configuracoes/playbooks).
+   - Lista de playbooks (nome, tipo de visita, qtd de itens).
+   - Dialog criar/editar: nome, tipo, descrição.
+   - Editor de itens: adicionar/remover/reordenar (order).
+   - Campos do item: kind, phase, title, offsetDays, responsável (texto), extras conforme kind.
+   - Reutilizar Card, Dialog, Button, Input, Select, PageHeader.
+7. Item de navegação só se fizer sentido (Configurações já existe). Não criar rota no sidebar principal hoje.
+
+Fora de escopo:
+- Gerar tarefas/atividades a partir do playbook.
+- Ligar playbook no NewVisitDialog.
+- Copiar arquivos do Storage.
+- Cloud Functions.
+
+Restrições:
+- Não quebrar templates de visita (isTemplate) nem saveVisitAsTemplate.
+- Não alterar DEFAULT_CHECKLIST hoje.
+- Cliente não acessa o CRUD (seguir canWriteOperations / isNavAllowed).
+- npm run build deve passar.
+- Não commitar secrets.
+
+Entregáveis:
+- Types + service + rules + UI CRUD de playbooks.
+- Pelo menos um playbook de exemplo pode ser criado pela UI (não precisa de seed).
+
+---
+
+Checklist manual:
+[ ] Abrir Configurações e ver a seção Playbooks
+[ ] Criar playbook "Visita institucional" com 3 itens (task, activity, document) em fases diferentes
+[ ] Editar um item (offsetDays = -7) e salvar
+[ ] Remover um item
+[ ] Recarregar a página e confirmar que o playbook persistiu
+[ ] Cliente (se testar) não cria/edita playbook
+[ ] npm run build passa
+
+Notas:
+- offsetDays será usado no dia 2: dueDate/activity.date = visit.startDate + offsetDays.
+- Documento no playbook é só título + categoria; o arquivo sobe depois na visita.
+- Arquivos-chave: src/types/index.ts, src/services/playbooks.ts, src/lib/validations.ts,
+  firestore.rules, src/pages/SettingsPage.tsx (ou nova página + rota em src/App.tsx).

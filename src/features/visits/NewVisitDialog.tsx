@@ -31,11 +31,13 @@ import {
 } from '@/lib/validations'
 import { createVisit, getVisit, listVisitTemplates } from '@/services/visits'
 import { createVisitFromTemplate } from '@/services/visitClone'
+import { applyPlaybookToVisit } from '@/services/playbookApply'
+import { listPlaybooks } from '@/services/playbooks'
 import { createVisitor, listVisitors } from '@/services/visitors'
 import { linkVisitorToVisit } from '@/services/visitVisitors'
 import { createTasksBatch } from '@/services/tasks'
 import { notifyVisitStakeholders } from '@/services/notifications'
-import type { Visit, Visitor } from '@/types'
+import type { Playbook, Visit, Visitor } from '@/types'
 import { Search, UserPlus, X } from 'lucide-react'
 
 interface NewVisitDialogProps {
@@ -51,6 +53,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<Visitor[]>([])
   const [templates, setTemplates] = useState<Visit[]>([])
+  const [playbooks, setPlaybooks] = useState<Playbook[]>([])
 
   const form = useForm<VisitInput>({
     resolver: zodResolver(visitSchema),
@@ -66,6 +69,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       language: '',
       pvNumber: '',
       templateId: '',
+      playbookId: '',
       startWithChecklist: true,
     },
   })
@@ -79,6 +83,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     if (!open || !user) return
     void listVisitors(user.uid, isAdmin).then(setVisitors)
     void listVisitTemplates(user.uid, isAdmin).then(setTemplates)
+    void listPlaybooks(user.uid, isAdmin).then(setPlaybooks)
   }, [open, user, isAdmin])
 
   const handleSearch = () => {
@@ -167,9 +172,21 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           progress: 0,
           teamMemberIds: [],
         })
-        if (values.startWithChecklist) {
+        if (values.startWithChecklist && !values.playbookId) {
           await createTasksBatch(user.uid, visitId, DEFAULT_CHECKLIST)
         }
+      }
+
+      if (values.playbookId) {
+        await applyPlaybookToVisit({
+          playbookId: values.playbookId,
+          visitId,
+          ownerId: user.uid,
+          startDate: values.startDate,
+          isAdmin,
+          actorId: user.uid,
+          actorName: profile?.name,
+        })
       }
 
       await Promise.all(
@@ -248,6 +265,33 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            ) : null}
+            {playbooks.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Playbook operacional (opcional)</Label>
+                <Select
+                  value={form.watch('playbookId') || '_none'}
+                  onValueChange={(value) =>
+                    form.setValue('playbookId', value === '_none' ? '' : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem playbook" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Sem playbook</SelectItem>
+                    {playbooks.map((playbook) => (
+                      <SelectItem key={playbook.id} value={playbook.id}>
+                        {playbook.name}
+                        {playbook.visitType ? ` · ${playbook.visitType}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Gera tarefas, atividades e documentos com prazos relativos à data de início.
+                </p>
               </div>
             ) : null}
             <div className="space-y-2">
@@ -343,7 +387,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
               <Label htmlFor="language">Idioma</Label>
               <Input id="language" placeholder="Português, Inglês..." {...form.register('language')} />
             </div>
-            {!form.watch('templateId') ? (
+            {!form.watch('templateId') && !form.watch('playbookId') ? (
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={form.watch('startWithChecklist')}

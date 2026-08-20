@@ -184,6 +184,35 @@ export type DocumentCategory =
   | 'comprovante'
   | 'outro'
 
+export type PlaybookPhase = 'preparacao' | 'durante' | 'encerramento'
+export type PlaybookItemKind = 'task' | 'activity' | 'document'
+
+export interface PlaybookItem {
+  id: string
+  kind: PlaybookItemKind
+  phase: PlaybookPhase
+  title: string
+  description?: string
+  offsetDays: number
+  durationMinutes?: number
+  startTime?: string
+  location?: string
+  documentCategory?: DocumentCategory
+  assigneeName?: string
+  order: number
+}
+
+export interface Playbook {
+  id: string
+  name: string
+  description?: string
+  visitType: string
+  items: PlaybookItem[]
+  ownerId: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
 export interface VisitDocument extends SoftDeletable {
   id: string
   visitId: string
@@ -192,6 +221,16 @@ export interface VisitDocument extends SoftDeletable {
   storagePath: string
   contentType: string
   size: number
+  ownerId: string
+  createdAt?: unknown
+}
+
+export interface DocumentPlaceholder {
+  id: string
+  visitId: string
+  title: string
+  category: DocumentCategory
+  phase?: PlaybookPhase
   ownerId: string
   createdAt?: unknown
 }

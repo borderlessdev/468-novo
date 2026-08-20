@@ -1,0 +1,92 @@
+DIA 14 — Atualizacao continua, Outlook esqueleto e fecho
+=======================================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Dias 1–13 feitos.
+Este é o último dia: robustez do calendário + esqueleto Outlook + regressão dos 5 módulos.
+Não comece features novas fora desta lista.
+
+Estado atual:
+- Google OAuth + sync de atividades (dias 12–13).
+- Outlook só "Em breve".
+- Token pode expirar / invalid_grant sem UX.
+- Cinco módulos no ar: playbooks, central, financeiro, portal, calendar.
+
+Objetivo do dia:
+1. Token Google expirado / revogado:
+   - Na Function, se a API retornar invalid_grant, apague a conexão e devolva código
+     `calendar_reauth_required`.
+   - Frontend: toast "Reconecte o Google Calendar" + card em Configurações em estado
+     desconectado. Não loop de retries.
+2. Garantir cobertura de atualização:
+   - Qualquer caminho que mude activity (AgendaPage submit, drag, import de programação
+     se src/lib/programmingImport.ts alterar horário, delete) chama sync ou delete.
+   - Se a visita mudar startDate/endDate, NÃO reagende o Google automaticamente
+     (atividades já têm date própria). Só sync se a atividade em si mudar.
+3. Outlook — esqueleto apenas:
+   - provider 'outlook' nos types.
+   - Função stub `outlookCalendarOAuthStart` que retorna erro amigável "ainda não disponível"
+     OU botão continua disabled.
+   - Comentário no service com os próximos passos (Azure App Registration, scopes
+     Calendars.ReadWrite, equivalente ao Google). NÃO implementar OAuth Microsoft hoje
+     a menos que o Google já esteja 100% e sobre tempo — mesmo assim, pare no start URL.
+4. Env / docs locais:
+   - functions/.env.example com GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, APP_ORIGIN
+     (sem valores reais).
+   - Confirmar que .gitignore ignora .env e service-account.
+   - NÃO editar guide/00-LEIA-PRIMEIRO.txt a menos que um nome de arquivo do guia
+     tenha ficado errado (não deveria).
+5. Checklist de regressão (corrigir bugs bloqueantes que aparecerem; sem polish estético):
+   - Playbook: criar, aplicar, checklists preparação/encerramento, salvar como playbook
+   - Central /operacoes: atrasadas, visitas 7 dias, docs, NFs, desvios/aprovação
+   - Sino: pelo menos um alerta novo do dia 5 ainda dispara
+   - Financeiro: aprovar, previsto/contratado/realizado, % desvio
+   - Portal: gerar link, abrir anônimo, confirmar, aplicar rascunho, QR, feedback
+   - Calendar: conectar, CRUD atividade reflete no Google, desconectar, reauth message
+   - Cliente não entra em /operacoes, /financeiro, CRUD playbook, conectar calendário
+6. `npm run build` (frontend) deve passar. Se functions tiverem compile, `npm run build`
+   dentro de functions/ também.
+
+Fora de escopo:
+- Sync Outlook real.
+- Cloud Scheduler / Functions para alertas dos dias 1–11.
+- Redesign visual.
+- Calendário mensal interno.
+
+Restrições:
+- Não refatore módulos estáveis "porque deu tempo".
+- Não commitar secrets.
+- Correções só do que o checklist quebrar.
+
+Entregáveis:
+- Tratamento invalid_grant.
+- Stubs/docs Outlook.
+- .env.example das Functions.
+- Build verde + bugs bloqueantes da regressão corrigidos.
+
+---
+
+Checklist manual (regressao completa):
+[ ] Criar visita a partir de playbook
+[ ] Checklists de preparacao e encerramento visiveis no detalhe
+[ ] /operacoes lista atrasos, visitas, docs, NFs, pendencias financeiras
+[ ] Notificacoes novas no sino
+[ ] Aprovar/rejeitar linha financeira
+[ ] Ver previsto vs contratado vs realizado e % desvio
+[ ] Gerar link do portal e abrir sem login
+[ ] Visitante confirma e envia rascunho; operador aplica
+[ ] QR / cracha / pesquisa funcionam
+[ ] Google: conectar, criar atividade, evento no Calendar, editar, excluir
+[ ] Desconectar Google; agenda interna segue ok
+[ ] Outlook permanece Em breve
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: functions/, src/services/calendar.ts, src/pages/SettingsPage.tsx,
+  src/pages/AgendaPage.tsx, src/lib/programmingImport.ts, .gitignore,
+  functions/.env.example.
+- Se a regressão revelar um buraco de security no portal (rules abertas demais),
+  isso é P0 e deve ser corrigido neste dia antes de qualquer polish.

@@ -1,0 +1,69 @@
+DIA 07 — Previsto, contratado, realizado
+========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Aprovação (dia 6) já existe.
+Implemente SOMENTE o dia 7: números e comparação de orçamentos. Indicadores de desvio na Central ficam no dia 8.
+
+Estado atual:
+- budget1, budget2, budget3 + até 3 anexos de orçamento.
+- serviceValue = valor do serviço (hoje usado como "gasto" no Dashboard).
+- winningCompany.
+- FinancePage mostra os 3 orçamentos como inputs, sem destacar o menor/vencedor de forma analítica.
+- Sem campo de valor pago/realizado.
+
+Objetivo do dia:
+1. Definir e documentar no código (comentário curto + helper src/lib/financeMetrics.ts):
+
+   - previsto: menor valor entre budget1/2/3 que existirem; se nenhum, undefined
+   - contratado: serviceValue
+   - realizado: campo novo `actualValue?: number`
+     * se actualValue ausente e nfReceived === true, usar serviceValue como realizado
+     * se nfReceived === false, realizado = actualValue ou 0/undefined (não fingir pagamento)
+
+2. Campo actualValue no FinanceItem, types, map, create/update, form Zod, input na UI
+   (label "Valor realizado / pago").
+3. Comparação visual dos 3 orçamentos na linha/card:
+   - Mostrar os três valores lado a lado.
+   - Destacar o menor (previsto) e, se winningCompany preenchida, indicar o vencedor.
+   - Não precisa de gráfico; badges ou tabela compacta bastam.
+4. Resumo no topo da FinancePage (além do total atual de serviceValue):
+   - Soma previsto (visitas filtradas)
+   - Soma contratado
+   - Soma realizado
+   Usar formatCurrency já existente.
+5. Dashboard: o KPI "Gastos do ciclo" continua usando contratado (serviceValue) OU
+   realizado se quiser — NÃO mude o significado sem label. Se alterar, renomeie o KPI
+   para "Contratado no ciclo" e, se couber, um segundo número "Realizado". Só faça isso
+   se for rápido; senão deixe o Dashboard quieto.
+
+Fora de escopo:
+- Cards de desvio % na Central (dia 8).
+- Aprovação (já feita; não refatore).
+- Relatórios PDF novos.
+
+Restrições:
+- Linhas antigas sem actualValue continuam válidas.
+- Cliente não vê financeiro.
+- npm run build deve passar.
+
+Entregáveis:
+- Helper de métricas + actualValue + UI de comparação + totais previstos/contratados/realizados.
+
+---
+
+Checklist manual:
+[ ] Cadastrar linha com budget1=1000, budget2=800, budget3=1200 → previsto = 800
+[ ] serviceValue = 900 → contratado = 900
+[ ] Marcar NF recebida sem actualValue → realizado cai para 900
+[ ] Informar actualValue = 950 → realizado = 950 mesmo com NF
+[ ] Topo da página soma as três colunas
+[ ] Os 3 orçamentos aparecem comparáveis na linha
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/lib/financeMetrics.ts, src/types/index.ts, src/services/finance.ts,
+  src/pages/FinancePage.tsx, src/lib/validations.ts, src/lib/utils.ts (formatCurrency).

@@ -1,0 +1,77 @@
+DIA 13 — Sync das atividades com o Google
+=========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Dia 12 conectou a conta Google.
+Implemente SOMENTE o dia 13: criar/atualizar/apagar eventos a partir das atividades.
+Outlook continua fora. Fecho de token expirado/regressão ampla é o dia 14.
+
+Estado atual:
+- Activities: title, description, location, date, startTime, endTime, visitId,
+  responsibleNames. startTime já no formato `${date}T${HH:mm}:00`.
+- AgendaPage cria/edita/exclui/move (dnd) e detecta conflito INTERNO na mesma visita.
+- Conexão Google via Functions (refresh token no servidor).
+
+Objetivo do dia:
+1. Campo opcional na Activity: `googleEventId?: string`.
+   Types + map + updateActivity. Não quebrar atividades antigas.
+2. Callable HTTPS `syncActivityToGoogle` (activityId) e `deleteGoogleEvent` (activityId
+   ou eventId). A Function:
+   - valida auth.uid (owner da atividade ou membro com escrita)
+   - lê tokens da conexão Google do uid (se a atividade é de outra pessoa, sincroniza
+     no calendário de quem está logado — documente isso)
+   - insert/update Google Calendar event:
+     summary = activity.title
+     description = visita + description
+     location = activity.location
+     start/end com timeZone America/Sao_Paulo (ou timezone do usuário se já existir)
+   - grava googleEventId na activity (Admin SDK)
+3. No frontend, depois de create/update/delete/move em AgendaPage (e WeeklyAgenda):
+   - se getCalendarStatus().connected, chamar o sync (fire-and-forget com toast de erro
+     se falhar; não bloquear o save local).
+   - delete local → deleteGoogleEvent.
+4. Conflitos:
+   - Manter o conflito interno atual da AgendaPage.
+   - Extra: na Function, freebusy.query no intervalo do evento. Se busy, a Function
+     devolve { conflict: true, hint }. O frontend mostra toast.warning
+     "Conflito no Google Calendar" mas AINDA assim pode criar o evento (ou perguntar).
+     Prefira: avisar e criar mesmo assim, para não travar a operação.
+   - Se freebusy falhar por escopo, fique só com o conflito interno e registre TODO no código.
+5. Não sincronizar o histórico inteiro automaticamente. Botão na Agenda:
+   "Enviar programação desta visita ao Google" (loop das activities da visita atual).
+
+Fora de escopo:
+- Outlook.
+- Importar eventos do Google para o app.
+- Watch/push do Google → app.
+- Tratamento polido de invalid_grant (dia 14).
+
+Restrições:
+- Falha no Google não desfaz o save da atividade no Firestore.
+- npm run build frontend passa.
+- Cliente role=client: não chama sync (canWrite).
+
+Entregáveis:
+- googleEventId + sync no CRUD da agenda + aviso de conflito Google se possível + botão bulk da visita.
+
+---
+
+Checklist manual:
+[ ] Conta Google conectada
+[ ] Criar atividade na visita → evento aparece no Google Calendar
+[ ] Editar horário → evento atualiza (mesmo event id)
+[ ] Mover no calendário semanal → atualiza no Google
+[ ] Excluir atividade → evento some no Google
+[ ] Sem conexão: agenda funciona igual, sem erro fatal
+[ ] Conflito interno continua bloqueando overlap na mesma visita
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: functions/ (calendar sync), src/services/activities.ts,
+  src/pages/AgendaPage.tsx, src/components/agenda/WeeklyAgenda.tsx,
+  src/services/calendar.ts.
+- Timezone: Brasil. date-fns já está no frontend; nas Functions use ISO com offset
+  ou timeZone explícito na API do Google.

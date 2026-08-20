@@ -1,0 +1,81 @@
+DIA 09 — Link seguro do portal (token)
+======================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Módulos internos 1–8 já existem.
+Implemente SOMENTE o dia 9: token, rota pública e rules. Não faça confirmação/edição do visitante ainda (dia 10).
+
+Estado atual:
+- Todas as rotas de negócio estão dentro de ProtectedRoute em src/App.tsx.
+- Convites: src/services/invites.ts — token, expiresAt, link /cadastro?invite=, rules de invites
+  permitem read se status == pending (sem login).
+- Visitantes e visitas exigem auth nas rules. NÃO abra a coleção visits inteira ao público.
+- VisitDetailPage já vincula visitantes.
+
+Objetivo do dia:
+1. Coleção `visitGuestLinks`:
+   - token (string aleatória, como invites: uuid sem hífens)
+   - visitId, visitorId (opcional neste dia; obrigatório se o link for por visitante —
+     prefira 1 link por visitante da visita)
+   - ownerId, createdBy, expiresAt (ISO, default +14 dias)
+   - revoked?: boolean
+   - createdAt
+2. Service src/services/visitGuestLinks.ts:
+   - createGuestLink(visitId, visitorId, createdBy)
+   - getGuestLinkByToken(token) — usado na rota pública
+   - listLinksForVisit(visitId)
+   - revokeLink(id)
+3. Rules (CRÍTICO — não vazar dados):
+   - create: autenticado, owner/team/admin da visita, ownerId == uid
+   - list/read autenticado: quem pode ler a visita
+   - get público: permitir leitura do DOCUMENTO do link se status não revogado.
+     NÃO permitir list público.
+   - A visita, o visitante e as atividades NÃO ficam publicamente listáveis hoje.
+     No dia 9 a página pública pode mostrar só o que estiver DENORMALIZADO no próprio
+     visitGuestLinks (snapshot): visitTitle, startDate, endDate, visitorName, company, city.
+     Assim não precisa abrir visits/ visível ao mundo.
+   - update: só dono/team para revoked=true.
+4. Rota PÚBLICA em App.tsx, FORA do ProtectedRoute:
+   `/portal/:token` → src/pages/GuestPortalPage.tsx
+   Layout simples (sem AppShell/sidebar). Se token inválido/expirado/revogado: mensagem clara.
+5. No detalhe da visita (autenticado): seção "Portal do visitante"
+   - Por visitante vinculado: botão "Gerar link", copiar URL `${origin}/portal/${token}`.
+   - Mostrar validade e botão revogar.
+   - Só canWrite.
+6. Página pública neste dia: somente leitura do snapshot
+   (título da visita, datas, nome do visitante, "link válido").
+   Placeholder: "Em breve você poderá confirmar presença e atualizar seus dados."
+
+Fora de escopo:
+- Formulário de confirmação e edição (dia 10).
+- QR, crachá, pesquisa (dia 11).
+- Login de visitante, Firebase Anonymous Auth (evitar se o snapshot no link bastar).
+
+Restrições:
+- Nunca permitir list em visits/visitors/activities sem auth.
+- Não reutilizar a coleção invites (role team/client é outro fluxo).
+- npm run build deve passar.
+- Token não deve aparecer em logs de toast completos se possível (ok mostrar na UI do operador).
+
+Entregáveis:
+- Coleção + rules + gerar/copiar/revogar link + página pública somente leitura.
+
+---
+
+Checklist manual:
+[ ] Operador gera link para um visitante da visita
+[ ] Copiar URL e abrir em janela anônima (sem login) mostra título/datas
+[ ] Token inventado mostra erro
+[ ] Revogar link → anônimo passa a ver inválido
+[ ] Visitante autenticado como client NÃO é requisito para o portal
+[ ] npm run build passa
+[ ] Revisar firestore.rules: anônimo NÃO lista visitas
+
+Notas:
+- Espelhe o padrão de src/services/invites.ts.
+- Arquivos-chave: src/services/visitGuestLinks.ts, src/pages/GuestPortalPage.tsx,
+  src/App.tsx, src/pages/VisitDetailPage.tsx, firestore.rules, src/types/index.ts.
+- Deploy das rules é necessário para testar de verdade (`npm run deploy:rules`).

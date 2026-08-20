@@ -1,0 +1,80 @@
+DIA 05 — Automacoes de alerta operacional
+=========================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. A Central /operacoes (dia 4) já existe.
+Implemente SOMENTE o dia 5: alertas. Não comece o fluxo de aprovação financeira (dia 6).
+
+Estado atual:
+- src/services/notificationReminders.ts: scanDueReminders no AppShell (cliente).
+  - task_due_soon: dueDate em 0..3 dias, não atrasadas (days < 0 é ignorado)
+  - finance_nf_due: nfDueDate em 0..7 dias, nfReceived false
+  - activity_soon: atividade nas próximas 24h
+- Tipos em src/types/index.ts NotificationType + NotificationPreferences.
+- Preferências UI: src/lib/notificationPreferences.ts e SettingsPage.
+- Dedupe via dedupeKey + notificationExistsByDedupeKey.
+- Sem Cloud Functions — manter scan no cliente.
+
+Objetivo do dia:
+1. Novos NotificationType (e preferências correspondentes, default true):
+
+   - task_overdue          — tarefa não concluída com dueDate < hoje
+   - visit_soon            — visita com startDate em 0..2 dias (hoje, amanhã, depois),
+                             status planejamento ou em_andamento
+   - document_pending      — mesmo critério da Central (placeholder sem arquivo
+                             OU visita ativa sem documentos). Dedupe por visita/dia.
+   - finance_nf_overdue    — nfReceived false e nfDueDate < hoje
+
+2. Estender scanDueReminders para emitir esses 4, com dedupeKey estável:
+   - task_overdue:{taskId}:{dueDate}
+   - visit_soon:{visitId}:{startDate}
+   - document_pending:{visitId}:{yyyy-mm-dd}
+   - finance_nf_overdue:{itemId}:{nfDueDate}
+
+   Não reenviar o mesmo dedupeKey.
+3. href coerente:
+   - tarefas → /planejamento?visita=
+   - visita → /visitas/{id} ou /operacoes
+   - docs → /visitas/{id}
+   - NF → /financeiro?visita=
+4. Títulos/bodies em português, no tom dos avisos atuais.
+5. Switches novos em Configurações (NOTIFICATION_PREFERENCE_ITEMS).
+6. Mapear TYPE_TO_PREFERENCE. Atualizar users se o merge de preferências já cobrir default.
+7. Opcional: no OperationsPage, um texto "alertas também aparecem no sino" — sem UI extra obrigatória.
+8. Continua SEM Cloud Functions. Documente num comentário curto no reminder:
+   o scan só roda com o app aberto (AppShell).
+
+Fora de escopo:
+- Push FCM, e-mail desses alertas, Cloud Scheduler.
+- Aprovação financeira (dia 6).
+- Mudar a Central além de reusar o mesmo critério de "documento pendente".
+
+Restrições:
+- Não quebrar os 3 scanners que já existem.
+- Preferências desligadas = não cria notificação (createNotification já checa).
+- Cliente: só receber o que fizer sentido (visita próxima sim; NF não, se já não recebe finance).
+  Siga o padrão atual de listFinanceItemsByOwner / isClient.
+- npm run build deve passar.
+
+Entregáveis:
+- 4 tipos novos + scan + preferências + types/rules se a rule de notifications exigir type "is string" (já exige string, ok).
+
+---
+
+Checklist manual:
+[ ] Tarefa atrasada gera notificação task_overdue no sino (recarregar app)
+[ ] Recarregar de novo NÃO duplica (dedupe)
+[ ] Visita que começa amanhã gera visit_soon
+[ ] NF vencida ontem gera finance_nf_overdue
+[ ] Desligar a preferência em Configurações impede novo aviso (use outro item/data)
+[ ] Clique na notificação navega certo
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/types/index.ts, src/services/notificationReminders.ts,
+  src/lib/notificationPreferences.ts, src/pages/SettingsPage.tsx,
+  src/services/notifications.ts (só se precisar).
+- AppShell já chama scanDueReminders — não precisa de outro trigger.

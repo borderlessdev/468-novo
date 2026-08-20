@@ -40,6 +40,26 @@ export const VISIT_STATUSES = [
 
 export const TASK_STATUSES = ['backlog', 'in_progress', 'completed'] as const
 
+export const PLAYBOOK_PHASES = [
+  { value: 'preparacao', label: 'Preparação' },
+  { value: 'durante', label: 'Durante' },
+  { value: 'encerramento', label: 'Encerramento' },
+] as const
+
+export const PLAYBOOK_ITEM_KINDS = [
+  { value: 'task', label: 'Tarefa' },
+  { value: 'activity', label: 'Atividade' },
+  { value: 'document', label: 'Documento' },
+] as const
+
+export const DOCUMENT_CATEGORIES = [
+  { value: 'contrato', label: 'Contrato' },
+  { value: 'boarding', label: 'Boarding pass' },
+  { value: 'briefing', label: 'Briefing' },
+  { value: 'comprovante', label: 'Comprovante' },
+  { value: 'outro', label: 'Outro' },
+] as const
+
 export const DEFAULT_CHECKLIST = [
   'Confirmar transporte',
   'Reservar hotel',

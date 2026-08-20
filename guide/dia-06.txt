@@ -1,0 +1,73 @@
+DIA 06 — Aprovacao financeira (1 nivel)
+=======================================
+Cole no Cursor (Agent mode):
+
+---
+
+Você está no Promover Experience (repo 468-novo).
+Leia guide/00-LEIA-PRIMEIRO.txt. Central e alertas (dias 4–5) já existem.
+Implemente SOMENTE o dia 6: fluxo de aprovação. Não calcule previsto/contratado/realizado ainda (dia 7).
+
+Estado atual:
+- FinanceItem: serviceName, budget1/2/3, serviceValue, winningCompany, nfReceived, nfDueDate, anexos.
+- Sem status de aprovação.
+- src/pages/FinancePage.tsx: tabela/cards/invoice, CRUD, upload orçamento/NF.
+- canWriteOperations: cliente não escreve. Equipe escreve na visita compartilhada.
+- activityLogs: writeActivityLog em várias telas (visita, etc.).
+- notifyVisitStakeholders existe.
+
+Objetivo do dia:
+1. Campos novos em FinanceItem:
+   - approvalStatus: 'pending' | 'approved' | 'rejected' (default 'pending' em itens novos)
+   - approvedBy?: string (uid)
+   - approvedByName?: string
+   - approvedAt?: string (ISO)
+   - rejectionReason?: string
+   Itens antigos sem campo = tratar como 'pending' na leitura (mapFinance).
+2. Types + map em src/services/finance.ts + createFinanceItem gravando pending.
+   updateFinanceItem para transições de status.
+3. Quem aprova: owner da visita, admin, ou role user dono. Equipe (team) NÃO aprova
+   (pode criar/editar a linha, não mudar approvalStatus). Cliente nunca.
+   Encapsular em src/lib/access.ts (ex: canApproveFinance).
+4. UI na FinancePage:
+   - Badge de status (pendente / aprovado / rejeitado) em cada linha.
+   - Botões Aprovar e Rejeitar (dialog de motivo na rejeição) só se canApproveFinance.
+   - Filtro por status (todos / pendente / aprovado / rejeitado).
+5. Ao aprovar/rejeitar: writeActivityLog (entityType financeItem) + toast.
+   Notificação opcional aos stakeholders (type novo finance_approval OU reusar um type
+   existente se quiser evitar expandir o dia — preferível um type `finance_approval`
+   com preferência default true, alinhado ao dia 5).
+6. Rules: equipe continua podendo update da linha, MAS se for fácil, impeça team de
+   alterar approvalStatus (rules complexas). Se as rules atuais não distinguem team vs owner
+   com precisão no financeItem, valide na UI + no service e documente o trade-off.
+   Não abrir buraco maior do que o atual.
+
+Fora de escopo:
+- Multi-nível, limite por valor, alçada.
+- Previsto vs realizado (dia 7).
+- Indicadores de desvio na Central (dia 8).
+
+Restrições:
+- Não quebrar upload de orçamento/NF nem as 3 views da FinancePage.
+- npm run build deve passar.
+- Soft-delete de financeItem continua igual.
+
+Entregáveis:
+- Campo + UI de aprovação 1 nível + log.
+- Filtro por status.
+
+---
+
+Checklist manual:
+[ ] Nova linha financeira nasce como Pendente
+[ ] Owner aprova; badge vira Aprovado; recarregar persiste
+[ ] Owner rejeita com motivo
+[ ] Equipe (team) não vê botão aprovar (ou o clique é recusado)
+[ ] Cliente não acessa /financeiro
+[ ] Filtro "Pendente" lista só pendentes
+[ ] Histórico/activity log registra a ação (se a UI de logs da visita mostrar financeItem)
+[ ] npm run build passa
+
+Notas:
+- Arquivos-chave: src/types/index.ts, src/services/finance.ts, src/pages/FinancePage.tsx,
+  src/lib/access.ts, src/services/activityLogs.ts, firestore.rules.
