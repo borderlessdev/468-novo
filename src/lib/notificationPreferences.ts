@@ -10,6 +10,10 @@ export interface NotificationPreferences {
   documentUploaded: boolean
   teamUpdated: boolean
   activitySoon: boolean
+  taskOverdue: boolean
+  visitSoon: boolean
+  documentPending: boolean
+  financeNfOverdue: boolean
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -22,6 +26,10 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   documentUploaded: true,
   teamUpdated: true,
   activitySoon: true,
+  taskOverdue: true,
+  visitSoon: true,
+  documentPending: true,
+  financeNfOverdue: true,
 }
 
 export const NOTIFICATION_PREFERENCE_ITEMS: {
@@ -35,9 +43,29 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
     description: 'Avisos quando uma tarefa estiver perto do vencimento',
   },
   {
+    key: 'taskOverdue',
+    label: 'Tarefas atrasadas',
+    description: 'Quando uma tarefa passar do prazo sem conclusão',
+  },
+  {
     key: 'financeNfDue',
     label: 'Vencimento de NF',
     description: 'Lembretes de notas fiscais com data de vencimento próxima',
+  },
+  {
+    key: 'financeNfOverdue',
+    label: 'NF atrasada',
+    description: 'Quando a nota fiscal já passou do vencimento e não foi recebida',
+  },
+  {
+    key: 'visitSoon',
+    label: 'Visitas próximas',
+    description: 'Avisos de visitas que começam em até 2 dias',
+  },
+  {
+    key: 'documentPending',
+    label: 'Documentos pendentes',
+    description: 'Placeholders sem arquivo ou visitas ativas sem documentos',
   },
   {
     key: 'visitStatusChanged',
@@ -78,12 +106,16 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
 
 const TYPE_TO_PREFERENCE: Record<NotificationType, keyof NotificationPreferences> = {
   task_due_soon: 'taskDueSoon',
+  task_overdue: 'taskOverdue',
   finance_nf_due: 'financeNfDue',
+  finance_nf_overdue: 'financeNfOverdue',
   visit_status_changed: 'visitStatusChanged',
   visit_created: 'visitCreated',
+  visit_soon: 'visitSoon',
   task_created: 'taskCreated',
   task_status_changed: 'taskStatusChanged',
   document_uploaded: 'documentUploaded',
+  document_pending: 'documentPending',
   team_updated: 'teamUpdated',
   activity_soon: 'activitySoon',
 }

@@ -3,6 +3,7 @@ import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
   Calendar,
+  ClipboardList,
   DollarSign,
   LayoutDashboard,
   ListTodo,
@@ -15,11 +16,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isNavAllowed } from '@/lib/access'
+import { NAV_ITEMS } from '@/lib/constants'
 import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import type { ModulePermissions, UserRole } from '@/types'
 
 const icons = {
   LayoutDashboard,
+  ClipboardList,
   MapPin,
   Calendar,
   Users,
@@ -28,17 +31,6 @@ const icons = {
   BarChart3,
   Settings,
 } as const
-
-const items = [
-  { to: '/', label: 'Dashboard', icon: 'LayoutDashboard' },
-  { to: '/visitas', label: 'Visitas', icon: 'MapPin' },
-  { to: '/agenda', label: 'Programação', icon: 'Calendar' },
-  { to: '/visitantes', label: 'Visitantes', icon: 'Users' },
-  { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
-  { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },
-  { to: '/relatorios', label: 'Relatórios', icon: 'BarChart3' },
-  { to: '/configuracoes', label: 'Configurações', icon: 'Settings' },
-] as const
 
 interface AppSidebarProps {
   open: boolean
@@ -162,7 +154,7 @@ export function AppSidebar({
         </div>
 
         <nav className="scrollbar-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5 py-4">
-          {items
+          {NAV_ITEMS
             .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
             .map((item) => {
               const Icon = icons[item.icon]

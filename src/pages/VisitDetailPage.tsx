@@ -25,6 +25,7 @@ import { VisitStatusBadge } from '@/components/shared/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -54,7 +55,8 @@ import {
   formatDate,
 } from '@/lib/utils'
 import { listFinanceItems } from '@/services/finance'
-import { listTasks } from '@/services/tasks'
+import { listTasks, updateTask } from '@/services/tasks'
+import { listActivities } from '@/services/activities'
 import {
   deleteDocument,
   getDocumentDownloadUrl,
@@ -70,15 +72,19 @@ import {
 import { deleteVisit, getVisit, syncVisitProgress, updateVisit } from '@/services/visits'
 import { writeActivityLog, listActivityLogsForVisit } from '@/services/activityLogs'
 import { duplicateVisit, saveVisitAsTemplate } from '@/services/visitClone'
-import { applyPlaybookToVisit } from '@/services/playbookApply'
+import { applyPlaybookToVisit, saveVisitAsPlaybook } from '@/services/playbookApply'
 import { listPlaybooks } from '@/services/playbooks'
 import { listDocumentPlaceholders } from '@/services/documentPlaceholders'
+import { unmatchedPlaceholders } from '@/lib/operations'
 import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
 import type {
+  Activity,
   ActivityLog,
   DocumentCategory,
   DocumentPlaceholder,
   Playbook,
+  PlaybookPhase,
+  Task,
   Visit,
   VisitDocument,
   Visitor,
@@ -105,8 +111,11 @@ export function VisitDetailPage() {
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([])
   const [documents, setDocuments] = useState<VisitDocument[]>([])
   const [placeholders, setPlaceholders] = useState<DocumentPlaceholder[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
   const [pendingTasks, setPendingTasks] = useState(0)
   const [taskCount, setTaskCount] = useState(0)
+  const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null)
   const [financeTotal, setFinanceTotal] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [docCategory, setDocCategory] = useState<DocumentCategory>('outro')
@@ -166,6 +175,7 @@ export function VisitDetailPage() {
         listFinanceItems(id, ownerIdForQuery, isAdmin),
         listDocuments(id, ownerIdForQuery, isAdmin),
         listDocumentPlaceholders(id, ownerIdForQuery, isAdmin),
+        listActivities(id, ownerIdForQuery, isAdmin),
       ])
 
       const failed = results.filter((result) => result.status === 'rejected')
@@ -178,10 +188,11 @@ export function VisitDetailPage() {
 
       const links = results[0].status === 'fulfilled' ? results[0].value : []
       const visitors = results[1].status === 'fulfilled' ? results[1].value : []
-      const tasks = results[2].status === 'fulfilled' ? results[2].value : []
+      const tasksData = results[2].status === 'fulfilled' ? results[2].value : []
       const finance = results[3].status === 'fulfilled' ? results[3].value : []
       const docs = results[4].status === 'fulfilled' ? results[4].value : []
       const pendingDocs = results[5].status === 'fulfilled' ? results[5].value : []
+      const activitiesData = results[6].status === 'fulfilled' ? results[6].value : []
 
       let linked: Visitor[]
       try {
@@ -196,8 +207,10 @@ export function VisitDetailPage() {
       setAllVisitors(visitors)
       setDocuments(docs)
       setPlaceholders(pendingDocs)
-      setTaskCount(tasks.length)
-      setPendingTasks(tasks.filter((t) => t.status !== 'completed').length)
+      setTasks(tasksData)
+      setActivities(activitiesData)
+      setTaskCount(tasksData.length)
+      setPendingTasks(tasksData.filter((t) => t.status !== 'completed').length)
       setFinanceTotal(
         finance.reduce((sum, item) => sum + (item.serviceValue ?? 0), 0),
       )
@@ -209,7 +222,7 @@ export function VisitDetailPage() {
         setActivityLogs([])
       }
 
-      const progress = calculateVisitProgress(tasks)
+      const progress = calculateVisitProgress(tasksData)
       if (progress !== visitData.progress) {
         try {
           await syncVisitProgress(id, progress)
@@ -391,6 +404,78 @@ export function VisitDetailPage() {
     }
   }
 
+  const handleSaveAsPlaybook = () => {
+    if (!user || !id) return
+    setCloning(true)
+    void saveVisitAsPlaybook(id, user.uid, isAdmin)
+      .then(() => toast.success('Playbook salvo em Configurações'))
+      .catch((error) => {
+        console.error(error)
+        toast.error('Não foi possível salvar como playbook')
+      })
+      .finally(() => setCloning(false))
+  }
+
+  const handleToggleChecklistTask = async (task: Task) => {
+    if (!canWrite) return
+    setTogglingTaskId(task.id)
+    const nextStatus = task.status === 'completed' ? 'backlog' : 'completed'
+    try {
+      await updateTask(task.id, { status: nextStatus })
+      setTasks((prev) =>
+        prev.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)),
+      )
+      setPendingTasks((prev) =>
+        nextStatus === 'completed' ? Math.max(0, prev - 1) : prev + 1,
+      )
+      if (visit) {
+        const nextTasks = tasks.map((item) =>
+          item.id === task.id ? { ...item, status: nextStatus } : item,
+        )
+        const progress = calculateVisitProgress(nextTasks)
+        setVisit((prev) => (prev ? { ...prev, progress } : prev))
+        await syncVisitProgress(visit.id, progress).catch(console.error)
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível atualizar a tarefa')
+    } finally {
+      setTogglingTaskId(null)
+    }
+  }
+
+  const tasksByPhase = useMemo(() => {
+    const group = (phase: PlaybookPhase) =>
+      tasks.filter((task) => (task.phase ?? 'durante') === phase)
+    return {
+      preparacao: group('preparacao'),
+      encerramento: group('encerramento'),
+    }
+  }, [tasks])
+
+  const activitiesByPhase = useMemo(() => {
+    const group = (phase: PlaybookPhase) =>
+      activities.filter((activity) => (activity.phase ?? 'durante') === phase)
+    return {
+      preparacao: group('preparacao'),
+      encerramento: group('encerramento'),
+    }
+  }, [activities])
+
+  const pendingPlaceholders = useMemo(
+    () => unmatchedPlaceholders(placeholders, documents),
+    [placeholders, documents],
+  )
+
+  const placeholdersByPhase = useMemo(() => {
+    const group = (phase: PlaybookPhase) =>
+      pendingPlaceholders.filter((item) => (item.phase ?? 'durante') === phase)
+    return {
+      preparacao: group('preparacao'),
+      encerramento: group('encerramento'),
+    }
+  }, [pendingPlaceholders])
+
   const handleUpload = async (file: File) => {
     if (!user || !id) return
     setUploading(true)
@@ -548,6 +633,15 @@ export function VisitDetailPage() {
                   <FileStack className="h-4 w-4" />
                   Salvar como modelo
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={cloning || !user}
+                  onClick={handleSaveAsPlaybook}
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Salvar como playbook
+                </Button>
               </>
             ) : null}
             {showDelete ? (
@@ -598,6 +692,106 @@ export function VisitDetailPage() {
           <Users className="h-4 w-4 shrink-0" />
           {linkedVisitors.length} visitante(s) · {pendingTasks} tarefa(s)
         </div>
+      </div>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        {(
+          [
+            {
+              key: 'preparacao' as const,
+              title: 'Checklist de preparação',
+              tasks: tasksByPhase.preparacao,
+              activities: activitiesByPhase.preparacao,
+              docs: placeholdersByPhase.preparacao,
+            },
+            {
+              key: 'encerramento' as const,
+              title: 'Checklist de encerramento',
+              tasks: tasksByPhase.encerramento,
+              activities: activitiesByPhase.encerramento,
+              docs: placeholdersByPhase.encerramento,
+            },
+          ] as const
+        ).map((block) => {
+          const empty =
+            block.tasks.length === 0 &&
+            block.activities.length === 0 &&
+            block.docs.length === 0
+          return (
+            <Card key={block.key}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-base">{block.title}</CardTitle>
+                {isNavAllowed('/planejamento', role, isAdmin, profile?.modulePermissions) ? (
+                  <Link
+                    to={`/planejamento?visita=${visit.id}`}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Ver no Planejamento
+                  </Link>
+                ) : null}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {empty ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum item nesta fase. Aplique um playbook ou crie tarefas com fase.
+                  </p>
+                ) : null}
+                {block.tasks.map((task) => (
+                  <label
+                    key={task.id}
+                    className="flex items-start gap-3 rounded-lg border px-3 py-2"
+                  >
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={task.status === 'completed'}
+                      disabled={!canWrite || togglingTaskId === task.id}
+                      onCheckedChange={() => void handleToggleChecklistTask(task)}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={
+                          task.status === 'completed'
+                            ? 'text-sm text-muted-foreground line-through'
+                            : 'text-sm font-medium'
+                        }
+                      >
+                        {task.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {task.dueDate ? `Prazo: ${formatDate(task.dueDate)}` : 'Sem prazo'}
+                        {task.assigneeName ? ` · ${task.assigneeName}` : ''}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+                {block.activities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="rounded-lg border border-dashed px-3 py-2 text-sm"
+                  >
+                    <p className="font-medium">{activity.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Atividade · {formatDate(activity.date)}
+                      {activity.location ? ` · ${activity.location}` : ''}
+                    </p>
+                  </div>
+                ))}
+                {block.docs.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.category}</p>
+                    </div>
+                    <Badge variant="outline">Arquivo pendente</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -826,9 +1020,9 @@ export function VisitDetailPage() {
                   {uploading ? 'Enviando...' : 'Upload'}
                 </Button>
               </div>
-              {placeholders.length > 0 ? (
+              {pendingPlaceholders.length > 0 ? (
                 <ul className="space-y-2">
-                  {placeholders.map((item) => (
+                  {pendingPlaceholders.map((item) => (
                     <li
                       key={item.id}
                       className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2 text-sm"
@@ -888,7 +1082,7 @@ export function VisitDetailPage() {
                 <p className="text-sm text-muted-foreground">Nenhum documento.</p>
               ) : (
                 <ul className="space-y-2">
-                  {placeholders.map((item) => (
+                  {pendingPlaceholders.map((item) => (
                     <li
                       key={item.id}
                       className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2 text-sm"

@@ -9,11 +9,15 @@ import {
 import { db } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import { softDeleteEntity } from '@/services/trash'
-import type { Activity } from '@/types'
+import type { Activity, PlaybookPhase } from '@/types'
 
 const col = collection(db, 'activities')
+const PHASES: PlaybookPhase[] = ['preparacao', 'durante', 'encerramento']
 
 function mapActivity(id: string, data: Record<string, unknown>): Activity {
+  const phase = PHASES.includes(data.phase as PlaybookPhase)
+    ? (data.phase as PlaybookPhase)
+    : undefined
   return {
     id,
     visitId: String(data.visitId ?? ''),
@@ -29,6 +33,7 @@ function mapActivity(id: string, data: Record<string, unknown>): Activity {
     visitorNames: Array.isArray(data.visitorNames)
       ? (data.visitorNames as string[])
       : [],
+    phase,
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
@@ -57,7 +62,16 @@ export async function createActivity(
   data: Omit<Activity, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>,
 ): Promise<string> {
   const ref = await addDoc(col, {
-    ...data,
+    visitId: data.visitId,
+    title: data.title,
+    description: data.description ?? null,
+    location: data.location ?? null,
+    date: data.date,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    responsibleNames: data.responsibleNames ?? [],
+    visitorNames: data.visitorNames ?? [],
+    phase: data.phase ?? null,
     ownerId,
     isDeleted: false,
     createdAt: serverTimestamp(),

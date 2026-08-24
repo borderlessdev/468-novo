@@ -246,18 +246,21 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           <div className="space-y-4">
             {templates.length > 0 ? (
               <div className="space-y-2">
-                <Label>Modelo (opcional)</Label>
+                <Label>Template de visita (cópia estrutural)</Label>
                 <Select
                   value={form.watch('templateId') || '_none'}
-                  onValueChange={(value) =>
-                    form.setValue('templateId', value === '_none' ? '' : value)
-                  }
+                  onValueChange={(value) => {
+                    const next = value === '_none' ? '' : value
+                    form.setValue('templateId', next)
+                    if (next) form.setValue('playbookId', '')
+                  }}
+                  disabled={Boolean(form.watch('playbookId'))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Sem modelo" />
+                    <SelectValue placeholder="Sem template" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">Sem modelo</SelectItem>
+                    <SelectItem value="_none">Sem template</SelectItem>
                     {templates.map((tpl) => (
                       <SelectItem key={tpl.id} value={tpl.id}>
                         {tpl.title}
@@ -265,16 +268,25 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Copia visita modelo (isTemplate). Não use junto com playbook.
+                </p>
               </div>
             ) : null}
             {playbooks.length > 0 ? (
               <div className="space-y-2">
-                <Label>Playbook operacional (opcional)</Label>
+                <Label>Modelo operacional (playbook)</Label>
                 <Select
                   value={form.watch('playbookId') || '_none'}
-                  onValueChange={(value) =>
-                    form.setValue('playbookId', value === '_none' ? '' : value)
-                  }
+                  onValueChange={(value) => {
+                    const next = value === '_none' ? '' : value
+                    form.setValue('playbookId', next)
+                    if (next) {
+                      form.setValue('templateId', '')
+                      form.setValue('startWithChecklist', false)
+                    }
+                  }}
+                  disabled={Boolean(form.watch('templateId'))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sem playbook" />
@@ -290,7 +302,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Gera tarefas, atividades e documentos com prazos relativos à data de início.
+                  Forma principal de checklist: gera tarefas, atividades e documentos com prazos relativos.
                 </p>
               </div>
             ) : null}

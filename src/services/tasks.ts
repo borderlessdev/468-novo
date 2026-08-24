@@ -10,11 +10,15 @@ import { db } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import { softDeleteEntity } from '@/services/trash'
 import { listVisits } from '@/services/visits'
-import type { Task, TaskStatus, UserRole } from '@/types'
+import type { PlaybookPhase, Task, TaskStatus, UserRole } from '@/types'
 
 const col = collection(db, 'tasks')
+const PHASES: PlaybookPhase[] = ['preparacao', 'durante', 'encerramento']
 
 function mapTask(id: string, data: Record<string, unknown>): Task {
+  const phase = PHASES.includes(data.phase as PlaybookPhase)
+    ? (data.phase as PlaybookPhase)
+    : undefined
   return {
     id,
     visitId: String(data.visitId ?? ''),
@@ -24,6 +28,7 @@ function mapTask(id: string, data: Record<string, unknown>): Task {
     dueDate: data.dueDate ? String(data.dueDate) : undefined,
     assigneeName: data.assigneeName ? String(data.assigneeName) : undefined,
     assigneeId: data.assigneeId ? String(data.assigneeId) : undefined,
+    phase,
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
@@ -100,6 +105,7 @@ export async function createTask(
     dueDate: data.dueDate ?? null,
     assigneeName: data.assigneeName ?? null,
     assigneeId: data.assigneeId ?? null,
+    phase: data.phase ?? null,
     ownerId,
     isDeleted: false,
     createdAt: serverTimestamp(),

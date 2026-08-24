@@ -42,6 +42,10 @@ export interface NotificationPreferences {
   documentUploaded: boolean
   teamUpdated: boolean
   activitySoon: boolean
+  taskOverdue: boolean
+  visitSoon: boolean
+  documentPending: boolean
+  financeNfOverdue: boolean
 }
 
 export type VisitStatus =
@@ -51,6 +55,16 @@ export type VisitStatus =
   | 'cancelada'
 
 export type TaskStatus = 'backlog' | 'in_progress' | 'completed'
+
+export type PlaybookPhase = 'preparacao' | 'durante' | 'encerramento'
+export type PlaybookItemKind = 'task' | 'activity' | 'document'
+
+export type DocumentCategory =
+  | 'contrato'
+  | 'boarding'
+  | 'briefing'
+  | 'comprovante'
+  | 'outro'
 
 export interface UserProfile {
   uid: string
@@ -129,6 +143,7 @@ export interface Activity extends SoftDeletable {
   endTime: string
   responsibleNames: string[]
   visitorNames: string[]
+  phase?: PlaybookPhase
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -143,6 +158,7 @@ export interface Task extends SoftDeletable {
   dueDate?: string
   assigneeName?: string
   assigneeId?: string
+  phase?: PlaybookPhase
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -176,16 +192,6 @@ export interface FinanceAttachment {
   size: number
   uploadedAt: string
 }
-
-export type DocumentCategory =
-  | 'contrato'
-  | 'boarding'
-  | 'briefing'
-  | 'comprovante'
-  | 'outro'
-
-export type PlaybookPhase = 'preparacao' | 'durante' | 'encerramento'
-export type PlaybookItemKind = 'task' | 'activity' | 'document'
 
 export interface PlaybookItem {
   id: string
@@ -241,10 +247,14 @@ export type NotificationType =
   | 'task_created'
   | 'task_status_changed'
   | 'task_due_soon'
+  | 'task_overdue'
   | 'document_uploaded'
+  | 'document_pending'
   | 'finance_nf_due'
+  | 'finance_nf_overdue'
   | 'team_updated'
   | 'activity_soon'
+  | 'visit_soon'
 
 export interface Notification {
   id: string

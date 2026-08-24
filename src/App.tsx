@@ -12,6 +12,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { OperationsPage } from '@/pages/OperationsPage'
 import { VisitDetailPage } from '@/pages/VisitDetailPage'
 import { VisitsPage } from '@/pages/VisitsPage'
 import { VisitorsPage } from '@/pages/VisitorsPage'
@@ -40,6 +41,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/operacoes" element={<OperationsPage />} />
               <Route path="/visitas" element={<VisitsPage />} />
               <Route path="/visitas/:id" element={<VisitDetailPage />} />
               <Route path="/agenda" element={<AgendaPage />} />

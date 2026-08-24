@@ -40,14 +40,18 @@ function NotificationIcon({ type }: { type: NotificationType }) {
   switch (type) {
     case 'visit_created':
     case 'visit_status_changed':
+    case 'visit_soon':
       return <CalendarDays className={className} />
     case 'task_created':
     case 'task_status_changed':
     case 'task_due_soon':
+    case 'task_overdue':
       return <CheckSquare className={className} />
     case 'document_uploaded':
+    case 'document_pending':
       return <FileText className={className} />
     case 'finance_nf_due':
+    case 'finance_nf_overdue':
       return <DollarSign className={className} />
     case 'team_updated':
       return <Users className={className} />
@@ -60,14 +64,18 @@ function iconBgClass(type: NotificationType): string {
   switch (type) {
     case 'visit_created':
     case 'visit_status_changed':
+    case 'visit_soon':
       return 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
     case 'task_created':
     case 'task_status_changed':
     case 'task_due_soon':
+    case 'task_overdue':
       return 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
     case 'document_uploaded':
+    case 'document_pending':
       return 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
     case 'finance_nf_due':
+    case 'finance_nf_overdue':
       return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
     case 'team_updated':
       return 'bg-orange-500/10 text-orange-600 dark:text-orange-400'

@@ -1,15 +1,39 @@
-import { addDays, addMinutesToHm, normalizeHm, toActivityDateTime } from '@/lib/date'
+import { addDays, addMinutesToHm, diffDays, normalizeHm, toActivityDateTime } from '@/lib/date'
 import { writeActivityLog } from '@/services/activityLogs'
-import { createActivity } from '@/services/activities'
-import { createDocumentPlaceholder } from '@/services/documentPlaceholders'
-import { getPlaybook } from '@/services/playbooks'
+import { createActivity, listActivities } from '@/services/activities'
+import { createDocumentPlaceholder, listDocumentPlaceholders } from '@/services/documentPlaceholders'
+import { listDocuments } from '@/services/documents'
+import { createPlaybook, getPlaybook } from '@/services/playbooks'
 import { createTask, listTasks } from '@/services/tasks'
+import { getVisit } from '@/services/visits'
+import type { PlaybookItem, PlaybookPhase } from '@/types'
 
 export interface ApplyPlaybookResult {
   playbookName: string
   tasks: number
   activities: number
   documents: number
+}
+
+function resolvePhase(phase?: PlaybookPhase): PlaybookPhase {
+  return phase ?? 'durante'
+}
+
+function activityStartHm(startTime: string): string {
+  if (startTime.includes('T')) {
+    const timePart = startTime.split('T')[1] ?? ''
+    return normalizeHm(timePart.slice(0, 5))
+  }
+  return normalizeHm(startTime)
+}
+
+function activityDurationMinutes(startTime: string, endTime: string): number {
+  const start = activityStartHm(startTime)
+  const end = activityStartHm(endTime)
+  const [sh, sm] = start.split(':').map((part) => Number(part) || 0)
+  const [eh, em] = end.split(':').map((part) => Number(part) || 0)
+  const diff = eh * 60 + em - (sh * 60 + sm)
+  return diff > 0 ? diff : 60
 }
 
 export async function applyPlaybookToVisit(input: {
@@ -47,6 +71,7 @@ export async function applyPlaybookToVisit(input: {
         order: orderBase + taskIndex,
         dueDate: date,
         assigneeName: item.assigneeName,
+        phase: item.phase,
       })
       taskIndex += 1
       taskCount += 1
@@ -67,6 +92,7 @@ export async function applyPlaybookToVisit(input: {
         endTime: toActivityDateTime(date, endHm),
         responsibleNames: item.assigneeName ? [item.assigneeName] : [],
         visitorNames: [],
+        phase: item.phase,
       })
       activityCount += 1
       continue
@@ -97,4 +123,82 @@ export async function applyPlaybookToVisit(input: {
     activities: activityCount,
     documents: documentCount,
   }
+}
+
+export async function saveVisitAsPlaybook(
+  visitId: string,
+  ownerId: string,
+  isAdmin: boolean,
+): Promise<string> {
+  const visit = await getVisit(visitId)
+  if (!visit) throw new Error('Visita não encontrada')
+
+  const [tasks, activities, placeholders, documents] = await Promise.all([
+    listTasks(visitId, visit.ownerId, isAdmin),
+    listActivities(visitId, visit.ownerId, isAdmin),
+    listDocumentPlaceholders(visitId, visit.ownerId, isAdmin),
+    listDocuments(visitId, visit.ownerId, isAdmin),
+  ])
+
+  const items: PlaybookItem[] = []
+  let order = 0
+
+  for (const task of tasks) {
+    items.push({
+      id: crypto.randomUUID(),
+      kind: 'task',
+      phase: resolvePhase(task.phase),
+      title: task.title,
+      offsetDays: task.dueDate ? diffDays(visit.startDate, task.dueDate) : 0,
+      assigneeName: task.assigneeName,
+      order: order++,
+    })
+  }
+
+  for (const activity of activities) {
+    items.push({
+      id: crypto.randomUUID(),
+      kind: 'activity',
+      phase: resolvePhase(activity.phase),
+      title: activity.title,
+      description: activity.description,
+      location: activity.location,
+      offsetDays: activity.date ? diffDays(visit.startDate, activity.date) : 0,
+      startTime: activityStartHm(activity.startTime),
+      durationMinutes: activityDurationMinutes(activity.startTime, activity.endTime),
+      assigneeName: activity.responsibleNames[0],
+      order: order++,
+    })
+  }
+
+  for (const placeholder of placeholders) {
+    items.push({
+      id: crypto.randomUUID(),
+      kind: 'document',
+      phase: resolvePhase(placeholder.phase),
+      title: placeholder.title,
+      offsetDays: 0,
+      documentCategory: placeholder.category,
+      order: order++,
+    })
+  }
+
+  for (const document of documents) {
+    items.push({
+      id: crypto.randomUUID(),
+      kind: 'document',
+      phase: 'durante',
+      title: document.name,
+      offsetDays: 0,
+      documentCategory: document.category,
+      order: order++,
+    })
+  }
+
+  return createPlaybook(ownerId, {
+    name: `Playbook: ${visit.title}`,
+    visitType: visit.company || 'Geral',
+    description: visit.objective,
+    items,
+  })
 }
