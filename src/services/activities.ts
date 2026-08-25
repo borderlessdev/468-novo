@@ -34,6 +34,7 @@ function mapActivity(id: string, data: Record<string, unknown>): Activity {
       ? (data.visitorNames as string[])
       : [],
     phase,
+    googleEventId: data.googleEventId ? String(data.googleEventId) : undefined,
     ownerId: String(data.ownerId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,

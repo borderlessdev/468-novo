@@ -6,6 +6,7 @@ import {
   notificationExistsByDedupeKey,
 } from '@/services/notifications'
 import { listPendingTasks } from '@/services/tasks'
+import { listLinksForVisit } from '@/services/visitGuestLinks'
 import { listVisits } from '@/services/visits'
 import {
   collectPendingDocuments,
@@ -195,6 +196,31 @@ export async function scanDueReminders(
           href: `/agenda?visita=${visit.id}`,
           dedupeKey,
         })
+      }
+    }
+
+    if (!isClient) {
+      for (const visit of visits) {
+        const links = await listLinksForVisit(visit.id).catch(() => [])
+        for (const link of links) {
+          if (link.confirmationStatus === 'pending') continue
+          const dedupeKey = `guest_confirmed:${link.id}:${link.confirmationStatus}`
+          const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
+          if (exists) continue
+          const confirmed = link.confirmationStatus === 'confirmed'
+          await createNotification({
+            recipientId: userId,
+            type: 'guest_confirmed',
+            title: confirmed
+              ? 'Visitante confirmou presença'
+              : 'Visitante recusou o convite',
+            body: `${link.visitorName} — ${visit.title}`,
+            visitId: visit.id,
+            entityId: link.id,
+            href: `/visitas/${visit.id}`,
+            dedupeKey,
+          })
+        }
       }
     }
   } catch (error) {

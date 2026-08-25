@@ -16,6 +16,14 @@ dist-ssr
 .env.local
 credenciais.md
 service-account.json
+service-account*.json
+
+# Cloud Functions
+functions/.env
+functions/.env.*
+!functions/.env.example
+functions/lib
+functions/node_modules
 
 # Editor directories and files
 .vscode/*

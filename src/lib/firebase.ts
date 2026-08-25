@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getFunctions } from 'firebase/functions'
 import { getStorage } from 'firebase/storage'
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics'
 
@@ -18,6 +19,7 @@ export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
+export const functions = getFunctions(app)
 
 let analytics: Analytics | null = null
 

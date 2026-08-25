@@ -35,6 +35,7 @@ export interface ModulePermissions {
 export interface NotificationPreferences {
   taskDueSoon: boolean
   financeNfDue: boolean
+  financeApproval: boolean
   visitStatusChanged: boolean
   visitCreated: boolean
   taskCreated: boolean
@@ -46,6 +47,7 @@ export interface NotificationPreferences {
   visitSoon: boolean
   documentPending: boolean
   financeNfOverdue: boolean
+  guestConfirmed: boolean
 }
 
 export type VisitStatus =
@@ -90,6 +92,8 @@ export interface Visit extends SoftDeletable {
   objective?: string
   language?: string
   pvNumber?: string
+  /** Instruções de chegada exibidas no portal do visitante. */
+  arrivalInstructions?: string
   progress: number
   teamMemberIds: string[]
   clientUserIds: string[]
@@ -97,6 +101,20 @@ export interface Visit extends SoftDeletable {
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
+}
+
+export type FinanceApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+export type GuestConfirmationStatus = 'pending' | 'confirmed' | 'declined'
+
+export type CalendarProvider = 'google' | 'outlook'
+
+export interface CalendarConnectionStatus {
+  provider: CalendarProvider
+  connected: boolean
+  email?: string
+  connectedAt?: string
+  needsReauth?: boolean
 }
 
 export interface VisitorGift {
@@ -144,6 +162,8 @@ export interface Activity extends SoftDeletable {
   responsibleNames: string[]
   visitorNames: string[]
   phase?: PlaybookPhase
+  /** ID do evento no Google Calendar (sync via Cloud Functions). */
+  googleEventId?: string
   ownerId: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -172,9 +192,16 @@ export interface FinanceItem extends SoftDeletable {
   budget2?: number
   budget3?: number
   serviceValue?: number
+  /** Valor pago / realizado (opcional). */
+  actualValue?: number
   winningCompany?: string
   nfReceived: boolean
   nfDueDate?: string
+  approvalStatus: FinanceApprovalStatus
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: string
+  rejectionReason?: string
   attachmentPath?: string
   attachmentName?: string
   budgetAttachments?: FinanceAttachment[]
@@ -252,9 +279,11 @@ export type NotificationType =
   | 'document_pending'
   | 'finance_nf_due'
   | 'finance_nf_overdue'
+  | 'finance_approval'
   | 'team_updated'
   | 'activity_soon'
   | 'visit_soon'
+  | 'guest_confirmed'
 
 export interface Notification {
   id: string
@@ -322,4 +351,62 @@ export interface EmailLog {
   status: EmailLogStatus
   createdBy: string
   createdAt?: unknown
+}
+
+/** Agenda denormalizada no link do portal (sem abrir activities ao público). */
+export interface GuestAgendaItem {
+  date: string
+  startTime: string
+  endTime: string
+  title: string
+  location?: string
+}
+
+/** Rascunho editável pelo visitante no portal; operador aplica no CRM. */
+export interface GuestVisitorDraft {
+  name?: string
+  document?: string
+  company?: string
+  role?: string
+  dietaryRestriction?: string
+  mobilityReduced?: boolean
+  language?: string
+  notes?: string
+  updatedAt?: string
+}
+
+export interface VisitGuestLink {
+  id: string
+  token: string
+  visitId: string
+  visitorId: string
+  ownerId: string
+  createdBy: string
+  expiresAt: string
+  revoked?: boolean
+  /** Snapshot denormalizado para a rota pública. */
+  visitTitle: string
+  startDate: string
+  endDate: string
+  visitorName: string
+  company?: string
+  city?: string
+  arrivalInstructions?: string
+  agenda?: GuestAgendaItem[]
+  confirmationStatus: GuestConfirmationStatus
+  visitorDraft?: GuestVisitorDraft
+  lastAppliedAt?: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+export interface VisitFeedback {
+  id: string
+  visitId: string
+  guestLinkId: string
+  visitorId?: string
+  rating: number
+  comment?: string
+  token: string
+  submittedAt: string
 }

@@ -30,6 +30,9 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     objective: data.objective ? String(data.objective) : undefined,
     language: data.language ? String(data.language) : undefined,
     pvNumber: data.pvNumber ? String(data.pvNumber) : undefined,
+    arrivalInstructions: data.arrivalInstructions
+      ? String(data.arrivalInstructions)
+      : undefined,
     progress: Number(data.progress ?? 0),
     teamMemberIds: Array.isArray(data.teamMemberIds)
       ? (data.teamMemberIds as string[])
@@ -172,6 +175,7 @@ export async function createVisit(
     status: data.status,
     objective: data.objective ?? null,
     language: data.language ?? null,
+    arrivalInstructions: data.arrivalInstructions ?? null,
     pvNumber: data.pvNumber ?? crypto.randomUUID(),
     progress: data.progress ?? 0,
     teamMemberIds: data.teamMemberIds ?? [],

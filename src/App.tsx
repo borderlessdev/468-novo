@@ -11,6 +11,7 @@ import {
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
+import { GuestPortalPage } from '@/pages/GuestPortalPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { OperationsPage } from '@/pages/OperationsPage'
 import { VisitDetailPage } from '@/pages/VisitDetailPage'
@@ -37,6 +38,12 @@ export default function App() {
             <Route path="/cadastro" element={<RegisterPage />} />
             <Route path="/recuperar-senha" element={<ResetPasswordPage />} />
           </Route>
+
+          <Route path="/portal/:token" element={<GuestPortalPage />} />
+          <Route
+            path="/portal/:token/cracha"
+            element={<GuestPortalPage mode="badge" />}
+          />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>

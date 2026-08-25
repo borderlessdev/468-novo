@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   Bell,
+  CalendarDays,
   ClipboardList,
   KeyRound,
   Monitor,
@@ -34,6 +35,12 @@ import {
 } from '@/lib/notificationPreferences'
 import { TRASH_RETENTION_DAYS } from '@/lib/trash'
 import { cn } from '@/lib/utils'
+import {
+  disconnectGoogle,
+  getCalendarStatuses,
+  startGoogleOAuth,
+  type CalendarStatuses,
+} from '@/services/calendar'
 import { createInvite } from '@/services/invites'
 import { listEmailLogs } from '@/services/emailLogs'
 import {
@@ -47,6 +54,15 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: 'Escuro', icon: Moon },
   { value: 'system', label: 'Sistema', icon: Monitor },
 ]
+
+const CALENDAR_ERROR_MESSAGES: Record<string, string> = {
+  credenciais: 'Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET nas Functions.',
+  consentimento: 'Autorização cancelada no Google.',
+  estado: 'A autorização expirou. Tente conectar novamente.',
+  sem_refresh_token:
+    'O Google não devolveu um token de atualização. Remova o acesso do app na sua conta Google e conecte de novo.',
+  token: 'Não foi possível concluir a conexão com o Google.',
+}
 
 function ThemePreview({ variant }: { variant: Theme }) {
   if (variant === 'light') {
@@ -97,6 +113,7 @@ export function SettingsPage() {
     user,
   } = useAuth()
   const { theme, setTheme } = useTheme()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'team' | 'client'>('team')
   const [inviting, setInviting] = useState(false)
@@ -108,6 +125,9 @@ export function SettingsPage() {
     () => mergeNotificationPreferences(profile?.notificationPreferences),
   )
   const [savingPrefs, setSavingPrefs] = useState(false)
+  const [calendar, setCalendar] = useState<CalendarStatuses | null>(null)
+  const [calendarLoading, setCalendarLoading] = useState(true)
+  const [calendarBusy, setCalendarBusy] = useState(false)
 
   // profile editing moved to Profile page
 
@@ -122,6 +142,66 @@ export function SettingsPage() {
     }
     void listEmailLogs(user.uid, isAdmin).then(setEmailLogs).catch(console.error)
   }, [user, isAdmin])
+
+  // As credenciais GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET moram em functions/.env
+  // (ou no Secret Manager). Sem elas as callables respondem erro tratado e o card
+  // apenas informa o que falta configurar — a página não quebra.
+  const loadCalendar = useCallback(async () => {
+    if (!user || isClient) {
+      setCalendarLoading(false)
+      return
+    }
+    setCalendarLoading(true)
+    try {
+      setCalendar(await getCalendarStatuses())
+    } finally {
+      setCalendarLoading(false)
+    }
+  }, [user, isClient])
+
+  useEffect(() => {
+    void loadCalendar()
+  }, [loadCalendar])
+
+  useEffect(() => {
+    const result = searchParams.get('calendar')
+    if (!result) return
+    if (result === 'connected') {
+      toast.success('Google Calendar conectado')
+    } else {
+      const reason = searchParams.get('reason') ?? ''
+      toast.error(CALENDAR_ERROR_MESSAGES[reason] ?? 'Não foi possível conectar o Google Calendar.')
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('calendar')
+    next.delete('reason')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  const handleConnectGoogle = async () => {
+    setCalendarBusy(true)
+    try {
+      await startGoogleOAuth()
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Não foi possível conectar')
+      setCalendarBusy(false)
+    }
+  }
+
+  const handleDisconnectGoogle = async () => {
+    setCalendarBusy(true)
+    try {
+      await disconnectGoogle()
+      toast.success('Google Calendar desconectado')
+      await loadCalendar()
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Não foi possível desconectar')
+    } finally {
+      setCalendarBusy(false)
+    }
+  }
 
   const handleInvite = async () => {
     if (!user || !inviteEmail.trim()) return
@@ -368,6 +448,83 @@ export function SettingsPage() {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" />
+            Calendários externos
+          </CardTitle>
+          <CardDescription>
+            Envie as atividades da programação para a sua agenda pessoal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isClient ? (
+            <p className="text-sm text-muted-foreground">
+              A conexão com calendários externos é feita pela equipe organizadora.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Google Calendar</p>
+                  {calendarLoading ? (
+                    <p className="text-sm text-muted-foreground">Verificando conexão...</p>
+                  ) : calendar?.google.connected ? (
+                    <p className="text-sm text-muted-foreground">
+                      Conectado
+                      {calendar.google.email ? ` como ${calendar.google.email}` : ''}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhuma conta conectada.</p>
+                  )}
+                  {calendar?.google.needsReauth ? (
+                    <p className="text-sm font-medium text-amber-600">
+                      A autorização expirou. Reconecte o Google Calendar.
+                    </p>
+                  ) : null}
+                </div>
+                {calendar?.google.connected ? (
+                  <Button
+                    variant="outline"
+                    disabled={calendarBusy || calendarLoading}
+                    onClick={() => void handleDisconnectGoogle()}
+                  >
+                    {calendarBusy ? 'Aguarde...' : 'Desconectar'}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={calendarBusy || calendarLoading}
+                    onClick={() => void handleConnectGoogle()}
+                  >
+                    {calendarBusy ? 'Abrindo consentimento...' : 'Conectar'}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Outlook</p>
+                  <p className="text-sm text-muted-foreground">
+                    Integração com Microsoft 365 ainda em desenvolvimento.
+                  </p>
+                </div>
+                <Button variant="outline" disabled>
+                  Em breve
+                </Button>
+              </div>
+
+              {!calendarLoading && calendar && !calendar.credentialsConfigured ? (
+                <p className="text-xs text-muted-foreground">
+                  Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET nas Functions para habilitar a
+                  conexão.
+                </p>
+              ) : null}
+            </>
+          )}
         </CardContent>
       </Card>
 

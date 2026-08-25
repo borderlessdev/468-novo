@@ -10,12 +10,16 @@ import {
 import { toast } from 'sonner'
 import { EmptyState, PageHeader } from '@/components/shared/PageHeader'
 import { TaskStatusBadge, VisitStatusBadge } from '@/components/shared/StatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
 import {
+  financePendingTags,
+  type FinancePendingTag,
+} from '@/lib/financeMetrics'
+import {
   collectPendingDocuments,
-  isNfAttention,
   isOverdueTask,
   isUpcomingVisit,
   todayIso,
@@ -27,13 +31,25 @@ import { listPendingTasks } from '@/services/tasks'
 import { listVisits } from '@/services/visits'
 import type { FinanceItem, Task, Visit } from '@/types'
 
+const FINANCE_TAG_LABEL: Record<FinancePendingTag, string> = {
+  sem_aprovacao: 'Sem aprovação',
+  nf_vencida: 'Vencida',
+  nf_a_vencer: 'A vencer',
+  desvio: 'Desvio',
+}
+
+type FinancePendingRow = {
+  item: FinanceItem
+  tags: FinancePendingTag[]
+}
+
 export function OperationsPage() {
   const { user, isAdmin, role, isClient } = useAuth()
   const [loading, setLoading] = useState(true)
   const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
   const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([])
   const [pendingDocs, setPendingDocs] = useState<PendingDocumentRow[]>([])
-  const [nfItems, setNfItems] = useState<FinanceItem[]>([])
+  const [financePending, setFinancePending] = useState<FinancePendingRow[]>([])
   const [visitsById, setVisitsById] = useState<Map<string, Visit>>(new Map())
 
   const load = useCallback(async () => {
@@ -56,7 +72,11 @@ export function OperationsPage() {
           .sort((a, b) => a.startDate.localeCompare(b.startDate)),
       )
       setPendingDocs(await collectPendingDocuments(visits, isAdmin))
-      setNfItems(finance.filter((item) => isNfAttention(item, today, 7)))
+      setFinancePending(
+        finance
+          .map((item) => ({ item, tags: financePendingTags(item, today) }))
+          .filter((row) => row.tags.length > 0),
+      )
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar a central de operações')
@@ -182,7 +202,9 @@ export function OperationsPage() {
                         <p className="text-sm font-medium">{row.label}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {row.visitTitle}
-                          {row.kind === 'placeholder' ? ' · arquivo do playbook' : ' · visita sem documentos'}
+                          {row.kind === 'placeholder'
+                            ? ' · arquivo do playbook'
+                            : ' · visita sem documentos'}
                         </p>
                       </Link>
                     </li>
@@ -195,19 +217,19 @@ export function OperationsPage() {
           {!isClient ? (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-base">Notas fiscais</CardTitle>
+                <CardTitle className="text-base">Pendências financeiras</CardTitle>
                 <Receipt className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {nfItems.length === 0 ? (
+                {financePending.length === 0 ? (
                   <EmptyState
                     icon={Receipt}
-                    title="Nenhuma NF pendente"
-                    description="Não há notas sem recebimento com vencimento próximo."
+                    title="Financeiro em dia"
+                    description="Sem aprovação pendente, NF em atraso ou desvio relevante."
                   />
                 ) : (
                   <ul className="space-y-2">
-                    {nfItems.map((item) => (
+                    {financePending.map(({ item, tags }) => (
                       <li key={item.id}>
                         <Link
                           to={`/financeiro?visita=${item.visitId}`}
@@ -218,8 +240,23 @@ export function OperationsPage() {
                             {visitsById.get(item.visitId)?.title ?? 'Visita'}
                             {item.nfDueDate
                               ? ` · vence ${formatDate(item.nfDueDate)}`
-                              : ' · vencimento não informado'}
+                              : ''}
                           </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant={
+                                  tag === 'nf_vencida' || tag === 'desvio'
+                                    ? 'warning'
+                                    : 'secondary'
+                                }
+                                className="text-[10px]"
+                              >
+                                {FINANCE_TAG_LABEL[tag]}
+                              </Badge>
+                            ))}
+                          </div>
                         </Link>
                       </li>
                     ))}

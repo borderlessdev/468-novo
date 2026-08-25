@@ -52,8 +52,11 @@ function NotificationIcon({ type }: { type: NotificationType }) {
       return <FileText className={className} />
     case 'finance_nf_due':
     case 'finance_nf_overdue':
+    case 'finance_approval':
       return <DollarSign className={className} />
     case 'team_updated':
+      return <Users className={className} />
+    case 'guest_confirmed':
       return <Users className={className} />
     default:
       return <Bell className={className} />
@@ -76,8 +79,10 @@ function iconBgClass(type: NotificationType): string {
       return 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
     case 'finance_nf_due':
     case 'finance_nf_overdue':
+    case 'finance_approval':
       return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
     case 'team_updated':
+    case 'guest_confirmed':
       return 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
     default:
       return 'bg-muted text-muted-foreground'

@@ -18,6 +18,24 @@ export function canWriteOperations(role: UserRole, isAdmin: boolean): boolean {
   return role !== 'client'
 }
 
+/**
+ * Aprovação financeira (1 nível): owner da visita, admin, ou role user dono.
+ * Equipe (team) e cliente NÃO aprovam.
+ * Trade-off: rules do financeItem não distinguem team vs owner com precisão;
+ * a validação fica na UI + service.
+ */
+export function canApproveFinance(
+  role: UserRole,
+  isAdmin: boolean,
+  visit: Visit | null | undefined,
+  uid: string,
+): boolean {
+  if (isAdmin) return true
+  if (role === 'client' || role === 'team') return false
+  if (!visit) return false
+  return visit.ownerId === uid
+}
+
 export function canDeleteVisit(
   role: UserRole,
   isAdmin: boolean,

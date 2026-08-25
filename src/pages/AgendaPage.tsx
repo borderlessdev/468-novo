@@ -40,6 +40,12 @@ import {
   listActivities,
   updateActivity,
 } from '@/services/activities'
+import {
+  deleteGoogleEvent,
+  getCalendarStatus,
+  syncActivityToGoogle,
+  syncVisitToGoogle,
+} from '@/services/calendar'
 import type { Activity, Visit } from '@/types'
 
 export function AgendaPage() {
@@ -63,6 +69,8 @@ export function AgendaPage() {
   const [importPreview, setImportPreview] = useState<ImportedActivity[]>([])
   const importInputRef = useRef<HTMLInputElement>(null)
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [syncingVisit, setSyncingVisit] = useState(false)
 
   const visitId = searchParams.get('visita') ?? ''
 
@@ -91,6 +99,79 @@ export function AgendaPage() {
       }
     })()
   }, [user, isAdmin, role])
+
+  useEffect(() => {
+    if (!user || !canWrite) {
+      setGoogleConnected(false)
+      return
+    }
+    void getCalendarStatus().then((status) => setGoogleConnected(status.connected))
+  }, [user, canWrite])
+
+  /**
+   * Sync com o Google é sempre fire-and-forget: uma falha lá não desfaz o que já
+   * foi salvo no Firestore.
+   */
+  const syncToGoogle = useCallback(
+    (activityId: string) => {
+      if (!canWrite || !googleConnected) return
+      void syncActivityToGoogle(activityId).then((result) => {
+        if (result.needsReauth) {
+          setGoogleConnected(false)
+          return
+        }
+        if (!result.ok) {
+          toast.error(result.error ?? 'Não foi possível sincronizar com o Google Calendar')
+          return
+        }
+        if (result.conflict) {
+          toast.warning('Conflito no Google Calendar: já existe compromisso neste horário')
+        }
+      })
+    },
+    [canWrite, googleConnected],
+  )
+
+  const removeFromGoogle = useCallback(
+    (activityId: string) => {
+      if (!canWrite || !googleConnected) return
+      void deleteGoogleEvent(activityId).then((result) => {
+        if (result.needsReauth) {
+          setGoogleConnected(false)
+          return
+        }
+        if (!result.ok) {
+          toast.error(result.error ?? 'Não foi possível remover o evento do Google Calendar')
+        }
+      })
+    },
+    [canWrite, googleConnected],
+  )
+
+  const handleSyncVisitToGoogle = async () => {
+    if (!visitId) return
+    setSyncingVisit(true)
+    try {
+      const result = await syncVisitToGoogle(visitId)
+      if (result.needsReauth) {
+        setGoogleConnected(false)
+        return
+      }
+      if (!result.ok) {
+        toast.error(result.error ?? 'Não foi possível enviar a programação ao Google')
+        return
+      }
+      toast.success(`${result.synced} de ${result.total} atividade(s) enviada(s) ao Google`)
+      if (result.conflicts > 0) {
+        toast.warning(`${result.conflicts} atividade(s) com conflito no Google Calendar`)
+      }
+      if (result.failed > 0) {
+        toast.error(`${result.failed} atividade(s) não puderam ser enviadas`)
+      }
+    } finally {
+      setSyncingVisit(false)
+    }
+  }
 
   const loadActivities = useCallback(async () => {
     if (!visitId || !user) {
@@ -214,9 +295,11 @@ export function AgendaPage() {
       if (editing) {
         await updateActivity(editing.id, payload)
         toast.success('Atividade atualizada')
+        syncToGoogle(editing.id)
       } else {
-        await createActivity(user.uid, { visitId, ...payload })
+        const createdId = await createActivity(user.uid, { visitId, ...payload })
         toast.success('Atividade criada')
+        syncToGoogle(createdId)
       }
       setOpen(false)
       setEditing(null)
@@ -249,6 +332,7 @@ export function AgendaPage() {
     try {
       await updateActivity(activity.id, next)
       toast.success('Atividade movida')
+      syncToGoogle(activity.id)
       await loadActivities()
     } catch (error) {
       console.error(error)
@@ -290,6 +374,8 @@ export function AgendaPage() {
       setImportPreview([])
       setImportFileName('')
       await loadActivities()
+      // A criação em lote não devolve os ids: reenviamos a programação inteira da visita.
+      if (googleConnected) await handleSyncVisitToGoogle()
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível salvar as atividades')
@@ -409,6 +495,17 @@ export function AgendaPage() {
             <Upload className="h-4 w-4" />
             {importing ? 'Importando...' : 'Importar arquivo'}
           </Button>
+          {visitId && canWrite && googleConnected ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={syncingVisit}
+              onClick={() => void handleSyncVisitToGoogle()}
+            >
+              <Calendar className="h-4 w-4" />
+              {syncingVisit ? 'Enviando...' : 'Enviar programação desta visita ao Google'}
+            </Button>
+          ) : null}
           <Button disabled={!visitId || !canWrite || importing} onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Nova atividade
@@ -721,6 +818,7 @@ export function AgendaPage() {
             if (!user) return
             await deleteActivity(item.id, user.uid)
             toastMovedToTrash('Atividade movida para a lixeira')
+            removeFromGoogle(item.id)
             await loadActivities()
           })
         }}

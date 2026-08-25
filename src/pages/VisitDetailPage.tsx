@@ -2,17 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
 import {
   ArrowLeft,
+  Ban,
   Calendar,
   ClipboardList,
   Copy,
   DollarSign,
+  DownloadCloud,
   FileStack,
   FileText,
+  Link2,
   Mail,
+  RefreshCcw,
+  Star,
   Trash2,
   Upload,
   UserPlus,
@@ -77,6 +83,19 @@ import { listPlaybooks } from '@/services/playbooks'
 import { listDocumentPlaceholders } from '@/services/documentPlaceholders'
 import { unmatchedPlaceholders } from '@/lib/operations'
 import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
+import {
+  applyVisitorDraft,
+  buildGuestAgenda,
+  buildGuestPortalUrl,
+  createGuestLink,
+  getGuestLinkAvailability,
+  hasPendingGuestDraft,
+  listLinksForVisit,
+  refreshGuestLinkSnapshot,
+  revokeLink,
+  type GuestLinkSnapshot,
+} from '@/services/visitGuestLinks'
+import { averageRating, listFeedbacksForVisit } from '@/services/visitFeedbacks'
 import type {
   Activity,
   ActivityLog,
@@ -87,6 +106,8 @@ import type {
   Task,
   Visit,
   VisitDocument,
+  VisitFeedback,
+  VisitGuestLink,
   Visitor,
 } from '@/types'
 
@@ -97,6 +118,16 @@ const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
   { value: 'comprovante', label: 'Comprovante' },
   { value: 'outro', label: 'Outro' },
 ]
+
+function GuestStatusBadge({ link }: { link: VisitGuestLink }) {
+  if (link.confirmationStatus === 'confirmed') {
+    return <Badge variant="success">Confirmado</Badge>
+  }
+  if (link.confirmationStatus === 'declined') {
+    return <Badge variant="warning">Recusado</Badge>
+  }
+  return <Badge variant="muted">Aguardando resposta</Badge>
+}
 
 export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -126,6 +157,9 @@ export function VisitDetailPage() {
   const [teamIdsInput, setTeamIdsInput] = useState('')
   const [clientIdsInput, setClientIdsInput] = useState('')
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+  const [guestLinks, setGuestLinks] = useState<VisitGuestLink[]>([])
+  const [feedbacks, setFeedbacks] = useState<VisitFeedback[]>([])
+  const [portalBusyId, setPortalBusyId] = useState<string | null>(null)
   const [cloning, setCloning] = useState(false)
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [playbookOpen, setPlaybookOpen] = useState(false)
@@ -162,6 +196,7 @@ export function VisitDetailPage() {
         status: visitData.status,
         objective: visitData.objective ?? '',
         language: visitData.language ?? '',
+        arrivalInstructions: visitData.arrivalInstructions ?? '',
       })
 
       const ownerIdForQuery = visitData.ownerId
@@ -222,6 +257,13 @@ export function VisitDetailPage() {
         setActivityLogs([])
       }
 
+      const portalResults = await Promise.allSettled([
+        listLinksForVisit(id),
+        listFeedbacksForVisit(id, ownerIdForQuery, isAdmin),
+      ])
+      setGuestLinks(portalResults[0].status === 'fulfilled' ? portalResults[0].value : [])
+      setFeedbacks(portalResults[1].status === 'fulfilled' ? portalResults[1].value : [])
+
       const progress = calculateVisitProgress(tasksData)
       if (progress !== visitData.progress) {
         try {
@@ -277,6 +319,7 @@ export function VisitDetailPage() {
         status: values.status,
         objective: values.objective || undefined,
         language: values.language || undefined,
+        arrivalInstructions: values.arrivalInstructions || undefined,
       }
       if (canManageVisitAccess(role, isAdmin, visit, user!.uid)) {
         payload.teamMemberIds = parseUidList(teamIdsInput)
@@ -359,6 +402,120 @@ export function VisitDetailPage() {
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível desvincular')
+    }
+  }
+
+  const activeLinkByVisitorId = useMemo(() => {
+    const map = new Map<string, VisitGuestLink>()
+    guestLinks.forEach((link) => {
+      if (link.revoked) return
+      const current = map.get(link.visitorId)
+      if (!current || link.expiresAt > current.expiresAt) {
+        map.set(link.visitorId, link)
+      }
+    })
+    return map
+  }, [guestLinks])
+
+  const feedbackAverage = useMemo(() => averageRating(feedbacks), [feedbacks])
+
+  const buildSnapshot = useCallback(
+    (visitor: Visitor): GuestLinkSnapshot | null => {
+      if (!visit) return null
+      return {
+        visitTitle: visit.title,
+        startDate: visit.startDate,
+        endDate: visit.endDate,
+        visitorName: visitor.name,
+        company: visitor.company ?? visit.company,
+        city: visit.city,
+        arrivalInstructions: visit.arrivalInstructions,
+        agenda: buildGuestAgenda(activities),
+      }
+    },
+    [visit, activities],
+  )
+
+  const copyPortalUrl = async (token: string) => {
+    const url = buildGuestPortalUrl(token)
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link do portal copiado')
+    } catch {
+      toast.error(`Copie manualmente: ${url}`)
+    }
+  }
+
+  const handleGenerateGuestLink = async (visitor: Visitor) => {
+    if (!user || !id || !visit) return
+    const snapshot = buildSnapshot(visitor)
+    if (!snapshot) return
+    setPortalBusyId(visitor.id)
+    try {
+      const link = await createGuestLink({
+        ...snapshot,
+        visitId: id,
+        visitorId: visitor.id,
+        ownerId: user.uid,
+        createdBy: user.uid,
+      })
+      setGuestLinks((prev) => [link, ...prev])
+      await copyPortalUrl(link.token)
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível gerar o link do portal')
+    } finally {
+      setPortalBusyId(null)
+    }
+  }
+
+  const handleRefreshGuestLink = async (link: VisitGuestLink, visitor: Visitor) => {
+    const snapshot = buildSnapshot(visitor)
+    if (!snapshot) return
+    setPortalBusyId(link.id)
+    try {
+      await refreshGuestLinkSnapshot(link.id, snapshot)
+      setGuestLinks((prev) =>
+        prev.map((item) => (item.id === link.id ? { ...item, ...snapshot } : item)),
+      )
+      toast.success('Dados do portal atualizados')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível atualizar o portal')
+    } finally {
+      setPortalBusyId(null)
+    }
+  }
+
+  const handleRevokeGuestLink = async (link: VisitGuestLink) => {
+    setPortalBusyId(link.id)
+    try {
+      await revokeLink(link.id)
+      setGuestLinks((prev) =>
+        prev.map((item) => (item.id === link.id ? { ...item, revoked: true } : item)),
+      )
+      toast.success('Link revogado')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível revogar o link')
+    } finally {
+      setPortalBusyId(null)
+    }
+  }
+
+  const handleApplyGuestDraft = async (link: VisitGuestLink) => {
+    setPortalBusyId(link.id)
+    try {
+      await applyVisitorDraft(link.id, link.visitorId)
+      toast.success('Dados do visitante atualizados')
+      await load()
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível aplicar os dados',
+      )
+    } finally {
+      setPortalBusyId(null)
     }
   }
 
@@ -874,6 +1031,17 @@ export function VisitDetailPage() {
                 <Label>Idioma</Label>
                 <Input {...form.register('language')} placeholder="Português, Inglês..." />
               </div>
+              <div className="space-y-2">
+                <Label>Instruções de chegada</Label>
+                <Textarea
+                  {...form.register('arrivalInstructions')}
+                  rows={3}
+                  placeholder="Endereço da portaria, documentos necessários, horário de acesso..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Exibido no portal do visitante.
+                </p>
+              </div>
               {showAccessFields ? (
                 <>
                   <div className="space-y-2">
@@ -905,6 +1073,7 @@ export function VisitDetailPage() {
                 <div><dt className="text-muted-foreground">Período</dt><dd>{formatDate(visit.startDate)} — {formatDate(visit.endDate)}</dd></div>
                 <div><dt className="text-muted-foreground">Objetivo</dt><dd>{visit.objective || '—'}</dd></div>
                 <div><dt className="text-muted-foreground">Idioma</dt><dd>{visit.language || '—'}</dd></div>
+                <div><dt className="text-muted-foreground">Instruções de chegada</dt><dd className="whitespace-pre-line">{visit.arrivalInstructions || '—'}</dd></div>
               </dl>
             )}
           </CardContent>
@@ -1114,6 +1283,162 @@ export function VisitDetailPage() {
           </Card>
         </div>
       </div>
+
+      {canWrite ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">Portal do visitante</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Gere um link público para cada visitante confirmar presença, revisar dados e
+              acessar a programação.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {linkedVisitors.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Vincule visitantes à visita para gerar links do portal.
+              </p>
+            ) : (
+              linkedVisitors.map((visitor) => {
+                const link = activeLinkByVisitorId.get(visitor.id)
+                const availability = link ? getGuestLinkAvailability(link) : null
+                const busy = portalBusyId === visitor.id || portalBusyId === link?.id
+                const pendingDraft = link ? hasPendingGuestDraft(link) : false
+
+                return (
+                  <div
+                    key={visitor.id}
+                    className="space-y-3 rounded-lg border px-3 py-3 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">{visitor.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {visitor.company || visitor.document}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {link ? <GuestStatusBadge link={link} /> : null}
+                        {availability === 'expired' ? (
+                          <Badge variant="outline">Link expirado</Badge>
+                        ) : null}
+                        {pendingDraft ? (
+                          <Badge variant="warning">Atualização pendente</Badge>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {!link ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void handleGenerateGuestLink(visitor)}
+                      >
+                        <Link2 className="h-4 w-4" />
+                        {busy ? 'Gerando...' : 'Gerar link'}
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        <div className="shrink-0 rounded-lg border border-dashed p-2">
+                          <QRCodeSVG value={buildGuestPortalUrl(link.token)} size={88} />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              readOnly
+                              value={buildGuestPortalUrl(link.token)}
+                              className="font-mono text-xs"
+                            />
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              aria-label="Copiar link"
+                              onClick={() => void copyPortalUrl(link.token)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Válido até {formatDate(link.expiresAt)}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {pendingDraft ? (
+                              <Button
+                                size="sm"
+                                disabled={busy}
+                                onClick={() => void handleApplyGuestDraft(link)}
+                              >
+                                <DownloadCloud className="h-4 w-4" />
+                                Aplicar dados do portal
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => void handleRefreshGuestLink(link, visitor)}
+                            >
+                              <RefreshCcw className="h-4 w-4" />
+                              Atualizar dados
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => void handleRevokeGuestLink(link)}
+                            >
+                              <Ban className="h-4 w-4" />
+                              Revogar
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Avaliações do portal</CardTitle>
+          {feedbackAverage != null ? (
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+              <Star className="h-4 w-4 text-primary" />
+              {feedbackAverage.toFixed(1)} / 5 · {feedbacks.length} resposta(s)
+            </span>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          {feedbacks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma avaliação enviada pelo portal ainda.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {feedbacks.map((feedback) => (
+                <li key={feedback.id} className="rounded-lg border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{feedback.rating} / 5</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(feedback.submittedAt)}
+                    </span>
+                  </div>
+                  {feedback.comment ? (
+                    <p className="mt-1 whitespace-pre-line text-muted-foreground">
+                      {feedback.comment}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>

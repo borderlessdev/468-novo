@@ -54,9 +54,18 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
     budget2: data.budget2 != null ? Number(data.budget2) : undefined,
     budget3: data.budget3 != null ? Number(data.budget3) : undefined,
     serviceValue: data.serviceValue != null ? Number(data.serviceValue) : undefined,
+    actualValue: data.actualValue != null ? Number(data.actualValue) : undefined,
     winningCompany: data.winningCompany ? String(data.winningCompany) : undefined,
     nfReceived: Boolean(data.nfReceived),
     nfDueDate: data.nfDueDate ? String(data.nfDueDate) : undefined,
+    approvalStatus:
+      data.approvalStatus === 'approved' || data.approvalStatus === 'rejected'
+        ? data.approvalStatus
+        : 'pending',
+    approvedBy: data.approvedBy ? String(data.approvedBy) : undefined,
+    approvedByName: data.approvedByName ? String(data.approvedByName) : undefined,
+    approvedAt: data.approvedAt ? String(data.approvedAt) : undefined,
+    rejectionReason: data.rejectionReason ? String(data.rejectionReason) : undefined,
     attachmentPath: data.attachmentPath ? String(data.attachmentPath) : undefined,
     attachmentName: data.attachmentName ? String(data.attachmentName) : undefined,
     budgetAttachments,
@@ -108,9 +117,15 @@ export async function createFinanceItem(
     budget2: data.budget2 ?? null,
     budget3: data.budget3 ?? null,
     serviceValue: data.serviceValue ?? null,
+    actualValue: data.actualValue ?? null,
     winningCompany: data.winningCompany ?? null,
     nfReceived: data.nfReceived,
     nfDueDate: data.nfDueDate ?? null,
+    approvalStatus: data.approvalStatus ?? 'pending',
+    approvedBy: data.approvedBy ?? null,
+    approvedByName: data.approvedByName ?? null,
+    approvedAt: data.approvedAt ?? null,
+    rejectionReason: data.rejectionReason ?? null,
     attachmentPath: data.attachmentPath ?? null,
     attachmentName: data.attachmentName ?? null,
     budgetAttachments: data.budgetAttachments ?? [],
@@ -129,6 +144,26 @@ export async function updateFinanceItem(
 ): Promise<void> {
   await updateDoc(doc(col, id), {
     ...data,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function setFinanceApproval(
+  id: string,
+  input: {
+    approvalStatus: 'approved' | 'rejected'
+    approvedBy: string
+    approvedByName?: string
+    rejectionReason?: string
+  },
+): Promise<void> {
+  await updateDoc(doc(col, id), {
+    approvalStatus: input.approvalStatus,
+    approvedBy: input.approvedBy,
+    approvedByName: input.approvedByName ?? null,
+    approvedAt: new Date().toISOString(),
+    rejectionReason:
+      input.approvalStatus === 'rejected' ? (input.rejectionReason ?? null) : null,
     updatedAt: serverTimestamp(),
   })
 }

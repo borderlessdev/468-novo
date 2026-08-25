@@ -3,6 +3,7 @@ import type { NotificationType } from '@/types'
 export interface NotificationPreferences {
   taskDueSoon: boolean
   financeNfDue: boolean
+  financeApproval: boolean
   visitStatusChanged: boolean
   visitCreated: boolean
   taskCreated: boolean
@@ -14,11 +15,13 @@ export interface NotificationPreferences {
   visitSoon: boolean
   documentPending: boolean
   financeNfOverdue: boolean
+  guestConfirmed: boolean
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   taskDueSoon: true,
   financeNfDue: true,
+  financeApproval: true,
   visitStatusChanged: true,
   visitCreated: true,
   taskCreated: true,
@@ -30,6 +33,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   visitSoon: true,
   documentPending: true,
   financeNfOverdue: true,
+  guestConfirmed: true,
 }
 
 export const NOTIFICATION_PREFERENCE_ITEMS: {
@@ -58,6 +62,11 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
     description: 'Quando a nota fiscal já passou do vencimento e não foi recebida',
   },
   {
+    key: 'financeApproval',
+    label: 'Aprovação financeira',
+    description: 'Quando uma linha financeira for aprovada ou rejeitada',
+  },
+  {
     key: 'visitSoon',
     label: 'Visitas próximas',
     description: 'Avisos de visitas que começam em até 2 dias',
@@ -66,6 +75,11 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
     key: 'documentPending',
     label: 'Documentos pendentes',
     description: 'Placeholders sem arquivo ou visitas ativas sem documentos',
+  },
+  {
+    key: 'guestConfirmed',
+    label: 'Confirmação do portal',
+    description: 'Quando o visitante confirma ou recusa pelo link do portal',
   },
   {
     key: 'visitStatusChanged',
@@ -109,6 +123,7 @@ const TYPE_TO_PREFERENCE: Record<NotificationType, keyof NotificationPreferences
   task_overdue: 'taskOverdue',
   finance_nf_due: 'financeNfDue',
   finance_nf_overdue: 'financeNfOverdue',
+  finance_approval: 'financeApproval',
   visit_status_changed: 'visitStatusChanged',
   visit_created: 'visitCreated',
   visit_soon: 'visitSoon',
@@ -118,6 +133,7 @@ const TYPE_TO_PREFERENCE: Record<NotificationType, keyof NotificationPreferences
   document_pending: 'documentPending',
   team_updated: 'teamUpdated',
   activity_soon: 'activitySoon',
+  guest_confirmed: 'guestConfirmed',
 }
 
 export function mergeNotificationPreferences(

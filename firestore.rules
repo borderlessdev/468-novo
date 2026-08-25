@@ -96,6 +96,16 @@ service cloud.firestore {
       return creatingOwnDoc() && canWriteVisit(request.resource.data.visitId);
     }
 
+    /** Autoriza a avaliação pública provando a posse de um link válido. */
+    function guestLinkGrantsFeedback(linkId, visitId, token) {
+      let link = get(/databases/$(database)/documents/visitGuestLinks/$(linkId)).data;
+      return link.revoked != true
+        && link.visitId == visitId
+        && link.token == token
+        && 'expiresAtTs' in link
+        && request.time < link.expiresAtTs;
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list: if isAdmin();
@@ -300,6 +310,76 @@ service cloud.firestore {
         && (resource.data.createdBy == request.auth.uid || isAdmin());
     }
 
+    // Portal do visitante: o ID do documento é o token secreto do link.
+    // Público pode fazer `get` (nunca `list`) e só alterar confirmação/rascunho.
+    match /visitGuestLinks/{linkId} {
+      allow get: if (resource.data.revoked != true)
+        || (isSignedIn() && canReadVisit(resource.data.visitId));
+
+      allow list: if isSignedIn() && (
+        isAdmin()
+        || resource.data.ownerId == request.auth.uid
+        || canReadVisit(resource.data.visitId)
+      );
+
+      allow create: if creatingOwnDoc()
+        && canWriteVisit(request.resource.data.visitId)
+        && request.resource.data.token is string
+        && request.resource.data.visitId is string
+        && request.resource.data.visitorId is string
+        && request.resource.data.expiresAtTs is timestamp
+        && request.resource.data.revoked == false
+        && request.resource.data.confirmationStatus == 'pending';
+
+      allow update: if
+        // Rota pública (sem login): apenas confirmação e rascunho do visitante.
+        (
+          resource.data.revoked != true
+          && 'expiresAtTs' in resource.data
+          && request.time < resource.data.expiresAtTs
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['confirmationStatus', 'visitorDraft', 'updatedAt'])
+          && request.resource.data.confirmationStatus in ['pending', 'confirmed', 'declined']
+          && (
+            request.resource.data.visitorDraft == null
+            || request.resource.data.visitorDraft is map
+          )
+        )
+        // Operador: revogar, atualizar snapshot, marcar rascunho como aplicado.
+        || (
+          isSignedIn()
+          && canWriteVisit(resource.data.visitId)
+          && unchangedOwnerId()
+          && request.resource.data.token == resource.data.token
+          && request.resource.data.visitId == resource.data.visitId
+          && request.resource.data.visitorId == resource.data.visitorId
+        );
+
+      allow delete: if isSignedIn() && canWriteVisit(resource.data.visitId);
+    }
+
+    // Avaliação enviada pelo portal. ID do documento = ID do link (1 por link).
+    match /visitFeedbacks/{feedbackId} {
+      allow get, list: if isSignedIn() && canReadVisit(resource.data.visitId);
+
+      allow create: if request.resource.data.keys()
+          .hasOnly(['visitId', 'guestLinkId', 'visitorId', 'rating', 'comment', 'token', 'submittedAt'])
+        && request.resource.data.keys()
+          .hasAll(['visitId', 'guestLinkId', 'rating', 'token', 'submittedAt'])
+        && request.resource.data.guestLinkId == feedbackId
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.submittedAt is string
+        && guestLinkGrantsFeedback(
+          request.resource.data.guestLinkId,
+          request.resource.data.visitId,
+          request.resource.data.token
+        );
+
+      allow update, delete: if false;
+    }
+
     match /playbooks/{playbookId} {
       allow read: if ownsOrAdmin();
 
@@ -327,6 +407,26 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (isAdmin() || resource.data.createdBy == request.auth.uid);
       allow update, delete: if false;
+    }
+
+    // Status "público" da conexão de calendário: só o dono lê e este doc NUNCA
+    // guarda refreshToken. As Functions escrevem aqui via Admin SDK.
+    match /calendarConnections/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.ownerId == uid
+        && !('refreshToken' in request.resource.data);
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Tokens e state do OAuth: exclusivos do Admin SDK (Functions).
+    match /calendarSecrets/{uid} {
+      allow read, write: if false;
+    }
+
+    match /calendarOAuthStates/{state} {
+      allow read, write: if false;
     }
 
     match /{document=**} {
