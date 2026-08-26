@@ -553,3 +553,5 @@ export const outlookCalendarOAuthStart = onCall(async (request) => {
     'A integração com Outlook ainda não está disponível.',
   )
 })
+
+export { askHelpAssistant, mapProgrammingImport, draftCommunication } from './ai/callables'

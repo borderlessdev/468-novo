@@ -60,6 +60,20 @@ o recebe.
 - `deleteGoogleEvent` (callable) — apaga o evento e limpa o `googleEventId`.
 - `syncVisitActivitiesToGoogle` (callable) — sincroniza todas as atividades de uma visita.
 - `outlookCalendarOAuthStart` (callable) — stub: responde "ainda não disponível".
+- `askHelpAssistant` (callable) — assistente de ajuda (manual UX); mock sem API key.
+- `mapProgrammingImport` (callable) — interpreta planilha de programação via IA.
+- `draftCommunication` (callable) — rascunhos de e-mail / briefing / convite do portal.
+
+## Assistente de IA
+
+Configure em `functions/.env` (ver `.env.example`):
+
+```
+AI_PROVIDER=openai
+OPENAI_API_KEY=...
+```
+
+ou Anthropic. Sem chave, as callables respondem em **modo mock** para desenvolver a UI.
 
 O evento é criado no calendário de **quem está logado**. Ao sincronizar uma atividade de
 outra pessoa da equipe, o evento aparece na agenda Google de quem disparou o sync.

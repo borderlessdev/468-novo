@@ -18,6 +18,7 @@ import {
   Link2,
   Mail,
   RefreshCcw,
+  Sparkles,
   Star,
   Trash2,
   Upload,
@@ -83,6 +84,7 @@ import { listPlaybooks } from '@/services/playbooks'
 import { listDocumentPlaceholders } from '@/services/documentPlaceholders'
 import { unmatchedPlaceholders } from '@/lib/operations'
 import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
+import { draftCommunication } from '@/services/ai'
 import {
   applyVisitorDraft,
   buildGuestAgenda,
@@ -153,7 +155,14 @@ export function VisitDetailPage() {
   const [visitorSearch, setVisitorSearch] = useState('')
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
+  const [draftingEmail, setDraftingEmail] = useState(false)
+  const [guestInviteOpen, setGuestInviteOpen] = useState(false)
+  const [guestInviteBody, setGuestInviteBody] = useState('')
+  const [guestInviteLabel, setGuestInviteLabel] = useState('')
+  const [draftingGuestInvite, setDraftingGuestInvite] = useState(false)
   const [teamIdsInput, setTeamIdsInput] = useState('')
   const [clientIdsInput, setClientIdsInput] = useState('')
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
@@ -678,14 +687,88 @@ export function VisitDetailPage() {
         .join('\n')
     : ''
 
+  const visitDraftContext = () => {
+    if (!visit) return {}
+    return {
+      title: visit.title,
+      company: visit.company,
+      startDate: visit.startDate,
+      endDate: visit.endDate,
+      status: visit.status,
+      objective: visit.objective,
+      visitorCount: linkedVisitors.length,
+      pendingTasks,
+      financeTotal: formatCurrency(financeTotal),
+    }
+  }
+
+  const openEmailDialog = () => {
+    if (!visit) return
+    setEmailSubject(`Resumo da visita: ${visit.title}`)
+    setEmailBody(emailSummary)
+    setEmailOpen(true)
+  }
+
+  const applySimpleEmailSummary = () => {
+    if (!visit) return
+    setEmailSubject(`Resumo da visita: ${visit.title}`)
+    setEmailBody(emailSummary)
+  }
+
+  const generateEmailDraft = async (kind: 'visit_summary' | 'internal_briefing') => {
+    if (!visit) return
+    setDraftingEmail(true)
+    try {
+      const draft = await draftCommunication({
+        kind,
+        visitContext: visitDraftContext(),
+      })
+      if (draft.subject) setEmailSubject(draft.subject)
+      setEmailBody(draft.body)
+      toast.success(kind === 'internal_briefing' ? 'Briefing gerado' : 'Resumo gerado com IA')
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar o rascunho')
+    } finally {
+      setDraftingEmail(false)
+    }
+  }
+
+  const openGuestInviteDraft = async (visitorName: string, token: string) => {
+    if (!visit) return
+    setGuestInviteLabel(visitorName)
+    setGuestInviteBody('')
+    setGuestInviteOpen(true)
+    setDraftingGuestInvite(true)
+    try {
+      const draft = await draftCommunication({
+        kind: 'guest_invite',
+        visitContext: {
+          ...visitDraftContext(),
+          visitorName,
+          portalUrl: buildGuestPortalUrl(token),
+        },
+      })
+      setGuestInviteBody(draft.body)
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar a mensagem')
+      setGuestInviteBody(
+        `Olá${visitorName ? `, ${visitorName}` : ''}!\n\nSegue o link do portal da visita "${visit.title}":\n${buildGuestPortalUrl(token)}`,
+      )
+    } finally {
+      setDraftingGuestInvite(false)
+    }
+  }
+
   const handleSendEmail = async () => {
     if (!visit || !user) return
     setSendingEmail(true)
     try {
       const mode = await sendVisitSummaryEmail({
         to: emailTo,
-        subject: `Resumo da visita: ${visit.title}`,
-        body: emailSummary,
+        subject: emailSubject.trim() || `Resumo da visita: ${visit.title}`,
+        body: emailBody.trim() || emailSummary,
         visitId: visit.id,
         createdBy: user.uid,
       })
@@ -734,7 +817,7 @@ export function VisitDetailPage() {
         description={visit.company || visit.pvNumber || 'Detalhes da visita'}
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEmailOpen(true)}>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={openEmailDialog}>
               <Mail className="h-4 w-4" />
               Enviar resumo
             </Button>
@@ -1376,6 +1459,15 @@ export function VisitDetailPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              disabled={busy || draftingGuestInvite}
+                              onClick={() => void openGuestInviteDraft(visitor.name, link.token)}
+                            >
+                              <Sparkles className="h-4 w-4" />
+                              Gerar mensagem
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               disabled={busy}
                               onClick={() => void handleRefreshGuestLink(link, visitor)}
                             >
@@ -1464,9 +1556,12 @@ export function VisitDetailPage() {
       </Card>
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Enviar resumo por e-mail</DialogTitle>
+            <DialogDescription>
+              Edite o texto ou gere um rascunho com IA antes de enviar.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
@@ -1479,8 +1574,52 @@ export function VisitDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Pré-visualização</Label>
-              <Textarea readOnly rows={8} value={emailSummary} className="font-mono text-xs" />
+              <Label>Assunto</Label>
+              <Input
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                disabled={draftingEmail}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Mensagem</Label>
+              <Textarea
+                rows={10}
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                disabled={draftingEmail}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={draftingEmail}
+                onClick={() => void generateEmailDraft('visit_summary')}
+              >
+                <Sparkles className="h-4 w-4" />
+                {draftingEmail ? 'Gerando…' : 'Gerar com IA'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={draftingEmail}
+                onClick={() => void generateEmailDraft('internal_briefing')}
+              >
+                Briefing interno
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={draftingEmail}
+                onClick={applySimpleEmailSummary}
+              >
+                Usar resumo simples
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">
               {isFirestoreEmailEnabled()
@@ -1491,12 +1630,57 @@ export function VisitDetailPage() {
               <Button variant="outline" onClick={() => setEmailOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => void handleSendEmail()} disabled={sendingEmail}>
+              <Button
+                onClick={() => void handleSendEmail()}
+                disabled={sendingEmail || draftingEmail || !emailBody.trim()}
+              >
                 {sendingEmail
                   ? 'Enviando…'
                   : isFirestoreEmailEnabled()
                     ? 'Enviar e-mail'
                     : 'Preparar envio'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={guestInviteOpen} onOpenChange={setGuestInviteOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mensagem para o portal</DialogTitle>
+            <DialogDescription>
+              {guestInviteLabel
+                ? `Rascunho para ${guestInviteLabel}. Copie e envie por e-mail ou WhatsApp.`
+                : 'Copie e envie por e-mail ou WhatsApp.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              rows={10}
+              value={guestInviteBody}
+              onChange={(e) => setGuestInviteBody(e.target.value)}
+              disabled={draftingGuestInvite}
+              placeholder={draftingGuestInvite ? 'Gerando mensagem…' : ''}
+            />
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={() => setGuestInviteOpen(false)}>
+                Fechar
+              </Button>
+              <Button
+                type="button"
+                disabled={!guestInviteBody.trim() || draftingGuestInvite}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(guestInviteBody)
+                    toast.success('Mensagem copiada')
+                  } catch {
+                    toast.error('Não foi possível copiar')
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                Copiar mensagem
               </Button>
             </div>
           </div>

@@ -170,3 +170,47 @@ export function parseProgrammingWorkbook(
   }
   return candidates[0].activities
 }
+
+const MAX_AI_CSV_CHARS = 80_000
+const MAX_AI_CSV_ROWS = 200
+
+/** Serializa a primeira sheet útil como CSV truncado para a Cloud Function de import IA. */
+export function workbookToCsvForAi(workbook: XLSX.WorkBook): {
+  sheetCsv: string
+  headers: string
+  sheetName: string
+} {
+  const preferred =
+    workbook.SheetNames.find((name) => /(^|\s)pv(\s|$)|program/i.test(normalize(name))) ??
+    workbook.SheetNames[0]
+  if (!preferred) {
+    throw new Error('Planilha vazia')
+  }
+  const sheet = workbook.Sheets[preferred]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+  }) as unknown[][]
+  const capped = rows.slice(0, MAX_AI_CSV_ROWS)
+  const lines = capped.map((row) =>
+    (Array.isArray(row) ? row : [])
+      .map((cell) => {
+        const text = String(cell ?? '').replace(/"/g, '""')
+        return text.includes(',') || text.includes('"') || text.includes('\n')
+          ? `"${text}"`
+          : text
+      })
+      .join(','),
+  )
+  let sheetCsv = lines.join('\n')
+  if (sheetCsv.length > MAX_AI_CSV_CHARS) {
+    sheetCsv = sheetCsv.slice(0, MAX_AI_CSV_CHARS)
+  }
+  const headerRow = capped[0] ?? []
+  const headers = (Array.isArray(headerRow) ? headerRow : [])
+    .map((cell) => String(cell ?? '').trim())
+    .filter(Boolean)
+    .join(' | ')
+  return { sheetCsv, headers, sheetName: preferred }
+}

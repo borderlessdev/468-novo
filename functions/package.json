@@ -6,7 +6,7 @@
     "node": "22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').cpSync('src/ai/help','lib/ai/help',{recursive:true})\"",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "npm run build && firebase deploy --only functions",

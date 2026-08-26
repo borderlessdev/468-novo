@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
 import { addDays, format, parseISO } from 'date-fns'
-import { Calendar, MapPin, Plus, Search, Upload } from 'lucide-react'
+import { Calendar, MapPin, Plus, Search, Sparkles, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { WeeklyAgenda, getWeekStart } from '@/components/agenda/WeeklyAgenda'
@@ -31,7 +31,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { activitySchema, type ActivityInput } from '@/lib/validations'
 import { activitiesOverlap, formatDate } from '@/lib/utils'
-import { parseProgrammingWorkbook, type ImportedActivity } from '@/lib/programmingImport'
+import { parseProgrammingWorkbook, workbookToCsvForAi, type ImportedActivity } from '@/lib/programmingImport'
+import { mapProgrammingImportWithAi } from '@/services/ai'
 import { listVisits } from '@/services/visits'
 import {
   createActivity,
@@ -67,6 +68,9 @@ export function AgendaPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [importFileName, setImportFileName] = useState('')
   const [importPreview, setImportPreview] = useState<ImportedActivity[]>([])
+  const [importWarnings, setImportWarnings] = useState<string[]>([])
+  const [importAiBusy, setImportAiBusy] = useState(false)
+  const [lastImportWorkbook, setLastImportWorkbook] = useState<XLSX.WorkBook | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
   const [googleConnected, setGoogleConnected] = useState(false)
@@ -340,18 +344,58 @@ export function AgendaPage() {
     }
   }
 
+  const runAiImport = async (workbook: XLSX.WorkBook) => {
+    if (!user || !visitId) return
+    setImportAiBusy(true)
+    try {
+      const fallbackYear = Number(selectedVisit?.startDate.slice(0, 4)) || new Date().getFullYear()
+      const { sheetCsv, headers } = workbookToCsvForAi(workbook)
+      const result = await mapProgrammingImportWithAi({
+        sheetCsv,
+        headers,
+        fallbackYear,
+        existingActivities: activities.map((a) => ({
+          title: a.title,
+          date: a.date,
+          startTime: a.startTime,
+          endTime: a.endTime,
+        })),
+      })
+      setImportPreview(result.activities)
+      setImportWarnings(result.warnings)
+      setImportOpen(true)
+      if (result.activities.length === 0) {
+        toast.error('A IA não encontrou atividades válidas no arquivo')
+      } else {
+        toast.success(`${result.activities.length} atividade(s) interpretada(s) com IA`)
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Falha ao interpretar com IA')
+    } finally {
+      setImportAiBusy(false)
+    }
+  }
+
   const handleImport = async (file: File) => {
     if (!user || !visitId) return
     setImporting(true)
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
-      const fallbackYear = Number(selectedVisit?.startDate.slice(0, 4)) || new Date().getFullYear()
-      const parsed = parseProgrammingWorkbook(workbook, fallbackYear)
-
-      setImportPreview(parsed)
+      setLastImportWorkbook(workbook)
       setImportFileName(file.name)
-      setImportOpen(true)
-      toast.success(`${parsed.length} atividade(s) extraída(s) para conferência`)
+      setImportWarnings([])
+      const fallbackYear = Number(selectedVisit?.startDate.slice(0, 4)) || new Date().getFullYear()
+      try {
+        const parsed = parseProgrammingWorkbook(workbook, fallbackYear)
+        setImportPreview(parsed)
+        setImportOpen(true)
+        toast.success(`${parsed.length} atividade(s) extraída(s) para conferência`)
+      } catch (parseError) {
+        console.warn(parseError)
+        toast.message('Parser local não reconheceu o layout. Tentando com IA…')
+        await runAiImport(workbook)
+      }
     } catch (error) {
       console.error(error)
       toast.error(error instanceof Error ? error.message : 'Não foi possível importar o arquivo')
@@ -372,7 +416,9 @@ export function AgendaPage() {
       toast.success(`${importPreview.length} atividade(s) salva(s)`)
       setImportOpen(false)
       setImportPreview([])
+      setImportWarnings([])
       setImportFileName('')
+      setLastImportWorkbook(null)
       await loadActivities()
       // A criação em lote não devolve os ids: reenviamos a programação inteira da visita.
       if (googleConnected) await handleSyncVisitToGoogle()
@@ -679,6 +725,17 @@ export function AgendaPage() {
               </p>
             </div>
 
+            {importWarnings.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                <p className="mb-1 font-medium">Avisos</p>
+                <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+                  {importWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
               {importPreview.map((activity, index) => (
                 <Card key={`${activity.date}-${activity.startTime}-${index}`}>
@@ -716,7 +773,7 @@ export function AgendaPage() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={importing || savingImport}
+                disabled={importing || savingImport || importAiBusy}
                 onClick={() => importInputRef.current?.click()}
               >
                 <Upload className="h-4 w-4" />
@@ -724,7 +781,20 @@ export function AgendaPage() {
               </Button>
               <Button
                 type="button"
-                disabled={savingImport || importing || importPreview.length === 0}
+                variant="outline"
+                disabled={
+                  !lastImportWorkbook || importing || savingImport || importAiBusy
+                }
+                onClick={() => {
+                  if (lastImportWorkbook) void runAiImport(lastImportWorkbook)
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                {importAiBusy ? 'Interpretando…' : 'Interpretar com IA'}
+              </Button>
+              <Button
+                type="button"
+                disabled={savingImport || importing || importAiBusy || importPreview.length === 0}
                 onClick={() => void saveImportedActivities()}
               >
                 {savingImport ? 'Salvando...' : 'Salvar programação'}

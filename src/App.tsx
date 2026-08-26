@@ -25,6 +25,7 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { PlaybooksPage } from '@/pages/PlaybooksPage'
 import ProfilePage from '@/pages/ProfilePage'
 import { TrashPage } from '@/pages/TrashPage'
+import { HelpPage } from '@/pages/HelpPage'
 
 export default function App() {
   return (
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="/configuracoes/playbooks" element={<PlaybooksPage />} />
               <Route path="/perfil" element={<ProfilePage />} />
               <Route path="/configuracoes/lixeira" element={<TrashPage />} />
+              <Route path="/ajuda" element={<HelpPage />} />
             </Route>
           </Route>
 

@@ -3,6 +3,7 @@ import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
   Calendar,
+  CircleHelp,
   ClipboardList,
   DollarSign,
   LayoutDashboard,
@@ -29,6 +30,7 @@ const icons = {
   ListTodo,
   DollarSign,
   BarChart3,
+  CircleHelp,
   Settings,
 } as const
 

@@ -57,7 +57,7 @@ export function canManageVisitAccess(
 }
 
 export function clientNavPaths(): string[] {
-  return ['/', '/visitas', '/agenda', '/configuracoes']
+  return ['/', '/visitas', '/agenda', '/ajuda', '/configuracoes']
 }
 
 const MODULE_PATH_PREFIX: { prefix: string; key: keyof ModulePermissions }[] = [
@@ -93,6 +93,7 @@ export function isNavAllowed(
     if (path === '/') return true
     if (path === '/agenda' || path.startsWith('/agenda/')) return true
     if (path === '/visitas' || path.startsWith('/visitas/')) return true
+    if (path === '/ajuda' || path.startsWith('/ajuda/')) return true
     if (path === '/configuracoes') return true
     return false
   }

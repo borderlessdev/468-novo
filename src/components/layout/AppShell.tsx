@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { NewVisitDialog } from '@/features/visits/NewVisitDialog'
+import { HelpWidget } from '@/components/help/HelpWidget'
 import { useAuth } from '@/contexts/AuthContext'
 import { VisitDialogProvider } from '@/contexts/VisitDialogContext'
 import { scanDueReminders } from '@/services/notificationReminders'
@@ -58,6 +59,7 @@ export function AppShell() {
         </div>
       </div>
       <NewVisitDialog onCreated={() => setRefreshKey((k) => k + 1)} />
+      <HelpWidget />
     </VisitDialogProvider>
   )
 }
