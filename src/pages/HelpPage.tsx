@@ -29,7 +29,7 @@ export function HelpPage() {
     <div className="flex h-[calc(100dvh-8rem)] min-h-[420px] flex-col">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Ajuda"
+          title="Assistente"
           description="Pergunte sobre os processos do app — caminhos curtos de tela a tela."
         />
         <Button type="button" variant="outline" onClick={() => clear()} disabled={messages.length === 0}>

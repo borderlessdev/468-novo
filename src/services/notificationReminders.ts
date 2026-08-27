@@ -3,9 +3,11 @@ import { listActivities } from '@/services/activities'
 import { listFinanceItemsByOwner } from '@/services/finance'
 import {
   createNotification,
-  notificationExistsByDedupeKey,
+  listRecentDedupeKeys,
+  type CreateNotificationInput,
 } from '@/services/notifications'
 import { listPendingTasks } from '@/services/tasks'
+import { getUserNotificationPreferences } from '@/services/users'
 import { listLinksForVisit } from '@/services/visitGuestLinks'
 import { listVisits } from '@/services/visits'
 import {
@@ -20,6 +22,8 @@ import type { UserRole } from '@/types'
 
 const TASK_DUE_DAYS = 3
 const NF_DUE_DAYS = 7
+const SCAN_THROTTLE_MS = 15 * 60 * 1000
+const CREATE_CONCURRENCY = 8
 
 function daysUntil(dateStr: string): number {
   const date = parseISO(dateStr)
@@ -33,6 +37,46 @@ function formatDueLabel(days: number): string {
   return `vence em ${days} dias`
 }
 
+function throttleKey(userId: string) {
+  return `reminderScan:${userId}`
+}
+
+function shouldSkipScan(userId: string): boolean {
+  try {
+    const raw = sessionStorage.getItem(throttleKey(userId))
+    if (!raw) return false
+    const last = Number(raw)
+    return Number.isFinite(last) && Date.now() - last < SCAN_THROTTLE_MS
+  } catch {
+    return false
+  }
+}
+
+function markScanDone(userId: string) {
+  try {
+    sessionStorage.setItem(throttleKey(userId), String(Date.now()))
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+async function mapPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  if (items.length === 0) return
+  let index = 0
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const current = items[index]
+      index += 1
+      await worker(current)
+    }
+  })
+  await Promise.all(runners)
+}
+
 /**
  * Escaneia pendências e cria notificações no cliente.
  * Só roda com o app aberto (chamado pelo AppShell) — sem Cloud Functions.
@@ -42,18 +86,43 @@ export async function scanDueReminders(
   isAdmin: boolean,
   role: UserRole,
 ): Promise<void> {
+  if (shouldSkipScan(userId)) return
+
   try {
     const isClient = role === 'client'
     const today = todayIso()
-    const [tasks, financeItems, visits] = await Promise.all([
-      listPendingTasks(userId, isAdmin, role),
+    const visits = await listVisits(userId, isAdmin, role)
+    const visitMap = new Map(visits.map((v) => [v.id, v]))
+
+    const [tasks, financeItems, preferences, knownDedupeKeys, pendingDocs] =
+      await Promise.all([
+        listPendingTasks(userId, isAdmin, role, visits),
+        isClient
+          ? Promise.resolve([])
+          : listFinanceItemsByOwner(userId, isAdmin, role, visits),
+        getUserNotificationPreferences(userId),
+        listRecentDedupeKeys(userId),
+        collectPendingDocuments(visits, isAdmin),
+      ])
+
+    const [activitiesByVisit, linksByVisit] = await Promise.all([
+      Promise.all(
+        visits.map(async (visit) => ({
+          visit,
+          activities: await listActivities(visit.id, visit.ownerId, isAdmin),
+        })),
+      ),
       isClient
         ? Promise.resolve([])
-        : listFinanceItemsByOwner(userId, isAdmin, role),
-      listVisits(userId, isAdmin, role),
+        : Promise.all(
+            visits.map(async (visit) => ({
+              visit,
+              links: await listLinksForVisit(visit.id).catch(() => []),
+            })),
+          ),
     ])
 
-    const visitMap = new Map(visits.map((v) => [v.id, v]))
+    const candidates: CreateNotificationInput[] = []
 
     for (const task of tasks) {
       if (!task.dueDate) continue
@@ -62,30 +131,21 @@ export async function scanDueReminders(
       const visitTitle = visit?.title ?? 'uma visita'
 
       if (!isClient && isOverdueTask(task, today)) {
-        const dedupeKey = `task_overdue:${task.id}:${task.dueDate}`
-        const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-        if (!exists) {
-          await createNotification({
-            recipientId: userId,
-            type: 'task_overdue',
-            title: 'Tarefa atrasada',
-            body: `"${task.title}" em ${visitTitle} — prazo ${format(parseISO(task.dueDate), 'dd/MM/yyyy')}`,
-            visitId: task.visitId,
-            entityId: task.id,
-            href: `/planejamento?visita=${task.visitId}`,
-            dedupeKey,
-          })
-        }
+        candidates.push({
+          recipientId: userId,
+          type: 'task_overdue',
+          title: 'Tarefa atrasada',
+          body: `"${task.title}" em ${visitTitle} — prazo ${format(parseISO(task.dueDate), 'dd/MM/yyyy')}`,
+          visitId: task.visitId,
+          entityId: task.id,
+          href: `/planejamento?visita=${task.visitId}`,
+          dedupeKey: `task_overdue:${task.id}:${task.dueDate}`,
+        })
         continue
       }
 
       if (days < 0 || days > TASK_DUE_DAYS) continue
-
-      const dedupeKey = `task_due:${task.id}:${task.dueDate}`
-      const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-      if (exists) continue
-
-      await createNotification({
+      candidates.push({
         recipientId: userId,
         type: 'task_due_soon',
         title: 'Tarefa com prazo próximo',
@@ -93,7 +153,7 @@ export async function scanDueReminders(
         visitId: task.visitId,
         entityId: task.id,
         href: `/planejamento?visita=${task.visitId}`,
-        dedupeKey,
+        dedupeKey: `task_due:${task.id}:${task.dueDate}`,
       })
     }
 
@@ -103,32 +163,23 @@ export async function scanDueReminders(
       const visitTitle = visit?.title ?? 'uma visita'
 
       if (isNfOverdue(item, today) && item.nfDueDate) {
-        const dedupeKey = `finance_nf_overdue:${item.id}:${item.nfDueDate}`
-        const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-        if (!exists) {
-          await createNotification({
-            recipientId: userId,
-            type: 'finance_nf_overdue',
-            title: 'NF atrasada',
-            body: `"${item.serviceName}" em ${visitTitle} — venceu em ${format(parseISO(item.nfDueDate), 'dd/MM/yyyy')}`,
-            visitId: item.visitId,
-            entityId: item.id,
-            href: `/financeiro?visita=${item.visitId}`,
-            dedupeKey,
-          })
-        }
+        candidates.push({
+          recipientId: userId,
+          type: 'finance_nf_overdue',
+          title: 'NF atrasada',
+          body: `"${item.serviceName}" em ${visitTitle} — venceu em ${format(parseISO(item.nfDueDate), 'dd/MM/yyyy')}`,
+          visitId: item.visitId,
+          entityId: item.id,
+          href: `/financeiro?visita=${item.visitId}`,
+          dedupeKey: `finance_nf_overdue:${item.id}:${item.nfDueDate}`,
+        })
         continue
       }
 
       if (!item.nfDueDate) continue
       const days = daysUntil(item.nfDueDate)
       if (days < 0 || days > NF_DUE_DAYS) continue
-
-      const dedupeKey = `finance_nf_due:${item.id}:${item.nfDueDate}`
-      const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-      if (exists) continue
-
-      await createNotification({
+      candidates.push({
         recipientId: userId,
         type: 'finance_nf_due',
         title: 'NF com vencimento próximo',
@@ -136,17 +187,14 @@ export async function scanDueReminders(
         visitId: item.visitId,
         entityId: item.id,
         href: `/financeiro?visita=${item.visitId}`,
-        dedupeKey,
+        dedupeKey: `finance_nf_due:${item.id}:${item.nfDueDate}`,
       })
     }
 
     for (const visit of visits) {
       if (!isVisitSoon(visit, today)) continue
-      const dedupeKey = `visit_soon:${visit.id}:${visit.startDate}`
-      const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-      if (exists) continue
       const days = daysUntil(visit.startDate)
-      await createNotification({
+      candidates.push({
         recipientId: userId,
         type: 'visit_soon',
         title: 'Visita próxima',
@@ -154,17 +202,13 @@ export async function scanDueReminders(
         visitId: visit.id,
         entityId: visit.id,
         href: `/visitas/${visit.id}`,
-        dedupeKey,
+        dedupeKey: `visit_soon:${visit.id}:${visit.startDate}`,
       })
     }
 
-    const pendingDocs = await collectPendingDocuments(visits, isAdmin)
     for (const visitId of pendingDocumentVisitIds(pendingDocs)) {
       const visit = visitMap.get(visitId)
-      const dedupeKey = `document_pending:${visitId}:${today}`
-      const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-      if (exists) continue
-      await createNotification({
+      candidates.push({
         recipientId: userId,
         type: 'document_pending',
         title: 'Documentos pendentes',
@@ -172,21 +216,17 @@ export async function scanDueReminders(
         visitId,
         entityId: visitId,
         href: `/visitas/${visitId}`,
-        dedupeKey,
+        dedupeKey: `document_pending:${visitId}:${today}`,
       })
     }
 
     const now = Date.now()
     const in24h = now + 24 * 60 * 60 * 1000
-    for (const visit of visits) {
-      const activities = await listActivities(visit.id, visit.ownerId, isAdmin)
+    for (const { visit, activities } of activitiesByVisit) {
       for (const activity of activities) {
         const start = parseISO(activity.startTime).getTime()
         if (Number.isNaN(start) || start < now || start > in24h) continue
-        const dedupeKey = `activity_soon:${activity.id}:${activity.startTime}`
-        const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-        if (exists) continue
-        await createNotification({
+        candidates.push({
           recipientId: userId,
           type: 'activity_soon',
           title: 'Atividade nas próximas 24h',
@@ -194,35 +234,39 @@ export async function scanDueReminders(
           visitId: visit.id,
           entityId: activity.id,
           href: `/agenda?visita=${visit.id}`,
-          dedupeKey,
+          dedupeKey: `activity_soon:${activity.id}:${activity.startTime}`,
         })
       }
     }
 
-    if (!isClient) {
-      for (const visit of visits) {
-        const links = await listLinksForVisit(visit.id).catch(() => [])
-        for (const link of links) {
-          if (link.confirmationStatus === 'pending') continue
-          const dedupeKey = `guest_confirmed:${link.id}:${link.confirmationStatus}`
-          const exists = await notificationExistsByDedupeKey(userId, dedupeKey)
-          if (exists) continue
-          const confirmed = link.confirmationStatus === 'confirmed'
-          await createNotification({
-            recipientId: userId,
-            type: 'guest_confirmed',
-            title: confirmed
-              ? 'Visitante confirmou presença'
-              : 'Visitante recusou o convite',
-            body: `${link.visitorName} — ${visit.title}`,
-            visitId: visit.id,
-            entityId: link.id,
-            href: `/visitas/${visit.id}`,
-            dedupeKey,
-          })
-        }
+    for (const { visit, links } of linksByVisit) {
+      for (const link of links) {
+        if (link.confirmationStatus === 'pending') continue
+        const confirmed = link.confirmationStatus === 'confirmed'
+        candidates.push({
+          recipientId: userId,
+          type: 'guest_confirmed',
+          title: confirmed
+            ? 'Visitante confirmou presença'
+            : 'Visitante recusou o convite',
+          body: `${link.visitorName} — ${visit.title}`,
+          visitId: visit.id,
+          entityId: link.id,
+          href: `/visitas/${visit.id}`,
+          dedupeKey: `guest_confirmed:${link.id}:${link.confirmationStatus}`,
+        })
       }
     }
+
+    const pendingCreates = candidates.filter(
+      (candidate) => !candidate.dedupeKey || !knownDedupeKeys.has(candidate.dedupeKey),
+    )
+
+    await mapPool(pendingCreates, CREATE_CONCURRENCY, async (candidate) => {
+      await createNotification(candidate, { preferences, knownDedupeKeys })
+    })
+
+    markScanDone(userId)
   } catch (error) {
     console.warn('Failed to scan due reminders', error)
   }

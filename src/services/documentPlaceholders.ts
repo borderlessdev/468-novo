@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getVisitChildDocs, isFirestorePermissionDenied } from '@/lib/firestore-visit-query'
@@ -57,6 +58,29 @@ export async function createDocumentPlaceholder(
     createdAt: serverTimestamp(),
   })
   return ref.id
+}
+
+export async function createDocumentPlaceholders(
+  ownerId: string,
+  items: Array<Omit<DocumentPlaceholder, 'id' | 'ownerId' | 'createdAt'>>,
+): Promise<void> {
+  if (items.length === 0) return
+  const CHUNK = 450
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const chunk = items.slice(i, i + CHUNK)
+    const batch = writeBatch(db)
+    chunk.forEach((item) => {
+      batch.set(doc(col), {
+        visitId: item.visitId,
+        title: item.title,
+        category: item.category,
+        phase: item.phase ?? null,
+        ownerId,
+        createdAt: serverTimestamp(),
+      })
+    })
+    await batch.commit()
+  }
 }
 
 export async function deleteDocumentPlaceholder(id: string): Promise<void> {

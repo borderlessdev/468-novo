@@ -59,7 +59,15 @@ export async function createUserProfile(input: {
 export async function updateUserProfile(
   uid: string,
   data: Partial<
-    Pick<UserProfile, 'name' | 'photoURL' | 'notificationPreferences' | 'modulePermissions' | 'role'>
+    Pick<
+      UserProfile,
+      | 'name'
+      | 'photoURL'
+      | 'photoStoragePath'
+      | 'notificationPreferences'
+      | 'modulePermissions'
+      | 'role'
+    >
   >,
 ): Promise<void> {
   await updateDoc(doc(usersCol, uid), {

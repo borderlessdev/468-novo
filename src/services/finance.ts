@@ -11,7 +11,7 @@ import { db, storage } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import { softDeleteEntity } from '@/services/trash'
 import { listVisits } from '@/services/visits'
-import type { FinanceAttachment, FinanceItem, UserRole } from '@/types'
+import type { FinanceAttachment, FinanceItem, UserRole, Visit } from '@/types'
 
 const col = collection(db, 'financeItems')
 
@@ -95,12 +95,13 @@ export async function listFinanceItemsByOwner(
   ownerId: string,
   isAdmin: boolean,
   role: UserRole = 'user',
+  visits?: Visit[],
 ): Promise<FinanceItem[]> {
-  const visits = await listVisits(ownerId, isAdmin, role)
-  if (visits.length === 0) return []
+  const visitList = visits ?? (await listVisits(ownerId, isAdmin, role))
+  if (visitList.length === 0) return []
 
   const itemsPerVisit = await Promise.all(
-    visits.map((visit) => listFinanceItems(visit.id, visit.ownerId, isAdmin)),
+    visitList.map((visit) => listFinanceItems(visit.id, visit.ownerId, isAdmin)),
   )
 
   return itemsPerVisit.flat()

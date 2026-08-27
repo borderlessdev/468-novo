@@ -10,7 +10,7 @@ import { db } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
 import { softDeleteEntity } from '@/services/trash'
 import { listVisits } from '@/services/visits'
-import type { PlaybookPhase, Task, TaskStatus, UserRole } from '@/types'
+import type { PlaybookPhase, Task, TaskStatus, UserRole, Visit } from '@/types'
 
 const col = collection(db, 'tasks')
 const PHASES: PlaybookPhase[] = ['preparacao', 'durante', 'encerramento']
@@ -78,12 +78,13 @@ export async function listPendingTasks(
   userId: string,
   isAdmin: boolean,
   role: UserRole = 'user',
+  visits?: Visit[],
 ): Promise<Task[]> {
-  const visits = await listVisits(userId, isAdmin, role)
-  if (visits.length === 0) return []
+  const visitList = visits ?? (await listVisits(userId, isAdmin, role))
+  if (visitList.length === 0) return []
 
   const tasksPerVisit = await Promise.all(
-    visits.map((visit) => listTasks(visit.id, visit.ownerId, isAdmin)),
+    visitList.map((visit) => listTasks(visit.id, visit.ownerId, isAdmin)),
   )
 
   return sortPendingTasks(
@@ -119,24 +120,49 @@ export async function createTasksBatch(
   visitId: string,
   titles: readonly string[],
 ): Promise<void> {
-  const batch = writeBatch(db)
-  titles.forEach((title, index) => {
-    const ref = doc(col)
-    batch.set(ref, {
-      visitId,
-      title,
-      status: 'backlog',
-      order: index,
-      dueDate: null,
-      assigneeName: null,
-      assigneeId: null,
-      ownerId,
-      isDeleted: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+  await createTasksDetailed(ownerId, visitId, titles.map((title, index) => ({
+    title,
+    status: 'backlog' as const,
+    order: index,
+  })))
+}
+
+export async function createTasksDetailed(
+  ownerId: string,
+  visitId: string,
+  tasks: Array<{
+    title: string
+    status?: TaskStatus
+    order: number
+    dueDate?: string
+    assigneeName?: string
+    assigneeId?: string
+    phase?: PlaybookPhase
+  }>,
+): Promise<void> {
+  const CHUNK = 450
+  for (let i = 0; i < tasks.length; i += CHUNK) {
+    const chunk = tasks.slice(i, i + CHUNK)
+    const batch = writeBatch(db)
+    chunk.forEach((task) => {
+      const ref = doc(col)
+      batch.set(ref, {
+        visitId,
+        title: task.title,
+        status: task.status ?? 'backlog',
+        order: task.order,
+        dueDate: task.dueDate ?? null,
+        assigneeName: task.assigneeName ?? null,
+        assigneeId: task.assigneeId ?? null,
+        phase: task.phase ?? null,
+        ownerId,
+        isDeleted: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
     })
-  })
-  await batch.commit()
+    await batch.commit()
+  }
 }
 
 export async function updateTask(

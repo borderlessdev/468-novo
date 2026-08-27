@@ -85,18 +85,32 @@ export async function createActivities(
   ownerId: string,
   activities: Array<Omit<Activity, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>>,
 ): Promise<void> {
+  if (activities.length === 0) return
   if (activities.length > 500) throw new Error('O arquivo excede o limite de 500 atividades')
-  const batch = writeBatch(db)
-  for (const activity of activities) {
-    batch.set(doc(col), {
-      ...activity,
-      ownerId,
-      isDeleted: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
+  const CHUNK = 450
+  for (let i = 0; i < activities.length; i += CHUNK) {
+    const chunk = activities.slice(i, i + CHUNK)
+    const batch = writeBatch(db)
+    for (const activity of chunk) {
+      batch.set(doc(col), {
+        visitId: activity.visitId,
+        title: activity.title,
+        description: activity.description ?? null,
+        location: activity.location ?? null,
+        date: activity.date,
+        startTime: activity.startTime,
+        endTime: activity.endTime,
+        responsibleNames: activity.responsibleNames ?? [],
+        visitorNames: activity.visitorNames ?? [],
+        phase: activity.phase ?? null,
+        ownerId,
+        isDeleted: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    }
+    await batch.commit()
   }
-  await batch.commit()
 }
 
 export async function updateActivity(

@@ -156,7 +156,6 @@ export const playbookSchema = z.object({
 
 export const profileSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
-  photoURL: z.union([z.url('URL inválida'), z.literal('')]).optional(),
 })
 
 export function parseOptionalNumber(value?: string): number | undefined {

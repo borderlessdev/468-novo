@@ -12,16 +12,16 @@ export function PageHeader({ title, description, actions, className }: PageHeade
   return (
     <div
       className={cn(
-        'mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between',
+        'mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between',
         className,
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 space-y-1.5">
         <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-[1.65rem]">
           {title}
         </h1>
         {description ? (
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
             {description}
           </p>
         ) : null}
@@ -40,19 +40,46 @@ interface EmptyStateProps {
   title: string
   description: string
   action?: React.ReactNode
+  compact?: boolean
+  className?: string
 }
 
-export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+  compact = false,
+  className,
+}: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 py-14 text-center">
-      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/8 text-primary ring-1 ring-primary/10 dark:bg-primary/15 dark:text-primary dark:ring-primary/20">
-        <Icon className="h-5 w-5" />
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/15 text-center',
+        compact ? 'px-4 py-8' : 'px-6 py-14',
+        className,
+      )}
+    >
+      <div
+        className={cn(
+          'mb-3 flex items-center justify-center rounded-2xl bg-primary/8 text-primary ring-1 ring-primary/10 dark:bg-primary/15 dark:ring-primary/20',
+          compact ? 'h-10 w-10' : 'mb-4 h-12 w-12',
+        )}
+      >
+        <Icon className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
       </div>
-      <h3 className="text-base font-semibold text-foreground">{title}</h3>
-      <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
+      <h3 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>
+        {title}
+      </h3>
+      <p
+        className={cn(
+          'mt-1 max-w-sm leading-relaxed text-muted-foreground',
+          compact ? 'text-xs' : 'text-sm',
+        )}
+      >
         {description}
       </p>
-      {action ? <div className="mt-5">{action}</div> : null}
+      {action ? <div className={compact ? 'mt-3' : 'mt-5'}>{action}</div> : null}
     </div>
   )
 }

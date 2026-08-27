@@ -1,12 +1,15 @@
 import { addDays, addMinutesToHm, diffDays, normalizeHm, toActivityDateTime } from '@/lib/date'
 import { writeActivityLog } from '@/services/activityLogs'
-import { createActivity, listActivities } from '@/services/activities'
-import { createDocumentPlaceholder, listDocumentPlaceholders } from '@/services/documentPlaceholders'
+import { createActivities, listActivities } from '@/services/activities'
+import {
+  createDocumentPlaceholders,
+  listDocumentPlaceholders,
+} from '@/services/documentPlaceholders'
 import { listDocuments } from '@/services/documents'
 import { createPlaybook, getPlaybook } from '@/services/playbooks'
-import { createTask, listTasks } from '@/services/tasks'
+import { createTasksDetailed, listTasks } from '@/services/tasks'
 import { getVisit } from '@/services/visits'
-import type { PlaybookItem, PlaybookPhase } from '@/types'
+import type { Activity, PlaybookItem, PlaybookPhase } from '@/types'
 
 export interface ApplyPlaybookResult {
   playbookName: string
@@ -45,27 +48,41 @@ export async function applyPlaybookToVisit(input: {
   actorId: string
   actorName?: string
 }): Promise<ApplyPlaybookResult> {
-  const playbook = await getPlaybook(input.playbookId)
+  const [playbook, existingTasks] = await Promise.all([
+    getPlaybook(input.playbookId),
+    listTasks(input.visitId, input.ownerId, input.isAdmin),
+  ])
   if (!playbook) throw new Error('Playbook não encontrado')
 
-  const existingTasks = await listTasks(input.visitId, input.ownerId, input.isAdmin)
   const orderBase =
     existingTasks.length === 0
       ? 0
       : Math.max(...existingTasks.map((task) => task.order)) + 1
 
   const items = [...playbook.items].sort((a, b) => a.order - b.order)
-  let taskCount = 0
-  let activityCount = 0
-  let documentCount = 0
-  let taskIndex = 0
 
+  const taskPayloads: Array<{
+    title: string
+    status: 'backlog'
+    order: number
+    dueDate: string
+    assigneeName?: string
+    phase?: PlaybookPhase
+  }> = []
+  const activityPayloads: Array<Omit<Activity, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>> = []
+  const documentPayloads: Array<{
+    visitId: string
+    title: string
+    category: NonNullable<PlaybookItem['documentCategory']>
+    phase?: PlaybookPhase
+  }> = []
+
+  let taskIndex = 0
   for (const item of items) {
     const date = addDays(input.startDate, item.offsetDays)
 
     if (item.kind === 'task') {
-      await createTask(input.ownerId, {
-        visitId: input.visitId,
+      taskPayloads.push({
         title: item.title,
         status: 'backlog',
         order: orderBase + taskIndex,
@@ -74,7 +91,6 @@ export async function applyPlaybookToVisit(input: {
         phase: item.phase,
       })
       taskIndex += 1
-      taskCount += 1
       continue
     }
 
@@ -82,7 +98,7 @@ export async function applyPlaybookToVisit(input: {
       const startHm = normalizeHm(item.startTime)
       const duration = item.durationMinutes && item.durationMinutes > 0 ? item.durationMinutes : 60
       const endHm = addMinutesToHm(startHm, duration)
-      await createActivity(input.ownerId, {
+      activityPayloads.push({
         visitId: input.visitId,
         title: item.title,
         description: item.description,
@@ -94,18 +110,26 @@ export async function applyPlaybookToVisit(input: {
         visitorNames: [],
         phase: item.phase,
       })
-      activityCount += 1
       continue
     }
 
-    await createDocumentPlaceholder(input.ownerId, {
+    documentPayloads.push({
       visitId: input.visitId,
       title: item.title,
       category: item.documentCategory ?? 'outro',
       phase: item.phase,
     })
-    documentCount += 1
   }
+
+  await Promise.all([
+    createTasksDetailed(input.ownerId, input.visitId, taskPayloads),
+    createActivities(input.ownerId, activityPayloads),
+    createDocumentPlaceholders(input.ownerId, documentPayloads),
+  ])
+
+  const taskCount = taskPayloads.length
+  const activityCount = activityPayloads.length
+  const documentCount = documentPayloads.length
 
   await writeActivityLog({
     entityType: 'visit',

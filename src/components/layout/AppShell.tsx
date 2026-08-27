@@ -49,7 +49,7 @@ export function AppShell() {
           <main
             id="conteudo-principal"
             tabIndex={-1}
-            className="flex-1 overflow-x-hidden p-4 md:p-6 lg:p-8"
+            className="flex-1 overflow-x-hidden p-4 md:p-6 lg:p-8 lg:pt-7"
             key={refreshKey}
           >
             <div className="mx-auto w-full max-w-[1600px]">

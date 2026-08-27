@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   CalendarDays,
@@ -9,9 +8,10 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyState, PageHeader } from '@/components/shared/PageHeader'
+import { ListRowLink, SectionCardHeader } from '@/components/shared/ListRow'
 import { TaskStatusBadge, VisitStatusBadge } from '@/components/shared/StatusBadge'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -57,12 +57,12 @@ export function OperationsPage() {
     setLoading(true)
     try {
       const today = todayIso()
-      const [visits, tasks, finance] = await Promise.all([
-        listVisits(user.uid, isAdmin, role),
-        listPendingTasks(user.uid, isAdmin, role),
+      const visits = await listVisits(user.uid, isAdmin, role)
+      const [tasks, finance] = await Promise.all([
+        listPendingTasks(user.uid, isAdmin, role, visits),
         isClient
           ? Promise.resolve([] as FinanceItem[])
-          : listFinanceItemsByOwner(user.uid, isAdmin, role),
+          : listFinanceItemsByOwner(user.uid, isAdmin, role, visits),
       ])
       setVisitsById(new Map(visits.map((visit) => [visit.id, visit])))
       setOverdueTasks(tasks.filter((task) => isOverdueTask(task, today)))
@@ -90,7 +90,7 @@ export function OperationsPage() {
   }, [load])
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Central de operações"
         description="Pendências que pedem atenção agora. Alertas também aparecem no sino do cabeçalho."
@@ -104,14 +104,16 @@ export function OperationsPage() {
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Tarefas atrasadas</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
+          <Card className="overflow-hidden">
+            <SectionCardHeader
+              title="Tarefas atrasadas"
+              icon={AlertTriangle}
+              count={overdueTasks.length}
+            />
             <CardContent>
               {overdueTasks.length === 0 ? (
                 <EmptyState
+                  compact
                   icon={ClipboardList}
                   title="Nada atrasado"
                   description="Não há tarefas com prazo vencido."
@@ -120,20 +122,18 @@ export function OperationsPage() {
                 <ul className="space-y-2">
                   {overdueTasks.map((task) => (
                     <li key={task.id}>
-                      <Link
+                      <ListRowLink
                         to={`/planejamento?visita=${task.visitId}`}
-                        className="block rounded-lg border px-3 py-2 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium">{task.title}</p>
-                          <TaskStatusBadge status={task.status} />
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {visitsById.get(task.visitId)?.title ?? 'Visita'}
-                          {task.dueDate ? ` · prazo ${formatDate(task.dueDate)}` : ''}
-                          {task.assigneeName ? ` · ${task.assigneeName}` : ''}
-                        </p>
-                      </Link>
+                        title={task.title}
+                        meta={[
+                          visitsById.get(task.visitId)?.title ?? 'Visita',
+                          task.dueDate ? `prazo ${formatDate(task.dueDate)}` : null,
+                          task.assigneeName,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        trailing={<TaskStatusBadge status={task.status} />}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -141,14 +141,16 @@ export function OperationsPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Visitas nos próximos 7 dias</CardTitle>
-              <CalendarDays className="h-4 w-4 text-primary" />
-            </CardHeader>
+          <Card className="overflow-hidden">
+            <SectionCardHeader
+              title="Visitas nos próximos 7 dias"
+              icon={CalendarDays}
+              count={upcomingVisits.length}
+            />
             <CardContent>
               {upcomingVisits.length === 0 ? (
                 <EmptyState
+                  compact
                   icon={CalendarDays}
                   title="Nenhuma visita próxima"
                   description="Não há visitas com início nos próximos 7 dias."
@@ -157,21 +159,16 @@ export function OperationsPage() {
                 <ul className="space-y-2">
                   {upcomingVisits.map((visit) => (
                     <li key={visit.id}>
-                      <Link
+                      <ListRowLink
                         to={`/visitas/${visit.id}`}
-                        className="block rounded-lg border px-3 py-2 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium">{visit.title}</p>
-                          <VisitStatusBadge status={visit.status} />
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {formatDate(visit.startDate)}
-                          {visit.endDate !== visit.startDate
+                        title={visit.title}
+                        meta={`${formatDate(visit.startDate)}${
+                          visit.endDate !== visit.startDate
                             ? ` a ${formatDate(visit.endDate)}`
-                            : ''}
-                        </p>
-                      </Link>
+                            : ''
+                        }`}
+                        trailing={<VisitStatusBadge status={visit.status} />}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -179,14 +176,16 @@ export function OperationsPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Documentos pendentes</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
+          <Card className="overflow-hidden">
+            <SectionCardHeader
+              title="Documentos pendentes"
+              icon={FileText}
+              count={pendingDocs.length}
+            />
             <CardContent>
               {pendingDocs.length === 0 ? (
                 <EmptyState
+                  compact
                   icon={FileText}
                   title="Documentação em dia"
                   description="Não há placeholders nem visitas ativas sem documento."
@@ -195,18 +194,15 @@ export function OperationsPage() {
                 <ul className="space-y-2">
                   {pendingDocs.map((row) => (
                     <li key={`${row.visitId}-${row.placeholder?.id ?? row.kind}`}>
-                      <Link
+                      <ListRowLink
                         to={`/visitas/${row.visitId}`}
-                        className="block rounded-lg border px-3 py-2 transition-colors hover:bg-muted/50"
-                      >
-                        <p className="text-sm font-medium">{row.label}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {row.visitTitle}
-                          {row.kind === 'placeholder'
-                            ? ' · arquivo do playbook'
-                            : ' · visita sem documentos'}
-                        </p>
-                      </Link>
+                        title={row.label}
+                        meta={`${row.visitTitle} · ${
+                          row.kind === 'placeholder'
+                            ? 'arquivo do playbook'
+                            : 'visita sem documentos'
+                        }`}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -215,14 +211,16 @@ export function OperationsPage() {
           </Card>
 
           {!isClient ? (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-base">Pendências financeiras</CardTitle>
-                <Receipt className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
+            <Card className="overflow-hidden">
+              <SectionCardHeader
+                title="Pendências financeiras"
+                icon={Receipt}
+                count={financePending.length}
+              />
               <CardContent>
                 {financePending.length === 0 ? (
                   <EmptyState
+                    compact
                     icon={Receipt}
                     title="Financeiro em dia"
                     description="Sem aprovação pendente, NF em atraso ou desvio relevante."
@@ -231,33 +229,33 @@ export function OperationsPage() {
                   <ul className="space-y-2">
                     {financePending.map(({ item, tags }) => (
                       <li key={item.id}>
-                        <Link
+                        <ListRowLink
                           to={`/financeiro?visita=${item.visitId}`}
-                          className="block rounded-lg border px-3 py-2 transition-colors hover:bg-muted/50"
-                        >
-                          <p className="text-sm font-medium">{item.serviceName}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {visitsById.get(item.visitId)?.title ?? 'Visita'}
-                            {item.nfDueDate
-                              ? ` · vence ${formatDate(item.nfDueDate)}`
-                              : ''}
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {tags.map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant={
-                                  tag === 'nf_vencida' || tag === 'desvio'
-                                    ? 'warning'
-                                    : 'secondary'
-                                }
-                                className="text-[10px]"
-                              >
-                                {FINANCE_TAG_LABEL[tag]}
-                              </Badge>
-                            ))}
-                          </div>
-                        </Link>
+                          title={item.serviceName}
+                          meta={[
+                            visitsById.get(item.visitId)?.title ?? 'Visita',
+                            item.nfDueDate ? `vence ${formatDate(item.nfDueDate)}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                          trailing={
+                            <>
+                              {tags.map((tag) => (
+                                <Badge
+                                  key={tag}
+                                  variant={
+                                    tag === 'nf_vencida' || tag === 'desvio'
+                                      ? 'warning'
+                                      : 'secondary'
+                                  }
+                                  className="text-[10px]"
+                                >
+                                  {FINANCE_TAG_LABEL[tag]}
+                                </Badge>
+                              ))}
+                            </>
+                          }
+                        />
                       </li>
                     ))}
                   </ul>

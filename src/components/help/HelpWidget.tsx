@@ -51,7 +51,7 @@ export function HelpWidget() {
               asChild
               title="Abrir em tela cheia"
             >
-              <Link to="/ajuda" onClick={() => setOpen(false)}>
+              <Link to="/assistente" onClick={() => setOpen(false)}>
                 <Maximize2 className="h-4 w-4" />
               </Link>
             </Button>

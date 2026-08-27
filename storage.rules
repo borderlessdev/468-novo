@@ -37,6 +37,10 @@ service firebase.storage {
         || request.auth.uid in memberIds(visit.teamMemberIds);
     }
 
+    function isImage() {
+      return request.resource.contentType.matches('image/jpeg|image/png|image/webp|image/gif');
+    }
+
     match /visits/{visitId}/{allPaths=**} {
       allow read: if isSignedIn() && canReadVisit(visitId);
 
@@ -46,6 +50,18 @@ service firebase.storage {
         && request.resource.contentType.matches('application/pdf|image/.*');
 
       allow delete: if isSignedIn() && canWriteVisit(visitId);
+    }
+
+    // Fotos de perfil: cada usuário gerencia a própria pasta.
+    match /profiles/{userId}/{fileName} {
+      allow read: if isSignedIn();
+
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && isImage();
+
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
   }
 }

@@ -16,7 +16,12 @@ import {
 import { isNotificationTypeEnabled } from '@/lib/notificationPreferences'
 import { db } from '@/lib/firebase'
 import { getUserNotificationPreferences } from '@/services/users'
-import type { Notification, NotificationType, Visit } from '@/types'
+import type {
+  Notification,
+  NotificationPreferences,
+  NotificationType,
+  Visit,
+} from '@/types'
 
 const col = collection(db, 'notifications')
 
@@ -49,10 +54,39 @@ export type CreateNotificationInput = Omit<
   'id' | 'read' | 'createdAt'
 > & { read?: boolean }
 
+export async function listRecentDedupeKeys(
+  recipientId: string,
+  max = 200,
+): Promise<Set<string>> {
+  const snap = await getDocs(
+    query(
+      col,
+      where('recipientId', '==', recipientId),
+      orderBy('createdAt', 'desc'),
+      limit(max),
+    ),
+  )
+  const keys = new Set<string>()
+  snap.docs.forEach((item) => {
+    const key = item.data().dedupeKey
+    if (typeof key === 'string' && key) keys.add(key)
+  })
+  return keys
+}
+
 export async function createNotification(
   input: CreateNotificationInput,
+  options?: {
+    preferences?: NotificationPreferences
+    knownDedupeKeys?: Set<string>
+  },
 ): Promise<string | null> {
-  const preferences = await getUserNotificationPreferences(input.recipientId)
+  if (input.dedupeKey && options?.knownDedupeKeys?.has(input.dedupeKey)) {
+    return null
+  }
+
+  const preferences =
+    options?.preferences ?? (await getUserNotificationPreferences(input.recipientId))
   if (!isNotificationTypeEnabled(input.type, preferences)) {
     return null
   }
@@ -71,6 +105,7 @@ export async function createNotification(
     dedupeKey: input.dedupeKey ?? null,
     createdAt: serverTimestamp(),
   })
+  if (input.dedupeKey) options?.knownDedupeKeys?.add(input.dedupeKey)
   return ref.id
 }
 

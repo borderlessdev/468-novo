@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
+import { ListRowLink, SectionCardHeader } from '@/components/shared/ListRow'
 import { VisitStatusBadge, TaskStatusBadge } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -43,7 +44,7 @@ function KpiValue({
   onPreview?: (records: KpiRecord[]) => void
 }) {
   if (!records) {
-    return <div className="font-display text-2xl font-semibold tracking-tight">{value}</div>
+    return <div className="font-display text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
   }
 
   return (
@@ -53,7 +54,7 @@ function KpiValue({
       onMouseEnter={() => onPreview?.(records)}
       onFocus={() => onPreview?.(records)}
       onClick={() => onPreview?.(records)}
-      className="cursor-pointer border-b border-dashed border-current/35 font-display text-2xl font-semibold tracking-tight outline-none transition-colors hover:text-primary focus-visible:text-primary"
+      className="cursor-pointer border-b border-dashed border-current/35 font-display text-2xl font-semibold tracking-tight tabular-nums outline-none transition-opacity hover:opacity-80 focus-visible:opacity-80"
     >
       {value}
     </button>
@@ -89,10 +90,10 @@ export function DashboardPage() {
     if (!user) return
     setLoading(true)
     try {
-      const [visitsData, tasksData, financeData] = await Promise.all([
-        listVisits(user.uid, isAdmin, role),
-        listPendingTasks(user.uid, isAdmin, role),
-        listFinanceItemsByOwner(user.uid, isAdmin, role),
+      const visitsData = await listVisits(user.uid, isAdmin, role)
+      const [tasksData, financeData] = await Promise.all([
+        listPendingTasks(user.uid, isAdmin, role, visitsData),
+        listFinanceItemsByOwner(user.uid, isAdmin, role, visitsData),
       ])
       setVisits(visitsData)
       setTasks(tasksData.slice(0, 8))
@@ -211,14 +212,14 @@ export function DashboardPage() {
   ]
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Dashboard"
         description={`Visão geral das operações · Ciclo ${cycleLabel}`}
         actions={
           <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-            <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card/80 p-3 sm:flex-row sm:items-end">
-              <div className="space-y-1">
+            <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-3 shadow-[0_1px_2px_rgba(15,47,42,0.03)] sm:flex-row sm:items-end">
+              <div className="space-y-1.5">
                 <Label htmlFor="cycle-start" className="text-xs text-muted-foreground">
                   Início do ciclo
                 </Label>
@@ -230,7 +231,7 @@ export function DashboardPage() {
                   className="w-full sm:w-44"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label htmlFor="cycle-end" className="text-xs text-muted-foreground">
                   Fim do ciclo
                 </Label>
@@ -259,20 +260,20 @@ export function DashboardPage() {
       />
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {Array.from({ length: isClient ? 4 : 5 }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {kpis.map((kpi, index) => (
             <Card
               key={kpi.label}
-              className="relative animate-fade-in-up hover:z-50 focus-within:z-50"
+              className="relative animate-fade-in-up transition-shadow hover:shadow-[0_2px_8px_rgba(15,47,42,0.06)] hover:z-50 focus-within:z-50"
               style={{ animationDelay: `${index * 40}ms` }}
             >
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {kpi.label}
                 </CardTitle>
@@ -297,65 +298,61 @@ export function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+      <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Próximas visitas</CardTitle>
-            <Link
-              to="/visitas"
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              Ver todas
-            </Link>
-          </CardHeader>
+          <SectionCardHeader
+            title={previewRecordIds ? 'Visitas selecionadas' : 'Próximas visitas'}
+            icon={MapPin}
+            count={loading ? undefined : displayedVisits.length}
+            action={
+              <Link
+                to="/visitas"
+                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Ver todas
+              </Link>
+            }
+          />
           <CardContent className="space-y-2">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                <Skeleton key={i} className="h-16 w-full rounded-xl" />
               ))
             ) : displayedVisits.length === 0 ? (
               <EmptyState
+                compact
                 icon={MapPin}
                 title="Nenhuma visita no ciclo"
                 description="Ajuste o período do ciclo ou crie uma nova visita."
               />
             ) : (
               displayedVisits.map((visit) => (
-                <Link
+                <ListRowLink
                   key={visit.id}
                   to={`/visitas/${visit.id}`}
-                  className="group flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 px-4 py-3 transition-all hover:border-primary/20 hover:bg-muted/40 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium transition-colors group-hover:text-primary">
-                      {visit.title}
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {formatDate(visit.startDate)}
-                      {visit.city ? ` · ${visit.city}` : ''}
-                    </p>
-                  </div>
-                  <VisitStatusBadge status={visit.status} />
-                </Link>
+                  title={visit.title}
+                  meta={`${formatDate(visit.startDate)}${visit.city ? ` · ${visit.city}` : ''}`}
+                  trailing={<VisitStatusBadge status={visit.status} />}
+                />
               ))
             )}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
-              <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-            </div>
-            <CardTitle>Tarefas pendentes</CardTitle>
-          </CardHeader>
+          <SectionCardHeader
+            title="Tarefas pendentes"
+            icon={AlertTriangle}
+            count={loading ? undefined : tasks.length}
+          />
           <CardContent className="space-y-2">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                <Skeleton key={i} className="h-16 w-full rounded-xl" />
               ))
             ) : tasks.length === 0 ? (
               <EmptyState
+                compact
                 icon={Clock3}
                 title="Nenhuma tarefa pendente"
                 description="As tarefas do planejamento aparecerão aqui."
@@ -364,22 +361,13 @@ export function DashboardPage() {
               tasks.map((task) => {
                 const visit = visitById.get(task.visitId)
                 return (
-                  <Link
+                  <ListRowLink
                     key={task.id}
                     to={`/planejamento?visita=${task.visitId}`}
-                    className="group flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 px-4 py-3 transition-all hover:border-primary/20 hover:bg-muted/40 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium transition-colors group-hover:text-primary">
-                        {task.title}
-                      </p>
-                      <p className="mt-0.5 text-sm text-muted-foreground">
-                        {visit ? `${visit.title} · ` : ''}
-                        Prazo: {task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}
-                      </p>
-                    </div>
-                    <TaskStatusBadge status={task.status} />
-                  </Link>
+                    title={task.title}
+                    meta={`${visit ? `${visit.title} · ` : ''}Prazo: ${task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}`}
+                    trailing={<TaskStatusBadge status={task.status} />}
+                  />
                 )
               })
             )}

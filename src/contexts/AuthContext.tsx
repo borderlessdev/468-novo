@@ -19,6 +19,7 @@ import {
 import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
+import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
 import { acceptInvite } from '@/services/invites'
 import type { UserProfile, UserRole } from '@/types'
 import type { NotificationPreferences } from '@/lib/notificationPreferences'
@@ -43,6 +44,8 @@ interface AuthContextValue {
   resetPassword: (email: string) => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfileData: (data: { name: string; photoURL?: string }) => Promise<void>
+  uploadAvatar: (file: File) => Promise<void>
+  removeAvatar: () => Promise<void>
   updateNotificationPreferences: (
     preferences: import('@/lib/notificationPreferences').NotificationPreferences,
   ) => Promise<void>
@@ -164,16 +167,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return
       await updateProfile(user, {
         displayName: data.name,
-        photoURL: data.photoURL || null,
+        ...(data.photoURL !== undefined
+          ? { photoURL: data.photoURL || null }
+          : {}),
       })
       await updateUserProfile(user.uid, {
         name: data.name,
-        photoURL: data.photoURL || undefined,
+        ...(data.photoURL !== undefined
+          ? { photoURL: data.photoURL || undefined }
+          : {}),
       })
       await refreshProfile()
     },
     [refreshProfile, user],
   )
+
+  const uploadAvatar = useCallback(
+    async (file: File) => {
+      if (!user) return
+      const { photoURL } = await uploadProfilePhoto(user.uid, file)
+      try {
+        await updateProfile(user, { photoURL })
+      } catch (error) {
+        console.warn('Auth photoURL update failed', error)
+      }
+      await refreshProfile()
+    },
+    [refreshProfile, user],
+  )
+
+  const removeAvatar = useCallback(async () => {
+    if (!user) return
+    await removeProfilePhoto(user.uid)
+    try {
+      await updateProfile(user, { photoURL: null })
+    } catch (error) {
+      console.warn('Auth photoURL clear failed', error)
+    }
+    await refreshProfile()
+  }, [refreshProfile, user])
 
   const updateNotificationPreferences = useCallback(
     async (preferences: NotificationPreferences) => {
@@ -203,6 +235,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       refreshProfile,
       updateProfileData,
+      uploadAvatar,
+      removeAvatar,
       updateNotificationPreferences,
     }),
     [
@@ -219,6 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       refreshProfile,
       updateProfileData,
+      uploadAvatar,
+      removeAvatar,
       updateNotificationPreferences,
     ],
   )

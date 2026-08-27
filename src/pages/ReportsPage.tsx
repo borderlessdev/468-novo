@@ -60,10 +60,10 @@ export function ReportsPage() {
   const load = useCallback(async () => {
     if (!user) return
     try {
-      const [visitsData, visitorsData, financeData] = await Promise.all([
-        listVisits(user.uid, isAdmin, role),
+      const visitsData = await listVisits(user.uid, isAdmin, role)
+      const [visitorsData, financeData] = await Promise.all([
         listVisitors(user.uid, isAdmin),
-        listFinanceItemsByOwner(user.uid, isAdmin, role),
+        listFinanceItemsByOwner(user.uid, isAdmin, role, visitsData),
       ])
       setVisits(visitsData)
       setVisitors(visitorsData)

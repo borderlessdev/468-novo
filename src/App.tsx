@@ -61,6 +61,7 @@ export default function App() {
               <Route path="/configuracoes/playbooks" element={<PlaybooksPage />} />
               <Route path="/perfil" element={<ProfilePage />} />
               <Route path="/configuracoes/lixeira" element={<TrashPage />} />
+              <Route path="/assistente" element={<HelpPage />} />
               <Route path="/ajuda" element={<HelpPage />} />
             </Route>
           </Route>

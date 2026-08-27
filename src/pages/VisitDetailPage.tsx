@@ -141,7 +141,12 @@ export function VisitDetailPage() {
   const [saving, setSaving] = useState(false)
   const [visit, setVisit] = useState<Visit | null>(null)
   const [linkedVisitors, setLinkedVisitors] = useState<Visitor[]>([])
+  const [visitVisitorLinks, setVisitVisitorLinks] = useState<
+    Array<{ id: string; visitorId: string }>
+  >([])
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([])
+  const [visitorsCatalogLoaded, setVisitorsCatalogLoaded] = useState(false)
+  const [loadingVisitorsCatalog, setLoadingVisitorsCatalog] = useState(false)
   const [documents, setDocuments] = useState<VisitDocument[]>([])
   const [placeholders, setPlaceholders] = useState<DocumentPlaceholder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -182,9 +187,9 @@ export function VisitDetailPage() {
   })
   const { reset } = form
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!id || !user) return
-    setLoading(true)
+    if (!options?.silent) setLoading(true)
     try {
       const visitData = await getVisit(id)
       if (!visitData) {
@@ -212,14 +217,14 @@ export function VisitDetailPage() {
 
       const results = await Promise.allSettled([
         listVisitVisitors(id, ownerIdForQuery, isAdmin),
-        canWrite
-          ? listVisitors(user.uid, isAdmin)
-          : Promise.resolve([] as Visitor[]),
         listTasks(id, ownerIdForQuery, isAdmin),
         listFinanceItems(id, ownerIdForQuery, isAdmin),
         listDocuments(id, ownerIdForQuery, isAdmin),
         listDocumentPlaceholders(id, ownerIdForQuery, isAdmin),
         listActivities(id, ownerIdForQuery, isAdmin),
+        listActivityLogsForVisit(id),
+        listLinksForVisit(id),
+        listFeedbacksForVisit(id, ownerIdForQuery, isAdmin),
       ])
 
       const failed = results.filter((result) => result.status === 'rejected')
@@ -231,12 +236,14 @@ export function VisitDetailPage() {
       }
 
       const links = results[0].status === 'fulfilled' ? results[0].value : []
-      const visitors = results[1].status === 'fulfilled' ? results[1].value : []
-      const tasksData = results[2].status === 'fulfilled' ? results[2].value : []
-      const finance = results[3].status === 'fulfilled' ? results[3].value : []
-      const docs = results[4].status === 'fulfilled' ? results[4].value : []
-      const pendingDocs = results[5].status === 'fulfilled' ? results[5].value : []
-      const activitiesData = results[6].status === 'fulfilled' ? results[6].value : []
+      const tasksData = results[1].status === 'fulfilled' ? results[1].value : []
+      const finance = results[2].status === 'fulfilled' ? results[2].value : []
+      const docs = results[3].status === 'fulfilled' ? results[3].value : []
+      const pendingDocs = results[4].status === 'fulfilled' ? results[4].value : []
+      const activitiesData = results[5].status === 'fulfilled' ? results[5].value : []
+      const logs = results[6].status === 'fulfilled' ? results[6].value : []
+      const portalLinks = results[7].status === 'fulfilled' ? results[7].value : []
+      const portalFeedbacks = results[8].status === 'fulfilled' ? results[8].value : []
 
       let linked: Visitor[]
       try {
@@ -247,8 +254,8 @@ export function VisitDetailPage() {
         toast.error('Não foi possível carregar visitantes vinculados')
       }
 
+      setVisitVisitorLinks(links.map((link) => ({ id: link.id, visitorId: link.visitorId })))
       setLinkedVisitors(linked)
-      setAllVisitors(visitors)
       setDocuments(docs)
       setPlaceholders(pendingDocs)
       setTasks(tasksData)
@@ -258,20 +265,9 @@ export function VisitDetailPage() {
       setFinanceTotal(
         finance.reduce((sum, item) => sum + (item.serviceValue ?? 0), 0),
       )
-
-      try {
-        setActivityLogs(await listActivityLogsForVisit(id))
-      } catch (error) {
-        console.error(error)
-        setActivityLogs([])
-      }
-
-      const portalResults = await Promise.allSettled([
-        listLinksForVisit(id),
-        listFeedbacksForVisit(id, ownerIdForQuery, isAdmin),
-      ])
-      setGuestLinks(portalResults[0].status === 'fulfilled' ? portalResults[0].value : [])
-      setFeedbacks(portalResults[1].status === 'fulfilled' ? portalResults[1].value : [])
+      setActivityLogs(logs)
+      setGuestLinks(portalLinks)
+      setFeedbacks(portalFeedbacks)
 
       const progress = calculateVisitProgress(tasksData)
       if (progress !== visitData.progress) {
@@ -286,13 +282,32 @@ export function VisitDetailPage() {
       console.error(error)
       toast.error('Erro ao carregar visita')
     } finally {
-      setLoading(false)
+      if (!options?.silent) setLoading(false)
     }
-  }, [id, user, isAdmin, canWrite, navigate, reset])
+  }, [id, user, isAdmin, navigate, reset])
+
+  const ensureVisitorsCatalog = useCallback(async () => {
+    if (!user || !canWrite || visitorsCatalogLoaded || loadingVisitorsCatalog) return
+    setLoadingVisitorsCatalog(true)
+    try {
+      setAllVisitors(await listVisitors(user.uid, isAdmin))
+      setVisitorsCatalogLoaded(true)
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível carregar o catálogo de visitantes')
+    } finally {
+      setLoadingVisitorsCatalog(false)
+    }
+  }, [user, canWrite, visitorsCatalogLoaded, loadingVisitorsCatalog, isAdmin])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    setVisitorsCatalogLoaded(false)
+    setAllVisitors([])
+  }, [id])
 
   const visitorResults = useMemo(() => {
     const term = visitorSearch.trim().toLowerCase()
@@ -349,7 +364,29 @@ export function VisitDetailPage() {
         console.warn(error)
       }
       toast.success('Visita atualizada')
-      await load()
+      setVisit((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...payload,
+              teamMemberIds: payload.teamMemberIds ?? prev.teamMemberIds,
+              clientUserIds: payload.clientUserIds ?? prev.clientUserIds,
+            }
+          : prev,
+      )
+      setActivityLogs((prev) => [
+        {
+          id: `local-${Date.now()}`,
+          entityType: 'visit',
+          entityId: id,
+          visitId: id,
+          action: 'updated',
+          summary: `Visita "${values.title}" atualizada`,
+          actorId: user!.uid,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ])
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível salvar')
@@ -381,17 +418,24 @@ export function VisitDetailPage() {
       if (!user) return
       await deleteDocument(doc, user.uid)
       toastMovedToTrash('Documento movido para a lixeira')
-      await load()
+      setDocuments((prev) => prev.filter((item) => item.id !== doc.id))
     })
   }
 
   const handleLinkVisitor = async (visitor: Visitor) => {
     if (!user || !id) return
     try {
-      await linkVisitorToVisit(user.uid, id, visitor.id)
+      const linkId = await linkVisitorToVisit(user.uid, id, visitor.id)
       setVisitorSearch('')
+      setVisitVisitorLinks((prev) =>
+        prev.some((link) => link.visitorId === visitor.id)
+          ? prev
+          : [...prev, { id: linkId, visitorId: visitor.id }],
+      )
+      setLinkedVisitors((prev) =>
+        prev.some((item) => item.id === visitor.id) ? prev : [...prev, visitor],
+      )
       toast.success('Visitante vinculado')
-      await load()
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível vincular')
@@ -401,12 +445,12 @@ export function VisitDetailPage() {
   const handleUnlinkVisitor = async (visitorId: string) => {
     if (!user || !id) return
     try {
-      const links = await listVisitVisitors(id, user.uid, isAdmin)
-      const link = links.find((l) => l.visitorId === visitorId)
+      const link = visitVisitorLinks.find((item) => item.visitorId === visitorId)
       if (link) {
         await unlinkVisitVisitor(link.id)
+        setVisitVisitorLinks((prev) => prev.filter((item) => item.id !== link.id))
+        setLinkedVisitors((prev) => prev.filter((item) => item.id !== visitorId))
         toast.success('Visitante desvinculado')
-        await load()
       }
     } catch (error) {
       console.error(error)
@@ -516,8 +560,35 @@ export function VisitDetailPage() {
     setPortalBusyId(link.id)
     try {
       await applyVisitorDraft(link.id, link.visitorId)
+      const draft = link.visitorDraft
+      if (draft) {
+        setLinkedVisitors((prev) =>
+          prev.map((visitor) =>
+            visitor.id === link.visitorId
+              ? {
+                  ...visitor,
+                  name: draft.name ?? visitor.name,
+                  document: draft.document ?? visitor.document,
+                  company: draft.company ?? visitor.company,
+                  role: draft.role ?? visitor.role,
+                  dietaryRestriction:
+                    draft.dietaryRestriction ?? visitor.dietaryRestriction,
+                  language: draft.language ?? visitor.language,
+                  notes: draft.notes ?? visitor.notes,
+                  mobilityReduced: draft.mobilityReduced ?? visitor.mobilityReduced,
+                }
+              : visitor,
+          ),
+        )
+      }
+      setGuestLinks((prev) =>
+        prev.map((item) =>
+          item.id === link.id
+            ? { ...item, lastAppliedAt: new Date().toISOString() }
+            : item,
+        ),
+      )
       toast.success('Dados do visitante atualizados')
-      await load()
     } catch (error) {
       console.error(error)
       toast.error(
@@ -561,7 +632,7 @@ export function VisitDetailPage() {
         `Playbook aplicado: ${result.tasks} tarefa(s), ${result.activities} atividade(s), ${result.documents} documento(s)`,
       )
       setPlaybookOpen(false)
-      await load()
+      await load({ silent: true })
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível aplicar o playbook')
@@ -646,9 +717,22 @@ export function VisitDetailPage() {
     if (!user || !id) return
     setUploading(true)
     try {
-      await uploadDocument(user.uid, id, file, docCategory)
+      const docId = await uploadDocument(user.uid, id, file, docCategory)
+      setDocuments((prev) => [
+        {
+          id: docId,
+          visitId: id,
+          name: file.name,
+          category: docCategory,
+          storagePath: `visits/${id}/${docId}/${file.name}`,
+          contentType: file.type,
+          size: file.size,
+          ownerId: user.uid,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ])
       toast.success('Documento enviado')
-      await load()
     } catch (error) {
       console.error(error)
       toast.error(error instanceof Error ? error.message : 'Falha no upload')
@@ -802,8 +886,8 @@ export function VisitDetailPage() {
   if (!visit) return null
 
   return (
-    <div>
-      <div className="mb-4">
+    <div className="animate-fade-in space-y-1">
+      <div className="mb-2">
         <Button variant="ghost" size="sm" asChild>
           <Link to="/visitas">
             <ArrowLeft className="h-4 w-4" />
@@ -816,8 +900,8 @@ export function VisitDetailPage() {
         title={visit.title}
         description={visit.company || visit.pvNumber || 'Detalhes da visita'}
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={openEmailDialog}>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={openEmailDialog}>
               <Mail className="h-4 w-4" />
               Enviar resumo
             </Button>
@@ -825,6 +909,7 @@ export function VisitDetailPage() {
               <>
                 <Button
                   variant="outline"
+                  size="sm"
                   className="w-full sm:w-auto"
                   disabled={!user}
                   onClick={() => void openPlaybookDialog()}
@@ -834,6 +919,7 @@ export function VisitDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   className="w-full sm:w-auto"
                   disabled={cloning || !user}
                   onClick={() => {
@@ -856,6 +942,7 @@ export function VisitDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   className="w-full sm:w-auto"
                   disabled={cloning || !user}
                   onClick={() => {
@@ -875,6 +962,7 @@ export function VisitDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   className="w-full sm:w-auto"
                   disabled={cloning || !user}
                   onClick={handleSaveAsPlaybook}
@@ -885,7 +973,7 @@ export function VisitDetailPage() {
               </>
             ) : null}
             {showDelete ? (
-            <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDeleteVisit}>
+            <Button variant="destructive" size="sm" className="w-full sm:w-auto" onClick={handleDeleteVisit}>
               <Trash2 className="h-4 w-4" />
               Excluir
             </Button>
@@ -894,18 +982,18 @@ export function VisitDetailPage() {
         }
       />
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border/70 bg-muted/15 px-4 py-3">
         <VisitStatusBadge status={visit.status} />
         <span className="text-sm text-muted-foreground">
-          PV: {visit.pvNumber || '—'}
+          PV: <span className="font-mono text-foreground">{visit.pvNumber || '—'}</span>
         </span>
-        <div className="flex min-w-[160px] items-center gap-2">
+        <div className="ml-auto flex min-w-[160px] flex-1 items-center gap-2 sm:max-w-xs">
           <Progress value={visit.progress} className="flex-1" />
-          <span className="text-xs text-muted-foreground">{visit.progress}%</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{visit.progress}%</span>
         </div>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Button variant="outline" className="justify-start" asChild>
           <Link to={`/agenda?visita=${visit.id}`}>
             <Calendar className="h-4 w-4" />
@@ -1169,12 +1257,21 @@ export function VisitDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {canWrite ? (
-                <div className="flex gap-2">
+                <div className="space-y-1">
                   <Input
                     placeholder="Buscar visitante para vincular"
                     value={visitorSearch}
-                    onChange={(e) => setVisitorSearch(e.target.value)}
+                    onFocus={() => {
+                      void ensureVisitorsCatalog()
+                    }}
+                    onChange={(e) => {
+                      setVisitorSearch(e.target.value)
+                      void ensureVisitorsCatalog()
+                    }}
                   />
+                  {loadingVisitorsCatalog ? (
+                    <p className="text-xs text-muted-foreground">Carregando catálogo…</p>
+                  ) : null}
                 </div>
               ) : null}
               {canWrite && visitorResults.length > 0 ? (

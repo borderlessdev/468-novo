@@ -205,12 +205,16 @@ export function PlanningPage() {
     },
   })
 
-  const refreshProgress = useCallback(async () => {
-    if (!visitId || !user) return
-    const ownerIdForQuery = selectedVisit?.ownerId ?? user.uid
-    const all = await listTasks(visitId, ownerIdForQuery, isAdmin)
-    await syncVisitProgress(visitId, calculateVisitProgress(all))
-  }, [visitId, user, isAdmin, selectedVisit?.ownerId])
+  const refreshProgress = useCallback(
+    async (sourceTasks?: Task[]) => {
+      if (!visitId || !user) return
+      const all =
+        sourceTasks ??
+        (await listTasks(visitId, selectedVisit?.ownerId ?? user.uid, isAdmin))
+      await syncVisitProgress(visitId, calculateVisitProgress(all))
+    },
+    [visitId, user, isAdmin, selectedVisit?.ownerId],
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -315,9 +319,10 @@ export function PlanningPage() {
     const newStatus = resolveStatus(over.id)
     if (!newStatus || newStatus === task.status) return
 
-    setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)),
+    const nextTasks = tasks.map((t) =>
+      t.id === task.id ? { ...t, status: newStatus } : t,
     )
+    setTasks(nextTasks)
     try {
       await updateTask(task.id, { status: newStatus })
     } catch (error) {
@@ -347,7 +352,7 @@ export function PlanningPage() {
     }
 
     try {
-      await refreshProgress()
+      await refreshProgress(nextTasks)
     } catch (error) {
       // O status da tarefa já foi persistido; uma falha no progresso agregado
       // não deve desfazer o Kanban nem informar que a movimentação falhou.
@@ -389,8 +394,9 @@ export function PlanningPage() {
       try {
         await deleteTask(item.id, user.uid)
         toastMovedToTrash('Tarefa movida para a lixeira')
-        await loadTasks()
-        await refreshProgress()
+        const nextTasks = tasks.filter((task) => task.id !== item.id)
+        setTasks(nextTasks)
+        await refreshProgress(nextTasks)
       } catch (error) {
         console.error(error)
         toast.error('Não foi possível excluir')
@@ -443,8 +449,10 @@ export function PlanningPage() {
       setOpen(false)
       setEditing(null)
       form.reset({ title: '', dueDate: '', assigneeName: '', status: 'backlog' })
-      await loadTasks()
-      await refreshProgress()
+      const ownerIdForQuery = selectedVisit?.ownerId ?? user.uid
+      const all = await listTasks(visitId, ownerIdForQuery, isAdmin)
+      setTasks(all)
+      await refreshProgress(all)
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível salvar a tarefa')

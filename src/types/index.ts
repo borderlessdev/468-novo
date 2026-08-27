@@ -73,6 +73,8 @@ export interface UserProfile {
   name: string
   email: string
   photoURL?: string
+  /** Caminho no Storage para limpar a foto anterior no upload. */
+  photoStoragePath?: string
   role: UserRole
   notificationPreferences?: Partial<NotificationPreferences>
   modulePermissions?: Partial<ModulePermissions>
