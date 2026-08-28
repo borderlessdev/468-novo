@@ -6,7 +6,6 @@ import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
 import {
-  ArrowLeft,
   Ban,
   Calendar,
   ClipboardList,
@@ -887,15 +886,6 @@ export function VisitDetailPage() {
 
   return (
     <div className="animate-fade-in space-y-1">
-      <div className="mb-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/visitas">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar às visitas
-          </Link>
-        </Button>
-      </div>
-
       <PageHeader
         title={visit.title}
         description={visit.company || visit.pvNumber || 'Detalhes da visita'}
@@ -995,7 +985,7 @@ export function VisitDetailPage() {
 
       <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Button variant="outline" className="justify-start" asChild>
-          <Link to={`/agenda?visita=${visit.id}`}>
+          <Link to={`/programacao?visita=${visit.id}`}>
             <Calendar className="h-4 w-4" />
             Programação
           </Link>

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronUp,
   ClipboardList,
@@ -236,12 +234,6 @@ export function PlaybooksPage() {
         description="Modelos operacionais por tipo de visita. A aplicação na visita entra no dia 2."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild>
-              <Link to="/configuracoes">
-                <ArrowLeft className="h-4 w-4" />
-                Configurações
-              </Link>
-            </Button>
             {canWrite && !isClient ? (
               <Button onClick={openCreate}>
                 <Plus className="h-4 w-4" />

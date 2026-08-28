@@ -1,6 +1,6 @@
 # Programação (Agenda)
 
-Rota: `/agenda`
+Rota: `/programacao`
 
 ## O que é
 A Programação mostra a agenda detalhada de **uma visita** (lista ou semana). Selecione a visita no filtro no topo.

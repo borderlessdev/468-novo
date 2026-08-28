@@ -292,7 +292,7 @@ export function SettingsPage() {
         description="Gerencie seu perfil, aparência, notificações e segurança."
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

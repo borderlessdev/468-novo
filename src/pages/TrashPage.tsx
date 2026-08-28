@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, RotateCcw, Trash2 } from 'lucide-react'
+import { RotateCcw, Trash2 } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
@@ -121,15 +120,6 @@ export function TrashPage() {
 
   return (
     <div>
-      <div className="mb-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/configuracoes">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar às configurações
-          </Link>
-        </Button>
-      </div>
-
       <PageHeader
         title="Lixeira"
         description={`Itens excluídos ficam disponíveis por ${TRASH_RETENTION_DAYS} dias antes da remoção automática.`}

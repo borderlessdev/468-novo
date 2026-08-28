@@ -189,7 +189,7 @@ export function AgendaPage() {
       setActivities(await listActivities(visitId, ownerIdForQuery, isAdmin))
     } catch (error) {
       console.error(error)
-      toast.error('Erro ao carregar agenda')
+      toast.error('Erro ao carregar programação')
     } finally {
       setLoadingActivities(false)
     }
@@ -437,126 +437,121 @@ export function AgendaPage() {
         description="Visualize a programação detalhada de uma visita específica."
       />
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <Label className="text-xs">Visita para visualizar a agenda</Label>
-          <Select
-            value={visitId || '_unset'}
-            onValueChange={(value) => {
-              if (value === '_unset') {
-                setSearchParams({})
-                return
-              }
-              setSearchParams({ visita: value })
-            }}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Select
+          value={visitId || '_unset'}
+          onValueChange={(value) => {
+            if (value === '_unset') {
+              setSearchParams({})
+              return
+            }
+            setSearchParams({ visita: value })
+          }}
+        >
+          <SelectTrigger className="w-full min-w-[12rem] sm:w-64" aria-label="Visita para visualizar a programação">
+            <SelectValue placeholder="Selecione uma visita" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_unset">Selecione uma visita</SelectItem>
+            {visits.map((visit) => (
+              <SelectItem key={visit.id} value={visit.id}>
+                {visit.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex shrink-0 rounded-lg border p-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'week' ? 'default' : 'ghost'}
+            onClick={() => setViewMode('week')}
           >
-            <SelectTrigger className="w-full sm:w-72">
-              <SelectValue placeholder="Selecione uma visita" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_unset">Selecione uma visita</SelectItem>
-              {visits.map((visit) => (
-                <SelectItem key={visit.id} value={visit.id}>
-                  {visit.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            Semana
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
+            onClick={() => setViewMode('list')}
+          >
+            Lista
+          </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex rounded-lg border p-1">
+        {viewMode === 'week' ? (
+          <div className="flex shrink-0 gap-1">
             <Button
               type="button"
               size="sm"
-              variant={viewMode === 'week' ? 'default' : 'ghost'}
-              onClick={() => setViewMode('week')}
+              variant="outline"
+              aria-label="Voltar um dia"
+              onClick={() => setWeekStart((d) => addDays(d, -1))}
             >
-              Semana
+              ← Dia
             </Button>
             <Button
               type="button"
               size="sm"
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              onClick={() => setViewMode('list')}
+              variant="outline"
+              onClick={() => setWeekStart(getWeekStart())}
             >
-              Lista
+              Hoje
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-label="Avançar um dia"
+              onClick={() => setWeekStart((d) => addDays(d, 1))}
+            >
+              Dia →
             </Button>
           </div>
-          {viewMode === 'week' ? (
-            <div className="flex gap-1">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                aria-label="Voltar um dia"
-                onClick={() => setWeekStart((d) => addDays(d, -1))}
-              >
-                ← Dia
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setWeekStart(getWeekStart())}
-              >
-                Hoje
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                aria-label="Avançar um dia"
-                onClick={() => setWeekStart((d) => addDays(d, 1))}
-              >
-                Dia →
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <Label className="text-xs">Filtrar por dia (opcional)</Label>
-              <Input
-                type="date"
-                value={dayFilter}
-                onChange={(e) => setDayFilter(e.target.value)}
-                className="w-full sm:w-44"
-              />
-            </div>
-          )}
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) void handleImport(file)
-            }}
+        ) : (
+          <Input
+            type="date"
+            value={dayFilter}
+            onChange={(e) => setDayFilter(e.target.value)}
+            aria-label="Filtrar por dia (opcional)"
+            className="w-full shrink-0 sm:w-44"
           />
+        )}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void handleImport(file)
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0"
+          disabled={!visitId || !canWrite || importing}
+          onClick={() => importInputRef.current?.click()}
+        >
+          <Upload className="h-4 w-4" />
+          {importing ? 'Importando...' : 'Importar arquivo'}
+        </Button>
+        {visitId && canWrite && googleConnected ? (
           <Button
             type="button"
             variant="outline"
-            disabled={!visitId || !canWrite || importing}
-            onClick={() => importInputRef.current?.click()}
+            className="shrink-0"
+            disabled={syncingVisit}
+            onClick={() => void handleSyncVisitToGoogle()}
           >
-            <Upload className="h-4 w-4" />
-            {importing ? 'Importando...' : 'Importar arquivo'}
+            <Calendar className="h-4 w-4" />
+            {syncingVisit ? 'Enviando...' : 'Enviar programação desta visita ao Google'}
           </Button>
-          {visitId && canWrite && googleConnected ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={syncingVisit}
-              onClick={() => void handleSyncVisitToGoogle()}
-            >
-              <Calendar className="h-4 w-4" />
-              {syncingVisit ? 'Enviando...' : 'Enviar programação desta visita ao Google'}
-            </Button>
-          ) : null}
-          <Button disabled={!visitId || !canWrite || importing} onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Nova atividade
-          </Button>
-        </div>
+        ) : null}
+        <Button className="shrink-0" disabled={!visitId || !canWrite || importing} onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          Nova atividade
+        </Button>
       </div>
 
       {visitId ? (
@@ -579,7 +574,7 @@ export function AgendaPage() {
         <EmptyState
           icon={Calendar}
           title="Selecione uma visita"
-          description="Selecione uma visita para visualizar a agenda de atividades."
+          description="Selecione uma visita para visualizar a programação de atividades."
         />
       ) : loadingActivities ? (
         <div className="space-y-3">

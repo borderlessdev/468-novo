@@ -22,7 +22,7 @@ export function AppShell() {
 
   return (
     <VisitDialogProvider>
-      <div className="flex min-h-dvh bg-background">
+      <div className="flex min-h-dvh items-start bg-background">
         <a
           href="#conteudo-principal"
           className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition-transform focus:translate-y-0"
@@ -49,7 +49,7 @@ export function AppShell() {
           <main
             id="conteudo-principal"
             tabIndex={-1}
-            className="flex-1 overflow-x-hidden p-4 md:p-6 lg:p-8 lg:pt-7"
+            className="w-full overflow-x-hidden p-4 md:p-6 lg:p-8 lg:pt-7"
             key={refreshKey}
           >
             <div className="mx-auto w-full max-w-[1600px]">

@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
@@ -27,6 +27,11 @@ import ProfilePage from '@/pages/ProfilePage'
 import { TrashPage } from '@/pages/TrashPage'
 import { HelpPage } from '@/pages/HelpPage'
 
+function LegacyAgendaRedirect() {
+  const { search } = useLocation()
+  return <Navigate to={`/programacao${search}`} replace />
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -52,7 +57,8 @@ export default function App() {
               <Route path="/operacoes" element={<OperationsPage />} />
               <Route path="/visitas" element={<VisitsPage />} />
               <Route path="/visitas/:id" element={<VisitDetailPage />} />
-              <Route path="/agenda" element={<AgendaPage />} />
+              <Route path="/programacao" element={<AgendaPage />} />
+              <Route path="/agenda" element={<LegacyAgendaRedirect />} />
               <Route path="/visitantes" element={<VisitorsPage />} />
               <Route path="/planejamento" element={<PlanningPage />} />
               <Route path="/financeiro" element={<FinancePage />} />

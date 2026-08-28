@@ -233,7 +233,7 @@ export async function scanDueReminders(
           body: `"${activity.title}" em ${visit.title}`,
           visitId: visit.id,
           entityId: activity.id,
-          href: `/agenda?visita=${visit.id}`,
+          href: `/programacao?visita=${visit.id}`,
           dedupeKey: `activity_soon:${activity.id}:${activity.startTime}`,
         })
       }

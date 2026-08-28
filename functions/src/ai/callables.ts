@@ -50,7 +50,7 @@ function mockHelpAnswer(message: string, route?: string): string {
       '1. Abra **Programação** no menu.',
       '2. Selecione a visita no filtro do topo.',
       '3. Clique em **Nova atividade**, preencha título, data e horários e salve.',
-      route?.startsWith('/agenda')
+      route?.startsWith('/programacao') || route?.startsWith('/agenda')
         ? 'Você já está na Programação — escolha a visita e use Nova atividade.'
         : '',
     ]

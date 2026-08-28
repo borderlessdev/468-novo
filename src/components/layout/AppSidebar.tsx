@@ -155,7 +155,7 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav className="scrollbar-thin min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 py-4">
+        <nav className="scrollbar-thin space-y-1 overflow-y-auto px-2.5 py-4">
           {NAV_ITEMS
             .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
             .map((item) => {

@@ -76,15 +76,13 @@
 }
 
 html,
-body,
-#root {
-  height: 100%;
+body {
   min-height: 100dvh;
+  overflow-x: hidden;
 }
 
-html,
-body {
-  overflow-x: hidden;
+#root {
+  min-height: 100dvh;
 }
 
 body {
