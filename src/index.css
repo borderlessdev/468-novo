@@ -173,6 +173,22 @@ body {
   border-radius: 999px;
 }
 
+.help-content p:first-child {
+  margin-top: 0;
+}
+
+.help-content p:last-child {
+  margin-bottom: 0;
+}
+
+.help-content ol {
+  list-style-type: decimal;
+}
+
+.help-content ul {
+  list-style-type: disc;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

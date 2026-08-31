@@ -64,16 +64,43 @@ o recebe.
 - `mapProgrammingImport` (callable) — interpreta planilha de programação via IA.
 - `draftCommunication` (callable) — rascunhos de e-mail / briefing / convite do portal.
 
-## Assistente de IA
+## Assistente de IA (Claude)
 
-Configure em `functions/.env` (ver `.env.example`):
+O chat de ajuda, o import de programação e os rascunhos usam **Claude (Anthropic)** por padrão.
 
-```
-AI_PROVIDER=openai
-OPENAI_API_KEY=...
-```
+### Configuração rápida
 
-ou Anthropic. Sem chave, as callables respondem em **modo mock** para desenvolver a UI.
+1. Crie uma API key em [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+2. Copie o exemplo e cole a chave:
+
+   ```bash
+   cp functions/.env.example functions/.env
+   ```
+
+3. Edite `functions/.env`:
+
+   ```
+   AI_PROVIDER=anthropic
+   ANTHROPIC_API_KEY=sk-ant-api03-...
+   ```
+
+4. Publique as functions:
+
+   ```bash
+   npm --prefix functions run deploy
+   ```
+
+Sem `ANTHROPIC_API_KEY`, as callables respondem em **modo mock** (respostas fixas) para desenvolver a UI.
+
+### Variáveis opcionais
+
+| Variável            | Padrão                                      | Descrição                          |
+| ------------------- | ------------------------------------------- | ---------------------------------- |
+| `ANTHROPIC_MODEL`   | `claude-sonnet-4-20250514`                  | Modelo Claude                      |
+| `ANTHROPIC_BASE_URL`| `https://api.anthropic.com/v1/messages`     | Endpoint da API (proxy customizado)|
+| `AI_PROVIDER`       | `anthropic`                                 | `anthropic`, `openai` ou `mock`    |
+
+Para usar OpenAI em vez de Claude, veja os comentários em `functions/.env.example`.
 
 O evento é criado no calendário de **quem está logado**. Ao sincronizar uma atividade de
 outra pessoa da equipe, o evento aparece na agenda Google de quem disparou o sync.

@@ -1,9 +1,17 @@
 /**
- * Adapter de LLM (OpenAI / Anthropic) com fallback mock quando não há API key.
- * Chaves ficam só em functions/.env / Secret Manager — nunca no cliente.
+ * Adapter de LLM (Claude / OpenAI) com fallback mock quando não há API key.
+ * Chaves ficam só em functions/.env — nunca no cliente.
  */
 
-export type AiProviderName = 'openai' | 'anthropic' | 'mock'
+import {
+  getAnthropicApiUrl,
+  getAnthropicModel,
+  getOpenAiModel,
+  readAiProvider,
+  type AiProviderName,
+} from './config'
+
+export type { AiProviderName }
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -19,27 +27,19 @@ export interface ChatCompletionInput {
   maxTokens?: number
 }
 
-function readProvider(): AiProviderName {
-  const raw = (process.env.AI_PROVIDER ?? '').trim().toLowerCase()
-  if (raw === 'openai' || raw === 'anthropic') return raw
-  if (process.env.OPENAI_API_KEY?.trim()) return 'openai'
-  if (process.env.ANTHROPIC_API_KEY?.trim()) return 'anthropic'
-  return 'mock'
-}
-
 export function getAiProviderName(): AiProviderName {
-  return readProvider()
+  return readAiProvider()
 }
 
 export function isAiMockMode(): boolean {
-  return readProvider() === 'mock'
+  return readAiProvider() === 'mock'
 }
 
 async function callOpenAi(input: ChatCompletionInput): Promise<string> {
   const key = process.env.OPENAI_API_KEY?.trim()
   if (!key) throw new Error('OPENAI_API_KEY ausente')
 
-  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini'
+  const model = getOpenAiModel()
   const body: Record<string, unknown> = {
     model,
     temperature: input.temperature ?? 0.3,
@@ -75,16 +75,19 @@ async function callAnthropic(input: ChatCompletionInput): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY?.trim()
   if (!key) throw new Error('ANTHROPIC_API_KEY ausente')
 
-  const model = process.env.ANTHROPIC_MODEL?.trim() || 'claude-3-5-haiku-latest'
+  const model = getAnthropicModel()
+  const system = input.json
+    ? `${input.system}\n\nResponda APENAS com JSON válido, sem markdown nem texto fora do objeto.`
+    : input.system
   const body: Record<string, unknown> = {
     model,
     max_tokens: input.maxTokens ?? 1200,
     temperature: input.temperature ?? 0.3,
-    system: input.system,
+    system,
     messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
   }
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(getAnthropicApiUrl(), {
     method: 'POST',
     headers: {
       'x-api-key': key,
@@ -113,7 +116,7 @@ export async function chatCompletion(input: ChatCompletionInput): Promise<{
   text: string
   provider: AiProviderName
 }> {
-  const provider = readProvider()
+  const provider = readAiProvider()
   if (provider === 'mock') {
     return { text: 'MOCK', provider: 'mock' }
   }
