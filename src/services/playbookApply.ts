@@ -219,7 +219,7 @@ export async function saveVisitAsPlaybook(
     })
   }
 
-  return createPlaybook(ownerId, {
+  return createPlaybook(ownerId, visit.orgId, {
     name: `Playbook: ${visit.title}`,
     visitType: visit.company || 'Geral',
     description: visit.objective,

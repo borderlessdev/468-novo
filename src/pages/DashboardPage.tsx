@@ -8,19 +8,17 @@ import {
   Users,
   AlertTriangle,
   MapPin,
-  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { CyclePeriodFields } from '@/components/shared/CyclePeriodFields'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ListRowLink, SectionCardHeader } from '@/components/shared/ListRow'
 import { VisitStatusBadge, TaskStatusBadge } from '@/components/shared/StatusBadge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
-import { getCurrentCycle } from '@/lib/constants'
+import { useOrg } from '@/contexts/OrgContext'
+import { useCyclePeriod } from '@/hooks/useCyclePeriod'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { listVisits } from '@/services/visits'
 import { listPendingTasks } from '@/services/tasks'
@@ -61,15 +59,19 @@ function KpiValue({
   )
 }
 
-function formatCycleLabel(startIso: string, endIso: string) {
-  return `${formatDate(startIso)} a ${formatDate(endIso)}`
-}
-
 export function DashboardPage() {
-  const { user, isAdmin, role, isClient } = useAuth()
-  const defaultCycle = useMemo(() => getCurrentCycle(), [])
-  const [cycleStart, setCycleStart] = useState(defaultCycle.startIso)
-  const [cycleEnd, setCycleEnd] = useState(defaultCycle.endIso)
+  const { user, isPlatformAdmin, role, isClient } = useAuth()
+  const { activeOrgId } = useOrg()
+  const {
+    cycleLabel,
+    isDefaultCycle,
+    range,
+    cycleStart,
+    cycleEnd,
+    setCycleStart,
+    setCycleEnd,
+    resetCycle,
+  } = useCyclePeriod({ notify: true })
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -77,23 +79,14 @@ export function DashboardPage() {
   const [visitorCount, setVisitorCount] = useState(0)
   const [previewRecordIds, setPreviewRecordIds] = useState<string[] | null>(null)
 
-  const cycleLabel = formatCycleLabel(cycleStart, cycleEnd)
-  const isDefaultCycle =
-    cycleStart === defaultCycle.startIso && cycleEnd === defaultCycle.endIso
-
-  const resetCycle = () => {
-    setCycleStart(defaultCycle.startIso)
-    setCycleEnd(defaultCycle.endIso)
-  }
-
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     setLoading(true)
     try {
-      const visitsData = await listVisits(user.uid, isAdmin, role)
+      const visitsData = await listVisits(activeOrgId, user.uid, isPlatformAdmin, role)
       const [tasksData, financeData] = await Promise.all([
-        listPendingTasks(user.uid, isAdmin, role, visitsData),
-        listFinanceItemsByOwner(user.uid, isAdmin, role, visitsData),
+        listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
+        listFinanceItemsByOwner(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
       ])
       setVisits(visitsData)
       setTasks(tasksData.slice(0, 8))
@@ -104,17 +97,17 @@ export function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isPlatformAdmin, role])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const cycleVisits = useMemo(() => {
-    const start = cycleStart <= cycleEnd ? cycleStart : cycleEnd
-    const end = cycleStart <= cycleEnd ? cycleEnd : cycleStart
-    return visits.filter((v) => v.startDate >= start && v.startDate <= end)
-  }, [visits, cycleStart, cycleEnd])
+    return visits.filter(
+      (v) => v.startDate >= range.startIso && v.startDate <= range.endIso,
+    )
+  }, [visits, range.endIso, range.startIso])
 
   const cycleSpend = useMemo(() => {
     const ids = new Set(cycleVisits.map((v) => v.id))
@@ -132,7 +125,7 @@ export function DashboardPage() {
     void (async () => {
       try {
         const links = await Promise.all(
-          cycleVisits.map((v) => listVisitVisitors(v.id, user.uid, isAdmin)),
+          cycleVisits.map((v) => listVisitVisitors(v.id, user.uid, isPlatformAdmin)),
         )
         if (!cancelled) {
           setVisitorCount(new Set(links.flat().map((l) => l.visitorId)).size)
@@ -145,7 +138,7 @@ export function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [cycleVisits, user, isAdmin])
+  }, [cycleVisits, user, isPlatformAdmin])
 
   const planningVisits = cycleVisits.filter((v) => v.status === 'planejamento')
   const ongoingVisits = cycleVisits.filter((v) => v.status === 'em_andamento')
@@ -217,45 +210,15 @@ export function DashboardPage() {
         title="Dashboard"
         description={`Visão geral das operações · Ciclo ${cycleLabel}`}
         actions={
-          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-            <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-3 shadow-[0_1px_2px_rgba(15,47,42,0.03)] sm:flex-row sm:items-end">
-              <div className="space-y-1.5">
-                <Label htmlFor="cycle-start" className="text-xs text-muted-foreground">
-                  Início do ciclo
-                </Label>
-                <Input
-                  id="cycle-start"
-                  type="date"
-                  value={cycleStart}
-                  onChange={(e) => setCycleStart(e.target.value)}
-                  className="w-full sm:w-44"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cycle-end" className="text-xs text-muted-foreground">
-                  Fim do ciclo
-                </Label>
-                <Input
-                  id="cycle-end"
-                  type="date"
-                  value={cycleEnd}
-                  onChange={(e) => setCycleEnd(e.target.value)}
-                  className="w-full sm:w-44"
-                />
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="h-auto justify-end px-0 text-muted-foreground"
-              onClick={resetCycle}
-              disabled={isDefaultCycle}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Resetar ciclo
-            </Button>
-          </div>
+          <CyclePeriodFields
+            className="sm:w-auto sm:items-end"
+            cycleStart={cycleStart}
+            cycleEnd={cycleEnd}
+            isDefaultCycle={isDefaultCycle}
+            onStartChange={setCycleStart}
+            onEndChange={setCycleEnd}
+            onReset={resetCycle}
+          />
         }
       />
 

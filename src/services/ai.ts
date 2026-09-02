@@ -43,6 +43,12 @@ export interface DraftResult {
   provider: AiProviderLabel
 }
 
+export interface AiStatusResult {
+  provider: AiProviderLabel
+  configured: boolean
+  model: string | null
+}
+
 const callAsk = httpsCallable<
   { message: string; route?: string; history?: HelpChatMessage[] },
   AskHelpResult
@@ -67,6 +73,8 @@ const callDraft = httpsCallable<
   { kind: DraftKind; visitContext: VisitDraftContext; tone?: string },
   DraftResult
 >(functions, 'draftCommunication')
+
+const callAiStatus = httpsCallable<Record<string, never>, AiStatusResult>(functions, 'getAiStatus')
 
 function messageOf(error: unknown): string {
   if (error instanceof FirebaseError) return error.message
@@ -110,6 +118,19 @@ export async function mapProgrammingImportWithAi(input: {
     }
   } catch (error) {
     throw new Error(messageOf(error))
+  }
+}
+
+export async function getAiStatus(): Promise<AiStatusResult> {
+  try {
+    const { data } = await callAiStatus({})
+    return {
+      provider: data.provider ?? 'mock',
+      configured: Boolean(data.configured),
+      model: data.model ?? null,
+    }
+  } catch {
+    return { provider: 'mock', configured: false, model: null }
   }
 }
 

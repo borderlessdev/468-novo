@@ -42,6 +42,7 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
       : [],
     isTemplate: data.isTemplate === true,
     ownerId: String(data.ownerId ?? ''),
+    orgId: String(data.orgId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
     deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
@@ -49,13 +50,6 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
-}
-
-function mergeVisits(visits: Visit[]): Visit[] {
-  const byId = new Map(visits.map((visit) => [visit.id, visit]))
-  return Array.from(byId.values()).sort((a, b) =>
-    b.startDate.localeCompare(a.startDate),
-  )
 }
 
 export async function getVisit(id: string): Promise<Visit | null> {
@@ -67,59 +61,14 @@ export async function getVisit(id: string): Promise<Visit | null> {
 }
 
 export async function listVisits(
-  uid: string,
-  isAdmin: boolean,
-  role: UserRole = 'user',
+  orgId: string,
+  _uid: string,
+  _isPlatformAdmin: boolean,
+  _role: UserRole = 'user',
 ): Promise<Visit[]> {
-  if (isAdmin) {
-    const snap = await getDocs(query(visitsCol, orderBy('startDate', 'desc')))
-    return snap.docs
-      .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
-      .map((d) => mapVisit(d.id, d.data()))
-  }
-
-  if (role === 'client') {
-    const snap = await getDocs(
-      query(
-        visitsCol,
-        where('clientUserIds', 'array-contains', uid),
-        orderBy('startDate', 'desc'),
-      ),
-    )
-    return snap.docs
-      .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
-      .map((d) => mapVisit(d.id, d.data()))
-  }
-
-  if (role === 'team') {
-    const [ownedSnap, teamSnap] = await Promise.all([
-      getDocs(
-        query(
-          visitsCol,
-          where('ownerId', '==', uid),
-          orderBy('startDate', 'desc'),
-        ),
-      ),
-      getDocs(
-        query(
-          visitsCol,
-          where('teamMemberIds', 'array-contains', uid),
-          orderBy('startDate', 'desc'),
-        ),
-      ),
-    ])
-    return mergeVisits([
-      ...ownedSnap.docs
-        .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
-        .map((d) => mapVisit(d.id, d.data())),
-      ...teamSnap.docs
-        .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
-        .map((d) => mapVisit(d.id, d.data())),
-    ])
-  }
-
+  if (!orgId) return []
   const snap = await getDocs(
-    query(visitsCol, where('ownerId', '==', uid), orderBy('startDate', 'desc')),
+    query(visitsCol, where('orgId', '==', orgId), orderBy('startDate', 'desc')),
   )
   return snap.docs
     .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
@@ -127,14 +76,21 @@ export async function listVisits(
 }
 
 export async function listVisitTemplates(
+  orgId: string,
   uid: string,
-  isAdmin: boolean,
+  isPlatformAdmin: boolean,
 ): Promise<Visit[]> {
+  if (!orgId) return []
   const snap = await getDocs(
-    isAdmin
-      ? query(visitsCol, where('isTemplate', '==', true))
+    isPlatformAdmin
+      ? query(
+          visitsCol,
+          where('orgId', '==', orgId),
+          where('isTemplate', '==', true),
+        )
       : query(
           visitsCol,
+          where('orgId', '==', orgId),
           where('ownerId', '==', uid),
           where('isTemplate', '==', true),
         ),
@@ -147,10 +103,12 @@ export async function listVisitTemplates(
 
 export async function createVisit(
   ownerId: string,
+  orgId: string,
   data: Omit<
     Visit,
     | 'id'
     | 'ownerId'
+    | 'orgId'
     | 'createdAt'
     | 'updatedAt'
     | 'progress'
@@ -182,6 +140,7 @@ export async function createVisit(
     clientUserIds: data.clientUserIds ?? [],
     isTemplate: data.isTemplate === true,
     ownerId,
+    orgId,
     isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -191,7 +150,7 @@ export async function createVisit(
 
 export async function updateVisit(
   id: string,
-  data: Partial<Omit<Visit, 'id' | 'ownerId' | 'createdAt'>>,
+  data: Partial<Omit<Visit, 'id' | 'ownerId' | 'orgId' | 'createdAt'>>,
 ): Promise<void> {
   await updateDoc(doc(visitsCol, id), {
     ...data,

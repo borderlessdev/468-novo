@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { activitySchema, type ActivityInput } from '@/lib/validations'
 import { activitiesOverlap, formatDate } from '@/lib/utils'
 import { parseProgrammingWorkbook, workbookToCsvForAi, type ImportedActivity } from '@/lib/programmingImport'
@@ -51,6 +52,7 @@ import type { Activity, Visit } from '@/types'
 
 export function AgendaPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
+  const { activeOrgId } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
@@ -93,16 +95,16 @@ export function AgendaPage() {
   })
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     void (async () => {
       setLoading(true)
       try {
-        setVisits(await listVisits(user.uid, isAdmin, role))
+        setVisits(await listVisits(activeOrgId, user.uid, isAdmin, role))
       } finally {
         setLoading(false)
       }
     })()
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isAdmin, role])
 
   useEffect(() => {
     if (!user || !canWrite) {

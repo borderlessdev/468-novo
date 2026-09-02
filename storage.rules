@@ -10,6 +10,19 @@ service firebase.storage {
       return isSignedIn() && request.auth.token.admin == true;
     }
 
+    function isPlatformAdmin() {
+      return isAdmin()
+        || (isSignedIn() && request.auth.token.platformAdmin == true);
+    }
+
+    function userOrgId() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.orgId;
+    }
+
+    function canAccessOrg(orgId) {
+      return isPlatformAdmin() || (isSignedIn() && userOrgId() == orgId);
+    }
+
     function visitDoc(visitId) {
       return firestore.get(/databases/(default)/documents/visits/$(visitId));
     }
@@ -24,17 +37,12 @@ service firebase.storage {
 
     function canReadVisit(visitId) {
       let visit = visitData(visitId);
-      return isAdmin()
-        || visit.ownerId == request.auth.uid
-        || request.auth.uid in memberIds(visit.teamMemberIds)
-        || request.auth.uid in memberIds(visit.clientUserIds);
+      return canAccessOrg(visit.orgId);
     }
 
     function canWriteVisit(visitId) {
       let visit = visitData(visitId);
-      return isAdmin()
-        || visit.ownerId == request.auth.uid
-        || request.auth.uid in memberIds(visit.teamMemberIds);
+      return canAccessOrg(visit.orgId);
     }
 
     function isImage() {

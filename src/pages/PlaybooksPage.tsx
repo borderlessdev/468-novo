@@ -32,6 +32,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import {
   DOCUMENT_CATEGORIES,
   PLAYBOOK_ITEM_KINDS,
@@ -93,7 +94,8 @@ function formatOffset(days: number) {
 }
 
 export function PlaybooksPage() {
-  const { user, isAdmin, canWrite, isClient } = useAuth()
+  const { user, canWrite, isClient } = useAuth()
+  const { activeOrgId } = useOrg()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
@@ -104,17 +106,17 @@ export function PlaybooksPage() {
   const deleteDialog = useConfirmDelete<Playbook>()
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     setLoading(true)
     try {
-      setPlaybooks(await listPlaybooks(user.uid, isAdmin))
+      setPlaybooks(await listPlaybooks(activeOrgId))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar playbooks')
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin])
+  }, [user, activeOrgId])
 
   useEffect(() => {
     void load()
@@ -184,6 +186,8 @@ export function PlaybooksPage() {
       return
     }
 
+    if (!user || !activeOrgId) return
+
     setSaving(true)
     try {
       const payload = {
@@ -199,7 +203,7 @@ export function PlaybooksPage() {
         await updatePlaybook(editing.id, payload)
         toast.success('Playbook atualizado')
       } else {
-        await createPlaybook(user.uid, payload)
+        await createPlaybook(user.uid, activeOrgId, payload)
         toast.success('Playbook criado')
       }
       setEditorOpen(false)

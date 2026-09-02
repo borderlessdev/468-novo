@@ -49,16 +49,17 @@ export async function linkVisitorToVisit(
 
 export async function listVisitIdsForVisitor(
   visitorId: string,
+  orgId: string,
   ownerId: string,
-  isAdmin: boolean,
+  isPlatformAdmin: boolean,
   role: UserRole = 'user',
 ): Promise<string[]> {
-  const visits = await listVisits(ownerId, isAdmin, role)
+  const visits = await listVisits(orgId, ownerId, isPlatformAdmin, role)
   const visitIds: string[] = []
 
   await Promise.all(
     visits.map(async (visit) => {
-      const links = await listVisitVisitors(visit.id, visit.ownerId, isAdmin)
+      const links = await listVisitVisitors(visit.id, visit.ownerId, isPlatformAdmin)
       if (links.some((link) => link.visitorId === visitorId)) {
         visitIds.push(visit.id)
       }

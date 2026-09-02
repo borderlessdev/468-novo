@@ -25,6 +25,32 @@ export interface TrashItem {
 
 export type UserRole = 'user' | 'team' | 'client' | 'admin'
 
+export type OrganizationStatus = 'active' | 'suspended'
+
+export type OrgRole = 'org_admin' | 'user' | 'team' | 'client'
+
+export interface Organization {
+  id: string
+  name: string
+  maxUsers: number
+  status: OrganizationStatus
+  createdBy: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+export interface OrganizationMember {
+  id: string
+  orgId: string
+  uid: string
+  email: string
+  name: string
+  orgRole: OrgRole
+  department?: string
+  invitedBy?: string
+  joinedAt?: unknown
+}
+
 export interface ModulePermissions {
   visitors: boolean
   planning: boolean
@@ -76,6 +102,8 @@ export interface UserProfile {
   /** Caminho no Storage para limpar a foto anterior no upload. */
   photoStoragePath?: string
   role: UserRole
+  /** Empresa à qual o usuário pertence (usuários comuns). */
+  orgId?: string
   notificationPreferences?: Partial<NotificationPreferences>
   modulePermissions?: Partial<ModulePermissions>
   createdAt?: unknown
@@ -101,6 +129,7 @@ export interface Visit extends SoftDeletable {
   clientUserIds: string[]
   isTemplate?: boolean
   ownerId: string
+  orgId: string
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -140,6 +169,7 @@ export interface Visitor extends SoftDeletable {
   notes?: string
   gifts?: VisitorGift[]
   ownerId: string
+  orgId: string
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -244,6 +274,7 @@ export interface Playbook {
   visitType: string
   items: PlaybookItem[]
   ownerId: string
+  orgId: string
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -324,7 +355,7 @@ export interface ActivityLog {
   createdAt?: unknown
 }
 
-export type InviteRole = 'team' | 'client'
+export type InviteRole = 'team' | 'client' | 'user' | 'org_admin'
 export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'cancelled'
 
 export interface Invite {
@@ -334,6 +365,8 @@ export interface Invite {
   token: string
   status: InviteStatus
   createdBy: string
+  orgId: string
+  department?: string
   visitId?: string
   expiresAt: string
   createdAt?: unknown

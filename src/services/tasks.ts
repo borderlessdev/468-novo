@@ -75,16 +75,17 @@ function sortPendingTasks(tasks: Task[]): Task[] {
 }
 
 export async function listPendingTasks(
+  orgId: string,
   userId: string,
-  isAdmin: boolean,
+  isPlatformAdmin: boolean,
   role: UserRole = 'user',
   visits?: Visit[],
 ): Promise<Task[]> {
-  const visitList = visits ?? (await listVisits(userId, isAdmin, role))
+  const visitList = visits ?? (await listVisits(orgId, userId, isPlatformAdmin, role))
   if (visitList.length === 0) return []
 
   const tasksPerVisit = await Promise.all(
-    visitList.map((visit) => listTasks(visit.id, visit.ownerId, isAdmin)),
+    visitList.map((visit) => listTasks(visit.id, visit.ownerId, isPlatformAdmin)),
   )
 
   return sortPendingTasks(

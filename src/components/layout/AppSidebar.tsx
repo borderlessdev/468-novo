@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
+  Building2,
   Calendar,
   CircleHelp,
   ClipboardList,
@@ -156,6 +157,28 @@ export function AppSidebar({
         </div>
 
         <nav className="scrollbar-thin space-y-1 overflow-y-auto px-2.5 py-4">
+          {isAdmin ? (
+            <NavLink
+              to="/empresas"
+              onClick={() => {
+                if (collapsed) onExpand()
+                onClose()
+              }}
+              className={({ isActive }) =>
+                cn(
+                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                  collapsed && 'justify-center px-2',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                )
+              }
+              title="Empresas"
+            >
+              <Building2 className="h-4 w-4 shrink-0" />
+              {!collapsed ? <span className="truncate">Empresas</span> : null}
+            </NavLink>
+          ) : null}
           {NAV_ITEMS
             .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
             .map((item) => {

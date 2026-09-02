@@ -92,16 +92,17 @@ export async function listFinanceItems(
 }
 
 export async function listFinanceItemsByOwner(
+  orgId: string,
   ownerId: string,
-  isAdmin: boolean,
+  isPlatformAdmin: boolean,
   role: UserRole = 'user',
   visits?: Visit[],
 ): Promise<FinanceItem[]> {
-  const visitList = visits ?? (await listVisits(ownerId, isAdmin, role))
+  const visitList = visits ?? (await listVisits(orgId, ownerId, isPlatformAdmin, role))
   if (visitList.length === 0) return []
 
   const itemsPerVisit = await Promise.all(
-    visitList.map((visit) => listFinanceItems(visit.id, visit.ownerId, isAdmin)),
+    visitList.map((visit) => listFinanceItems(visit.id, visit.ownerId, isPlatformAdmin)),
   )
 
   return itemsPerVisit.flat()

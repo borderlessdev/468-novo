@@ -82,8 +82,9 @@ async function mapPool<T>(
  * Só roda com o app aberto (chamado pelo AppShell) — sem Cloud Functions.
  */
 export async function scanDueReminders(
+  orgId: string,
   userId: string,
-  isAdmin: boolean,
+  isPlatformAdmin: boolean,
   role: UserRole,
 ): Promise<void> {
   if (shouldSkipScan(userId)) return
@@ -91,25 +92,25 @@ export async function scanDueReminders(
   try {
     const isClient = role === 'client'
     const today = todayIso()
-    const visits = await listVisits(userId, isAdmin, role)
+    const visits = await listVisits(orgId, userId, isPlatformAdmin, role)
     const visitMap = new Map(visits.map((v) => [v.id, v]))
 
     const [tasks, financeItems, preferences, knownDedupeKeys, pendingDocs] =
       await Promise.all([
-        listPendingTasks(userId, isAdmin, role, visits),
+        listPendingTasks(orgId, userId, isPlatformAdmin, role, visits),
         isClient
           ? Promise.resolve([])
-          : listFinanceItemsByOwner(userId, isAdmin, role, visits),
+          : listFinanceItemsByOwner(orgId, userId, isPlatformAdmin, role, visits),
         getUserNotificationPreferences(userId),
         listRecentDedupeKeys(userId),
-        collectPendingDocuments(visits, isAdmin),
+        collectPendingDocuments(visits, isPlatformAdmin),
       ])
 
     const [activitiesByVisit, linksByVisit] = await Promise.all([
       Promise.all(
         visits.map(async (visit) => ({
           visit,
-          activities: await listActivities(visit.id, visit.ownerId, isAdmin),
+          activities: await listActivities(visit.id, visit.ownerId, isPlatformAdmin),
         })),
       ),
       isClient

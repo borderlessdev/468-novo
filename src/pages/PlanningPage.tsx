@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { taskSchema, type TaskInput } from '@/lib/validations'
 import { formatDateShort } from '@/lib/utils'
 import { calculateVisitProgress } from '@/lib/utils'
@@ -179,6 +180,7 @@ function KanbanColumn({
 
 export function PlanningPage() {
   const { user, isAdmin, role, canWrite, profile } = useAuth()
+  const { activeOrgId } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -221,16 +223,16 @@ export function PlanningPage() {
   )
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     void (async () => {
       setLoading(true)
       try {
-        setVisits(await listVisits(user.uid, isAdmin, role))
+        setVisits(await listVisits(activeOrgId, user.uid, isAdmin, role))
       } finally {
         setLoading(false)
       }
     })()
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isAdmin, role])
 
   const loadTasks = useCallback(async () => {
     if (!visitId || !user) {

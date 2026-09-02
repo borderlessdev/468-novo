@@ -20,7 +20,9 @@ import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
 import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
-import { acceptInvite } from '@/services/invites'
+import { acceptInvite, getInviteById } from '@/services/invites'
+import { addOrganizationMember } from '@/services/organizations'
+import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import type { UserProfile, UserRole } from '@/types'
 import type { NotificationPreferences } from '@/lib/notificationPreferences'
 import { getAuthErrorMessage } from '@/lib/utils'
@@ -30,6 +32,7 @@ interface AuthContextValue {
   profile: UserProfile | null
   loading: boolean
   isAdmin: boolean
+  isPlatformAdmin: boolean
   role: UserRole
   isClient: boolean
   canWrite: boolean
@@ -38,7 +41,13 @@ interface AuthContextValue {
     name: string,
     email: string,
     password: string,
-    options?: { role?: UserRole; inviteId?: string },
+    options?: {
+      role?: UserRole
+      inviteId?: string
+      orgId?: string
+      orgRole?: import('@/types').OrgRole
+      department?: string
+    },
   ) => Promise<void>
   logout: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
@@ -58,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
 
   const loadProfile = useCallback(async (firebaseUser: User) => {
     let userProfile = await getUserProfile(firebaseUser.uid)
@@ -73,8 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(userProfile)
 
     const token = await firebaseUser.getIdTokenResult(true)
-    // Fonte de verdade: só Custom Claim. Nunca confiar em users.role para queries privilegiadas.
-    setIsAdmin(token.claims.admin === true)
+    const platformAdmin =
+      token.claims.admin === true || token.claims.platformAdmin === true
+    setIsPlatformAdmin(platformAdmin)
+    setIsAdmin(platformAdmin)
   }, [])
 
   useEffect(() => {
@@ -92,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error(error)
             setProfile(null)
             setIsAdmin(false)
+            setIsPlatformAdmin(false)
           }
         } else {
           setProfile(null)
@@ -117,17 +130,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: string,
       email: string,
       password: string,
-      options?: { role?: UserRole; inviteId?: string },
+      options?: {
+        role?: UserRole
+        inviteId?: string
+        orgId?: string
+        orgRole?: import('@/types').OrgRole
+        department?: string
+      },
     ) => {
       try {
         const credential = await createUserWithEmailAndPassword(auth, email, password)
         await updateProfile(credential.user, { displayName: name })
+        let orgId = options?.orgId
+        let orgRole = options?.orgRole
+        let department = options?.department
+        let role = options?.role ?? 'user'
+
+        if (options?.inviteId) {
+          const invite = await getInviteById(options.inviteId)
+          if (invite) {
+            orgId = invite.orgId
+            orgRole = inviteRoleToOrgRole(invite.role)
+            department = invite.department
+            role = inviteRoleToUserRole(invite.role)
+          }
+        }
+
         await createUserProfile({
           uid: credential.user.uid,
           name,
           email,
-          role: options?.role ?? 'user',
+          role,
+          orgId,
         })
+
+        if (orgId && orgRole) {
+          await addOrganizationMember({
+            orgId,
+            uid: credential.user.uid,
+            email,
+            name,
+            orgRole,
+            department,
+          })
+        }
+
         if (options?.inviteId) {
           await acceptInvite(options.inviteId, credential.user.uid)
         }
@@ -216,9 +263,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProfile, user],
   )
 
-  const role: UserRole = isAdmin ? 'admin' : (profile?.role ?? 'user')
+  const role: UserRole = isPlatformAdmin ? 'admin' : (profile?.role ?? 'user')
   const isClient = role === 'client'
-  const canWrite = canWriteOperations(role, isAdmin)
+  const canWrite = canWriteOperations(role, isPlatformAdmin)
 
   const value = useMemo(
     () => ({
@@ -226,6 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       isAdmin,
+      isPlatformAdmin,
       role,
       isClient,
       canWrite,
@@ -244,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       isAdmin,
+      isPlatformAdmin,
       role,
       isClient,
       canWrite,

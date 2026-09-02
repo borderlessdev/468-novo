@@ -110,18 +110,15 @@ function mapPlaybook(id: string, data: Record<string, unknown>): Playbook {
     visitType: String(data.visitType ?? ''),
     items,
     ownerId: String(data.ownerId ?? ''),
+    orgId: String(data.orgId ?? ''),
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
 }
 
-export async function listPlaybooks(
-  ownerId: string,
-  isAdmin: boolean,
-): Promise<Playbook[]> {
-  const snap = await getDocs(
-    isAdmin ? col : query(col, where('ownerId', '==', ownerId)),
-  )
+export async function listPlaybooks(orgId: string): Promise<Playbook[]> {
+  if (!orgId) return []
+  const snap = await getDocs(query(col, where('orgId', '==', orgId)))
   return snap.docs
     .map((d) => mapPlaybook(d.id, d.data()))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
@@ -135,7 +132,8 @@ export async function getPlaybook(id: string): Promise<Playbook | null> {
 
 export async function createPlaybook(
   ownerId: string,
-  data: Omit<Playbook, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>,
+  orgId: string,
+  data: Omit<Playbook, 'id' | 'ownerId' | 'orgId' | 'createdAt' | 'updatedAt'>,
 ): Promise<string> {
   const ref = await addDoc(col, {
     name: data.name,
@@ -143,6 +141,7 @@ export async function createPlaybook(
     visitType: data.visitType,
     items: serializeItems(data.items),
     ownerId,
+    orgId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })

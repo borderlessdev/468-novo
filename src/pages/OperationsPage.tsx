@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import {
   financePendingTags,
   type FinancePendingTag,
@@ -44,7 +45,8 @@ type FinancePendingRow = {
 }
 
 export function OperationsPage() {
-  const { user, isAdmin, role, isClient } = useAuth()
+  const { user, isPlatformAdmin, role, isClient } = useAuth()
+  const { activeOrgId } = useOrg()
   const [loading, setLoading] = useState(true)
   const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
   const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([])
@@ -53,16 +55,16 @@ export function OperationsPage() {
   const [visitsById, setVisitsById] = useState<Map<string, Visit>>(new Map())
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     setLoading(true)
     try {
       const today = todayIso()
-      const visits = await listVisits(user.uid, isAdmin, role)
+      const visits = await listVisits(activeOrgId, user.uid, isPlatformAdmin, role)
       const [tasks, finance] = await Promise.all([
-        listPendingTasks(user.uid, isAdmin, role, visits),
+        listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visits),
         isClient
           ? Promise.resolve([] as FinanceItem[])
-          : listFinanceItemsByOwner(user.uid, isAdmin, role, visits),
+          : listFinanceItemsByOwner(activeOrgId, user.uid, isPlatformAdmin, role, visits),
       ])
       setVisitsById(new Map(visits.map((visit) => [visit.id, visit])))
       setOverdueTasks(tasks.filter((task) => isOverdueTask(task, today)))
@@ -71,7 +73,7 @@ export function OperationsPage() {
           .filter((visit) => isUpcomingVisit(visit, today, 7))
           .sort((a, b) => a.startDate.localeCompare(b.startDate)),
       )
-      setPendingDocs(await collectPendingDocuments(visits, isAdmin))
+      setPendingDocs(await collectPendingDocuments(visits, isPlatformAdmin))
       setFinancePending(
         finance
           .map((item) => ({ item, tags: financePendingTags(item, today) }))
@@ -83,7 +85,7 @@ export function OperationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin, role, isClient])
+  }, [user, activeOrgId, isPlatformAdmin, role, isClient])
 
   useEffect(() => {
     void load()

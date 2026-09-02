@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { useVisitDialog } from '@/contexts/VisitDialogContext'
 import { BRAZILIAN_STATES } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
@@ -40,7 +41,8 @@ function dateValue(value: string, endOfDay = false) {
 }
 
 export function VisitsPage() {
-  const { user, isAdmin, role, canWrite } = useAuth()
+  const { user, isPlatformAdmin, role, canWrite } = useAuth()
+  const { activeOrgId } = useOrg()
   const { setOpen } = useVisitDialog()
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
@@ -59,16 +61,16 @@ export function VisitsPage() {
   }
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     setLoading(true)
     try {
-      setVisits(await listVisits(user.uid, isAdmin, role))
+      setVisits(await listVisits(activeOrgId, user.uid, isPlatformAdmin, role))
     } catch (error) {
       console.error(error)
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isPlatformAdmin, role])
 
   useEffect(() => {
     void load()

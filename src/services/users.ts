@@ -43,6 +43,7 @@ export async function createUserProfile(input: {
   email: string
   photoURL?: string
   role?: UserRole
+  orgId?: string
 }): Promise<void> {
   await setDoc(doc(usersCol, input.uid), {
     uid: input.uid,
@@ -50,6 +51,7 @@ export async function createUserProfile(input: {
     email: input.email,
     photoURL: input.photoURL ?? null,
     role: input.role ?? 'user',
+    orgId: input.orgId ?? null,
     modulePermissions: mergeModulePermissions(null),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -67,6 +69,7 @@ export async function updateUserProfile(
       | 'notificationPreferences'
       | 'modulePermissions'
       | 'role'
+      | 'orgId'
     >
   >,
 ): Promise<void> {

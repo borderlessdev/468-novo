@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { canApproveFinance } from '@/lib/access'
 import { financeItemSchema, type FinanceItemInput } from '@/lib/validations'
 import {
@@ -384,6 +385,7 @@ function FinanceFiles({
 
 export function FinancePage() {
   const { user, isAdmin, role, canWrite, profile } = useAuth()
+  const { activeOrgId } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [items, setItems] = useState<FinanceItem[]>([])
@@ -427,16 +429,16 @@ export function FinancePage() {
   })
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     void (async () => {
       setLoading(true)
       try {
-        setVisits(await listVisits(user.uid, isAdmin, role))
+        setVisits(await listVisits(activeOrgId, user.uid, isAdmin, role))
       } finally {
         setLoading(false)
       }
     })()
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isAdmin, role])
 
   const loadItems = useCallback(async () => {
     if (!visitId || !user) {

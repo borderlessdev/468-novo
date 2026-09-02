@@ -26,6 +26,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
+import { canManageOrgUsers } from '@/lib/access'
+import { orgRoleLabel } from '@/lib/org'
 import { useTheme, type Theme } from '@/contexts/ThemeContext'
 import { mergeModulePermissions } from '@/lib/access'
 import {
@@ -42,12 +45,17 @@ import {
   type CalendarStatuses,
 } from '@/services/calendar'
 import { createInvite } from '@/services/invites'
+import {
+  countOrganizationSeats,
+  countPendingInvites,
+  listOrganizationMembers,
+} from '@/services/organizations'
 import { listEmailLogs } from '@/services/emailLogs'
 import {
   listUsers,
   updateUserModulePermissions,
 } from '@/services/users'
-import type { EmailLog, ModulePermissions, UserProfile } from '@/types'
+import type { EmailLog, InviteRole, ModulePermissions, OrganizationMember, UserProfile } from '@/types'
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Claro', icon: Sun },
@@ -109,13 +117,16 @@ export function SettingsPage() {
     resetPassword,
     isClient,
     isAdmin,
-    canWrite,
     user,
   } = useAuth()
+  const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
   const { theme, setTheme } = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'team' | 'client'>('team')
+  const [inviteRole, setInviteRole] = useState<InviteRole>('team')
+  const [inviteDepartment, setInviteDepartment] = useState('')
+  const [orgMembers, setOrgMembers] = useState<OrganizationMember[]>([])
+  const [seatUsage, setSeatUsage] = useState({ members: 0, pending: 0 })
   const [inviting, setInviting] = useState(false)
   const [lastInviteLink, setLastInviteLink] = useState('')
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -142,6 +153,18 @@ export function SettingsPage() {
     }
     void listEmailLogs(user.uid, isAdmin).then(setEmailLogs).catch(console.error)
   }, [user, isAdmin])
+
+  useEffect(() => {
+    if (!user || !activeOrgId || !canManageOrgUsers(isAdmin, isOrgAdmin)) return
+    void Promise.all([
+      listOrganizationMembers(activeOrgId),
+      countOrganizationSeats(activeOrgId),
+      countPendingInvites(activeOrgId),
+    ]).then(([members, membersCount, pendingCount]) => {
+      setOrgMembers(members)
+      setSeatUsage({ members: membersCount, pending: pendingCount })
+    })
+  }, [user, activeOrgId, isAdmin, isOrgAdmin, lastInviteLink])
 
   // As credenciais GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET moram em functions/.env
   // (ou no Secret Manager). Sem elas as callables respondem erro tratado e o card
@@ -204,13 +227,15 @@ export function SettingsPage() {
   }
 
   const handleInvite = async () => {
-    if (!user || !inviteEmail.trim()) return
+    if (!user || !activeOrgId || !inviteEmail.trim()) return
     setInviting(true)
     try {
       const created = await createInvite({
         email: inviteEmail,
         role: inviteRole,
         createdBy: user.uid,
+        orgId: activeOrgId,
+        department: inviteDepartment.trim() || undefined,
       })
       setLastInviteLink(created.link)
       toast.success(
@@ -219,6 +244,7 @@ export function SettingsPage() {
           : 'Convite criado — copie o link abaixo',
       )
       setInviteEmail('')
+      setInviteDepartment('')
       setEmailLogs(await listEmailLogs(user.uid, isAdmin))
     } catch (error) {
       console.error(error)
@@ -528,20 +554,44 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {canWrite && !isClient ? (
+      {canManageOrgUsers(isAdmin, isOrgAdmin) && activeOrgId ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              Convidar usuário
+              Usuários da empresa
             </CardTitle>
             <CardDescription>
-              Envia link de cadastro para equipe ou cliente.
+              {activeOrg
+                ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes).`
+                : 'Gerencie convites e membros da empresa.'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            {orgMembers.length > 0 ? (
+              <div className="space-y-2">
+                {orgMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{member.name}</p>
+                      <p className="text-xs text-muted-foreground">{member.email}</p>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {orgRoleLabel(member.orgRole)}
+                      {member.department ? ` · ${member.department}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhum membro cadastrado ainda.</p>
+            )}
+
             <form
-              className="space-y-3"
+              className="space-y-3 border-t pt-4"
               onSubmit={(event) => {
                 event.preventDefault()
                 void handleInvite()
@@ -559,22 +609,46 @@ export function SettingsPage() {
                 placeholder="pessoa@empresa.com"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-role">Perfil</Label>
-              <Select
-                value={inviteRole}
-                onValueChange={(v) => setInviteRole(v as 'team' | 'client')}
-              >
-                <SelectTrigger id="invite-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="team">Equipe</SelectItem>
-                  <SelectItem value="client">Cliente</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="invite-role">Perfil</Label>
+                <Select
+                  value={inviteRole}
+                  onValueChange={(v) => setInviteRole(v as InviteRole)}
+                >
+                  <SelectTrigger id="invite-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(isAdmin || isOrgAdmin) && (
+                      <SelectItem value="org_admin">Admin da empresa</SelectItem>
+                    )}
+                    <SelectItem value="user">Usuário</SelectItem>
+                    <SelectItem value="team">Equipe</SelectItem>
+                    <SelectItem value="client">Cliente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-department">Setor (opcional)</Label>
+                <Input
+                  id="invite-department"
+                  value={inviteDepartment}
+                  onChange={(e) => setInviteDepartment(e.target.value)}
+                  placeholder="Comercial, Eventos..."
+                />
+              </div>
             </div>
-            <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
+            <Button
+              type="submit"
+              disabled={
+                inviting ||
+                !inviteEmail.trim() ||
+                (activeOrg
+                  ? seatUsage.members + seatUsage.pending >= activeOrg.maxUsers
+                  : false)
+              }
+            >
               {inviting ? 'Enviando...' : 'Convidar'}
             </Button>
             {lastInviteLink ? (

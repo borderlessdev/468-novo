@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { askHelpAssistant, type HelpChatMessage } from '@/services/ai'
 
 const STORAGE_KEY = 'pe-help-chat-v1'
-const SYNC_EVENT = 'pe-help-chat-sync'
 
 export const HELP_SUGGESTIONS = [
   'Como registro um compromisso na agenda?',
@@ -46,7 +45,6 @@ function readStored(): StoredHelpMessage[] {
 function writeStored(messages: StoredHelpMessage[]) {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40)))
-    window.dispatchEvent(new CustomEvent(SYNC_EVENT))
   } catch {
     /* ignore quota */
   }
@@ -64,18 +62,13 @@ export function useHelpChat(route?: string) {
   }, [messages])
 
   useEffect(() => {
-    const syncFromStorage = () => setMessages(readStored())
-
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY) syncFromStorage()
+    const syncFromStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return
+      setMessages(readStored())
     }
 
-    window.addEventListener('storage', onStorage)
-    window.addEventListener(SYNC_EVENT, syncFromStorage)
-    return () => {
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener(SYNC_EVENT, syncFromStorage)
-    }
+    window.addEventListener('storage', syncFromStorage)
+    return () => window.removeEventListener('storage', syncFromStorage)
   }, [])
 
   const clear = useCallback(() => {
@@ -91,25 +84,31 @@ export function useHelpChat(route?: string) {
 
       setError(null)
       const userMessage: StoredHelpMessage = { role: 'user', content: message, id: createId() }
-      const nextHistory = [...messages, userMessage]
-      setMessages(nextHistory)
+
+      let historyForApi: HelpChatMessage[] = []
+      setMessages((prev) => {
+        historyForApi = prev.slice(-8).map(({ role, content }) => ({ role, content }))
+        return [...prev, userMessage]
+      })
       setSending(true)
 
       try {
         const { reply } = await askHelpAssistant({
           message,
           route,
-          history: messages.slice(-8).map(({ role, content }) => ({ role, content })),
+          history: historyForApi,
         })
-        setMessages([
-          ...nextHistory,
-          { role: 'assistant', content: reply, id: createId() },
-        ])
+        const assistantMessage: StoredHelpMessage = {
+          role: 'assistant',
+          content: reply,
+          id: createId(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Falha ao consultar o assistente'
         setError(msg)
-        setMessages([
-          ...nextHistory,
+        setMessages((prev) => [
+          ...prev,
           {
             role: 'assistant',
             id: createId(),
@@ -123,7 +122,7 @@ export function useHelpChat(route?: string) {
         setSending(false)
       }
     },
-    [messages, route, sending],
+    [route, sending],
   )
 
   return { messages, sending, error, send, clear }

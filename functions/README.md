@@ -96,7 +96,7 @@ Sem `ANTHROPIC_API_KEY`, as callables respondem em **modo mock** (respostas fixa
 
 | Variável            | Padrão                                      | Descrição                          |
 | ------------------- | ------------------------------------------- | ---------------------------------- |
-| `ANTHROPIC_MODEL`   | `claude-sonnet-4-20250514`                  | Modelo Claude                      |
+| `ANTHROPIC_MODEL`   | `claude-sonnet-4-6`                         | Modelo Claude                      |
 | `ANTHROPIC_BASE_URL`| `https://api.anthropic.com/v1/messages`     | Endpoint da API (proxy customizado)|
 | `AI_PROVIDER`       | `anthropic`                                 | `anthropic`, `openai` ou `mock`    |
 

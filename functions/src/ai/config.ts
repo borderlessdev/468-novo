@@ -12,7 +12,7 @@ export function getAnthropicApiUrl(): string {
 }
 
 export function getAnthropicModel(): string {
-  return process.env.ANTHROPIC_MODEL?.trim() || 'claude-sonnet-4-20250514'
+  return process.env.ANTHROPIC_MODEL?.trim() || 'claude-sonnet-4-6'
 }
 
 export function getOpenAiModel(): string {

@@ -42,6 +42,7 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
       }
     }),
     ownerId: String(data.ownerId ?? ''),
+    orgId: String(data.orgId ?? ''),
     isDeleted: data.isDeleted === true,
     deletedAt: data.deletedAt,
     deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
@@ -68,13 +69,9 @@ export async function getVisitorsByIds(ids: string[]): Promise<Visitor[]> {
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
-export async function listVisitors(
-  ownerId: string,
-  isAdmin: boolean,
-): Promise<Visitor[]> {
-  const snap = await getDocs(
-    isAdmin ? query(visitorsCol) : query(visitorsCol, where('ownerId', '==', ownerId)),
-  )
+export async function listVisitors(orgId: string): Promise<Visitor[]> {
+  if (!orgId) return []
+  const snap = await getDocs(query(visitorsCol, where('orgId', '==', orgId)))
   return snap.docs
     .filter((d) => isActiveRecord(d.data()))
     .map((d) => mapVisitor(d.id, d.data()))
@@ -83,7 +80,8 @@ export async function listVisitors(
 
 export async function createVisitor(
   ownerId: string,
-  data: Omit<Visitor, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>,
+  orgId: string,
+  data: Omit<Visitor, 'id' | 'ownerId' | 'orgId' | 'createdAt' | 'updatedAt'>,
 ): Promise<string> {
   const ref = await addDoc(visitorsCol, {
     name: data.name,
@@ -103,6 +101,7 @@ export async function createVisitor(
       notes: g.notes ?? null,
     })),
     ownerId,
+    orgId,
     isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -112,7 +111,7 @@ export async function createVisitor(
 
 export async function updateVisitor(
   id: string,
-  data: Partial<Omit<Visitor, 'id' | 'ownerId' | 'createdAt'>>,
+  data: Partial<Omit<Visitor, 'id' | 'ownerId' | 'orgId' | 'createdAt'>>,
 ): Promise<void> {
   await updateDoc(doc(visitorsCol, id), {
     ...data,

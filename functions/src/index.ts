@@ -1,3 +1,5 @@
+import './loadEnv'
+
 /**
  * Cloud Functions do Promover Experience — integração com Google Calendar.
  *
@@ -554,4 +556,9 @@ export const outlookCalendarOAuthStart = onCall(async (request) => {
   )
 })
 
-export { askHelpAssistant, mapProgrammingImport, draftCommunication } from './ai/callables'
+export {
+  askHelpAssistant,
+  draftCommunication,
+  getAiStatus,
+  mapProgrammingImport,
+} from './ai/callables'

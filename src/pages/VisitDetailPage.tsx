@@ -52,6 +52,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { canDeleteVisit, canManageVisitAccess, isNavAllowed } from '@/lib/access'
 import { BRAZILIAN_STATES } from '@/lib/constants'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
@@ -134,6 +135,7 @@ export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, isAdmin, role, canWrite, profile } = useAuth()
+  const { activeOrgId } = useOrg()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
@@ -286,10 +288,10 @@ export function VisitDetailPage() {
   }, [id, user, isAdmin, navigate, reset])
 
   const ensureVisitorsCatalog = useCallback(async () => {
-    if (!user || !canWrite || visitorsCatalogLoaded || loadingVisitorsCatalog) return
+    if (!user || !activeOrgId || !canWrite || visitorsCatalogLoaded || loadingVisitorsCatalog) return
     setLoadingVisitorsCatalog(true)
     try {
-      setAllVisitors(await listVisitors(user.uid, isAdmin))
+      setAllVisitors(await listVisitors(activeOrgId))
       setVisitorsCatalogLoaded(true)
     } catch (error) {
       console.error(error)
@@ -297,7 +299,7 @@ export function VisitDetailPage() {
     } finally {
       setLoadingVisitorsCatalog(false)
     }
-  }, [user, canWrite, visitorsCatalogLoaded, loadingVisitorsCatalog, isAdmin])
+  }, [user, activeOrgId, canWrite, visitorsCatalogLoaded, loadingVisitorsCatalog])
 
   useEffect(() => {
     void load()
@@ -599,9 +601,9 @@ export function VisitDetailPage() {
   }
 
   const openPlaybookDialog = async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     try {
-      const items = await listPlaybooks(user.uid, isAdmin)
+      const items = await listPlaybooks(activeOrgId)
       setPlaybooks(items)
       setSelectedPlaybookId(items[0]?.id ?? '')
       setPlaybookOpen(true)

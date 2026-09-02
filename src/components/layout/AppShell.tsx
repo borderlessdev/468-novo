@@ -5,20 +5,22 @@ import { AppHeader } from '@/components/layout/AppHeader'
 import { NewVisitDialog } from '@/features/visits/NewVisitDialog'
 import { HelpWidget } from '@/components/help/HelpWidget'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { VisitDialogProvider } from '@/contexts/VisitDialogContext'
 import { scanDueReminders } from '@/services/notificationReminders'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
-  const { user, role, isAdmin, profile } = useAuth()
+  const { user, role, isPlatformAdmin, profile } = useAuth()
+  const { activeOrgId } = useOrg()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    if (!user) return
-    void scanDueReminders(user.uid, isAdmin, role)
-  }, [user, isAdmin, role])
+    if (!user || !activeOrgId) return
+    void scanDueReminders(activeOrgId, user.uid, isPlatformAdmin, role)
+  }, [activeOrgId, user, isPlatformAdmin, role])
 
   return (
     <VisitDialogProvider>
@@ -36,7 +38,7 @@ export function AppShell() {
           onToggleCollapse={() => setCollapsed((prev) => !prev)}
           onExpand={() => setCollapsed(false)}
           role={role}
-          isAdmin={isAdmin}
+          isAdmin={isPlatformAdmin}
           modulePermissions={profile?.modulePermissions}
         />
         <div

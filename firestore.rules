@@ -10,6 +10,23 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.admin == true;
     }
 
+    function isPlatformAdmin() {
+      return isAdmin()
+        || (isSignedIn() && request.auth.token.platformAdmin == true);
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userOrgId() {
+      return userProfile().orgId;
+    }
+
+    function canAccessOrg(orgId) {
+      return isPlatformAdmin() || (isSignedIn() && userOrgId() == orgId);
+    }
+
     function visitData(visitId) {
       return get(/databases/$(database)/documents/visits/$(visitId)).data;
     }
@@ -20,21 +37,16 @@ service cloud.firestore {
 
     function canReadVisit(visitId) {
       let visit = visitData(visitId);
-      return isAdmin()
-        || visit.ownerId == request.auth.uid
-        || request.auth.uid in memberIds(visit.teamMemberIds)
-        || request.auth.uid in memberIds(visit.clientUserIds);
+      return canAccessOrg(visit.orgId);
     }
 
     function canWriteVisit(visitId) {
       let visit = visitData(visitId);
-      return isAdmin()
-        || visit.ownerId == request.auth.uid
-        || request.auth.uid in memberIds(visit.teamMemberIds);
+      return canAccessOrg(visit.orgId) && !isClientUser();
     }
 
     function ownsOrAdmin() {
-      return isAdmin() || resource.data.ownerId == request.auth.uid;
+      return isPlatformAdmin() || (resource.data.orgId is string && canAccessOrg(resource.data.orgId));
     }
 
     function creatingOwnDoc() {
@@ -87,9 +99,7 @@ service cloud.firestore {
     }
 
     function canWriteChild() {
-      return isAdmin()
-        || resource.data.ownerId == request.auth.uid
-        || canWriteVisit(resource.data.visitId);
+      return canWriteVisit(resource.data.visitId);
     }
 
     function canCreateChild() {
@@ -106,6 +116,31 @@ service cloud.firestore {
         && request.time < link.expiresAtTs;
     }
 
+    match /organizations/{orgId} {
+      allow get: if isSignedIn();
+      allow list: if isPlatformAdmin();
+      allow create: if isPlatformAdmin()
+        && request.resource.data.name is string
+        && request.resource.data.maxUsers is number
+        && request.resource.data.status in ['active', 'suspended'];
+      allow update, delete: if isPlatformAdmin();
+    }
+
+    match /organizationMembers/{memberId} {
+      allow get: if isSignedIn()
+        && (isPlatformAdmin() || resource.data.uid == request.auth.uid || canAccessOrg(resource.data.orgId));
+      allow list: if isSignedIn()
+        && (isPlatformAdmin() || (resource.data.orgId is string && canAccessOrg(resource.data.orgId)));
+      allow create: if isSignedIn()
+        && request.resource.data.orgId is string
+        && request.resource.data.uid is string
+        && request.resource.data.email is string
+        && request.resource.data.name is string
+        && request.resource.data.orgRole in ['org_admin', 'user', 'team', 'client']
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isPlatformAdmin();
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list: if isAdmin();
@@ -115,7 +150,8 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.name is string
-        && request.resource.data.role in ['user', 'team', 'client'];
+        && request.resource.data.role in ['user', 'team', 'client']
+        && (!('orgId' in request.resource.data) || request.resource.data.orgId is string);
 
       allow update: if isSignedIn()
         && (
@@ -131,36 +167,36 @@ service cloud.firestore {
     }
 
     match /visits/{visitId} {
-      allow read: if isAdmin()
-        || resource.data.ownerId == request.auth.uid
-        || request.auth.uid in resource.data.teamMemberIds
-        || request.auth.uid in resource.data.clientUserIds;
+      allow read: if canAccessOrg(resource.data.orgId);
 
       allow create: if creatingOwnDoc()
+        && request.resource.data.orgId is string
+        && canAccessOrg(request.resource.data.orgId)
+        && !isClientUser()
         && request.resource.data.title is string
         && request.resource.data.startDate is string
         && request.resource.data.endDate is string
         && validVisitStatus(request.resource.data.status);
 
-      allow update: if isAdmin()
-        || (resource.data.ownerId == request.auth.uid && unchangedOwnerId() && (
-          !isCurrentlyDeleted() || isRestoreUpdate()
-        ))
-        || (request.auth.uid in resource.data.teamMemberIds && unchangedOwnerId() && (
-          !isCurrentlyDeleted() || isRestoreUpdate()
-        ))
-        || (resource.data.ownerId == request.auth.uid && canTrashUpdate())
-        || (request.auth.uid in resource.data.teamMemberIds && canTrashUpdate());
+      allow update: if canAccessOrg(resource.data.orgId)
+        && !isClientUser()
+        && unchangedOwnerId()
+        && (
+          !isCurrentlyDeleted() || isRestoreUpdate() || canTrashUpdate()
+        );
 
-      allow delete: if isAdmin() || resource.data.ownerId == request.auth.uid;
+      allow delete: if canAccessOrg(resource.data.orgId) && !isClientUser();
     }
 
     // get: autenticado (IDs vêm de visitVisitors já protegido).
     // list: só dono/admin (CRM). Trade-off MVP para equipe/cliente no detalhe.
     match /visitors/{visitorId} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() && canAccessOrg(resource.data.orgId);
       allow list: if ownsOrAdmin();
       allow create: if creatingOwnDoc()
+        && request.resource.data.orgId is string
+        && canAccessOrg(request.resource.data.orgId)
+        && !isClientUser()
         && request.resource.data.name is string
         && request.resource.data.document is string;
       allow update: if (ownsOrAdmin() && unchangedOwnerId() && (
@@ -298,8 +334,9 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.email is string
         && request.resource.data.token is string
-        && request.resource.data.role in ['team', 'client']
-        && request.resource.data.status == 'pending';
+        && request.resource.data.role in ['team', 'client', 'user', 'org_admin']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.orgId is string;
       allow update: if isSignedIn()
         && (
           (resource.data.status == 'pending' && request.resource.data.status == 'accepted')

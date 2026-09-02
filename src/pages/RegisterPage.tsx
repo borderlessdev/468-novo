@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
 import { registerSchema, type RegisterInput } from '@/lib/validations'
+import { inviteRoleToUserRole } from '@/lib/org'
 import { getInviteByToken } from '@/services/invites'
 import type { Invite } from '@/types'
 
@@ -55,7 +56,7 @@ export function RegisterPage() {
     setLoading(true)
     try {
       await registerUser(values.name, values.email, values.password, {
-        role: invite?.role ?? 'user',
+        role: invite ? inviteRoleToUserRole(invite.role) : 'user',
         inviteId: invite?.id,
       })
       toast.success('Conta criada com sucesso')

@@ -67,7 +67,7 @@ export async function saveVisitAsTemplate(
   const source = await getVisit(sourceId)
   if (!source) throw new Error('Visita não encontrada')
 
-  const templateId = await createVisit(ownerId, {
+  const templateId = await createVisit(ownerId, source.orgId, {
     title: `Modelo: ${source.title}`,
     company: source.company,
     state: source.state,
@@ -99,7 +99,7 @@ export async function duplicateVisit(
   const startDate = overrides?.startDate ?? source.startDate
   const endDate = overrides?.endDate ?? source.endDate
 
-  const newId = await createVisit(ownerId, {
+  const newId = await createVisit(ownerId, source.orgId, {
     title: overrides?.title ?? `${source.title} (cópia)`,
     company: source.company,
     state: source.state,
@@ -132,7 +132,7 @@ export async function createVisitFromTemplate(
   const template = await getVisit(templateId)
   if (!template || !template.isTemplate) throw new Error('Template não encontrado')
 
-  const newId = await createVisit(ownerId, {
+  const newId = await createVisit(ownerId, template.orgId, {
     title: overrides.title,
     company: overrides.company ?? template.company,
     state: overrides.state ?? template.state,

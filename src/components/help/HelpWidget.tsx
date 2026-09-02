@@ -7,8 +7,10 @@ import { HelpChatInput } from '@/components/help/HelpChatInput'
 import { HelpChatMessage } from '@/components/help/HelpChatMessage'
 import { HelpChatSuggestions } from '@/components/help/HelpChatSuggestions'
 import { HelpChatTypingIndicator } from '@/components/help/HelpChatTypingIndicator'
+import { AiProviderBadge } from '@/components/help/AiProviderBadge'
 import { cn } from '@/lib/utils'
 import { useHelpChat } from '@/hooks/useHelpChat'
+import { useAiStatus } from '@/hooks/useAiStatus'
 
 export function HelpWidget() {
   const location = useLocation()
@@ -17,6 +19,7 @@ export function HelpWidget() {
   const [lastSeenCount, setLastSeenCount] = useState(0)
   const [confirmClear, setConfirmClear] = useState(false)
   const { messages, sending, error, send, clear } = useHelpChat(location.pathname)
+  const aiStatus = useAiStatus()
   const bottomRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -76,7 +79,10 @@ export function HelpWidget() {
           <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2.5">
             <CircleHelp className="h-4 w-4 text-primary" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-tight">Assistente</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold leading-tight">Assistente</p>
+                <AiProviderBadge status={aiStatus} compact />
+              </div>
               <p className="text-[11px] text-muted-foreground">Dúvidas sobre o uso do app</p>
             </div>
             <Button

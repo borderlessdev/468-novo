@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { useVisitDialog } from '@/contexts/VisitDialogContext'
 import { BRAZILIAN_STATES, DEFAULT_CHECKLIST } from '@/lib/constants'
 import {
@@ -47,6 +48,7 @@ interface NewVisitDialogProps {
 export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const { open, setOpen } = useVisitDialog()
   const { user, isAdmin, profile } = useAuth()
+  const { activeOrgId } = useOrg()
   const [saving, setSaving] = useState(false)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [selectedVisitors, setSelectedVisitors] = useState<Visitor[]>([])
@@ -80,11 +82,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   })
 
   useEffect(() => {
-    if (!open || !user) return
-    void listVisitors(user.uid, isAdmin).then(setVisitors)
-    void listVisitTemplates(user.uid, isAdmin).then(setTemplates)
-    void listPlaybooks(user.uid, isAdmin).then(setPlaybooks)
-  }, [open, user, isAdmin])
+    if (!open || !user || !activeOrgId) return
+    void listVisitors(activeOrgId).then(setVisitors)
+    void listVisitTemplates(activeOrgId, user.uid, isAdmin).then(setTemplates)
+    void listPlaybooks(activeOrgId).then(setPlaybooks)
+  }, [open, user, activeOrgId, isAdmin])
 
   const handleSearch = () => {
     const term = search.trim().toLowerCase()
@@ -116,9 +118,9 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   }
 
   const onQuickCreate = quickForm.handleSubmit(async (values) => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     try {
-      const id = await createVisitor(user.uid, {
+      const id = await createVisitor(user.uid, activeOrgId, {
         name: values.name,
         document: values.document,
         company: values.company,
@@ -129,6 +131,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
         document: values.document,
         company: values.company,
         ownerId: user.uid,
+        orgId: activeOrgId,
       }
       setVisitors((prev) => [...prev, created])
       addVisitor(created)
@@ -141,7 +144,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     setSaving(true)
     try {
       let visitId: string
@@ -158,7 +161,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           pvNumber: values.pvNumber,
         })
       } else {
-        visitId = await createVisit(user.uid, {
+        visitId = await createVisit(user.uid, activeOrgId, {
           title: values.title,
           company: values.company,
           state: values.state,

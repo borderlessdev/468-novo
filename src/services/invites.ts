@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -9,12 +10,17 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { inviteRoleToOrgRole } from '@/lib/org'
+import {
+  canAddOrganizationMember,
+  mapInviteRoleToOrgRole,
+} from '@/services/organizations'
 import {
   getEmailDeliveryMode,
   isFirestoreEmailEnabled,
 } from '@/services/email'
 import { createEmailLog } from '@/services/emailLogs'
-import type { Invite, InviteRole, InviteStatus } from '@/types'
+import type { Invite, InviteRole, InviteStatus, OrgRole } from '@/types'
 
 const col = collection(db, 'invites')
 
@@ -26,6 +32,8 @@ function mapInvite(id: string, data: Record<string, unknown>): Invite {
     token: String(data.token ?? ''),
     status: (data.status as InviteStatus) ?? 'pending',
     createdBy: String(data.createdBy ?? ''),
+    orgId: String(data.orgId ?? ''),
+    department: data.department ? String(data.department) : undefined,
     visitId: data.visitId ? String(data.visitId) : undefined,
     expiresAt: String(data.expiresAt ?? ''),
     createdAt: data.createdAt,
@@ -34,13 +42,33 @@ function mapInvite(id: string, data: Record<string, unknown>): Invite {
   }
 }
 
+function roleLabel(role: InviteRole): string {
+  switch (role) {
+    case 'org_admin':
+      return 'admin da empresa'
+    case 'team':
+      return 'equipe'
+    case 'client':
+      return 'cliente'
+    default:
+      return 'usuário'
+  }
+}
+
 export async function createInvite(input: {
   email: string
   role: InviteRole
   createdBy: string
+  orgId: string
+  department?: string
   visitId?: string
   createdByName?: string
 }): Promise<Invite & { link: string; mailtoOpened: boolean }> {
+  const canAdd = await canAddOrganizationMember(input.orgId)
+  if (!canAdd) {
+    throw new Error('Limite de usuários da empresa atingido')
+  }
+
   const token = crypto.randomUUID().replace(/-/g, '')
   const expires = new Date()
   expires.setDate(expires.getDate() + 14)
@@ -52,6 +80,8 @@ export async function createInvite(input: {
     token,
     status: 'pending',
     createdBy: input.createdBy,
+    orgId: input.orgId,
+    department: input.department?.trim() || null,
     visitId: input.visitId ?? null,
     expiresAt,
     createdAt: serverTimestamp(),
@@ -64,6 +94,8 @@ export async function createInvite(input: {
     token,
     status: 'pending',
     createdBy: input.createdBy,
+    orgId: input.orgId,
+    department: input.department,
     visitId: input.visitId,
     expiresAt,
   }
@@ -72,13 +104,16 @@ export async function createInvite(input: {
   const link = `${origin}/cadastro?invite=${token}`
   const subject = 'Convite — Promover Experience'
   const body = [
-    `Você foi convidado como ${input.role === 'team' ? 'equipe' : 'cliente'}.`,
+    `Você foi convidado como ${roleLabel(input.role)}.`,
+    input.department ? `Setor: ${input.department}` : '',
     '',
     `Acesse o link para criar sua conta:`,
     link,
     '',
     `Este convite expira em 14 dias.`,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   let mailtoOpened = false
   if (isFirestoreEmailEnabled()) {
@@ -104,13 +139,18 @@ export async function createInvite(input: {
       status: 'mailto',
       createdBy: input.createdBy,
     })
-    // Não redireciona a página — abre em nova aba/janela se o browser permitir
     const mailto = `mailto:${invite.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     const opened = window.open(mailto, '_blank')
     mailtoOpened = opened != null
   }
 
   return { ...invite, link, mailtoOpened }
+}
+
+export async function getInviteById(inviteId: string): Promise<Invite | null> {
+  const snap = await getDoc(doc(col, inviteId))
+  if (!snap.exists()) return null
+  return mapInvite(snap.id, snap.data())
 }
 
 export async function getInviteByToken(token: string): Promise<Invite | null> {
@@ -130,6 +170,13 @@ export async function acceptInvite(inviteId: string, uid: string): Promise<void>
   })
 }
 
+export async function listInvitesByOrg(orgId: string): Promise<Invite[]> {
+  const snap = await getDocs(query(col, where('orgId', '==', orgId)))
+  return snap.docs
+    .map((d) => mapInvite(d.id, d.data()))
+    .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
+}
+
 export async function listInvitesByCreator(createdBy: string): Promise<Invite[]> {
   const snap = await getDocs(query(col, where('createdBy', '==', createdBy)))
   return snap.docs
@@ -137,4 +184,6 @@ export async function listInvitesByCreator(createdBy: string): Promise<Invite[]>
     .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
 }
 
+export { inviteRoleToOrgRole, mapInviteRoleToOrgRole }
+export type { OrgRole }
 export { getEmailDeliveryMode }

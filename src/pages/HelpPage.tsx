@@ -6,13 +6,16 @@ import { HelpChatEmptyState } from '@/components/help/HelpChatEmptyState'
 import { HelpChatInput } from '@/components/help/HelpChatInput'
 import { HelpChatMessage } from '@/components/help/HelpChatMessage'
 import { HelpChatTypingIndicator } from '@/components/help/HelpChatTypingIndicator'
+import { AiProviderBadge } from '@/components/help/AiProviderBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useHelpChat } from '@/hooks/useHelpChat'
+import { useAiStatus } from '@/hooks/useAiStatus'
 
 export function HelpPage() {
   const location = useLocation()
   const { messages, sending, error, send, clear } = useHelpChat(location.pathname)
+  const aiStatus = useAiStatus()
   const [draft, setDraft] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -39,10 +42,13 @@ export function HelpPage() {
   return (
     <div className="flex h-[calc(100dvh-8rem)] min-h-[420px] flex-col">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <PageHeader
-          title="Assistente"
-          description="Pergunte sobre os processos do app — caminhos curtos de tela a tela."
-        />
+        <div className="space-y-2">
+          <PageHeader
+            title="Assistente"
+            description="Pergunte sobre os processos do app — caminhos curtos de tela a tela."
+          />
+          <AiProviderBadge status={aiStatus} />
+        </div>
         <Button
           type="button"
           variant={confirmClear ? 'destructive' : 'outline'}

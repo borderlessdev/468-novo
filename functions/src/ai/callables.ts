@@ -1,5 +1,11 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
+import {
+  getAnthropicModel,
+  getOpenAiModel,
+  isAiConfigured,
+  readAiProvider,
+} from './config'
 import { chatCompletion, isAiMockMode } from './provider'
 import { assertAiRateLimit } from './rateLimit'
 import { loadHelpCatalog } from './helpCatalog'
@@ -75,6 +81,22 @@ function mockHelpAnswer(message: string, route?: string): string {
     .join('\n')
 }
 
+export const getAiStatus = onCall(async (request) => {
+  requireUid(request.auth)
+
+  const provider = readAiProvider()
+  return {
+    provider,
+    configured: isAiConfigured(),
+    model:
+      provider === 'anthropic'
+        ? getAnthropicModel()
+        : provider === 'openai'
+          ? getOpenAiModel()
+          : null,
+  }
+})
+
 export const askHelpAssistant = onCall(async (request) => {
   const uid = requireUid(request.auth)
   enforceRateLimit(uid)
@@ -121,6 +143,19 @@ export const askHelpAssistant = onCall(async (request) => {
     return { reply: text, provider }
   } catch (error) {
     logger.error('askHelpAssistant failed', error)
+    const detail = error instanceof Error ? error.message : 'erro desconhecido'
+    if (detail.includes('rate_limit')) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Limite da API Claude atingido. Aguarde um momento e tente de novo.',
+      )
+    }
+    if (detail.includes('Anthropic 404') && detail.includes('model')) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Modelo Claude inválido no servidor. Atualize ANTHROPIC_MODEL e faça deploy das functions.',
+      )
+    }
     throw new HttpsError('internal', 'Não foi possível obter resposta do assistente.')
   }
 })

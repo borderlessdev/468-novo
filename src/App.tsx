@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { OrgProvider } from '@/contexts/OrgContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { TrashToastNavigator } from '@/components/shared/TrashToastNavigator'
@@ -26,6 +27,7 @@ import { PlaybooksPage } from '@/pages/PlaybooksPage'
 import ProfilePage from '@/pages/ProfilePage'
 import { TrashPage } from '@/pages/TrashPage'
 import { HelpPage } from '@/pages/HelpPage'
+import { OrganizationsPage } from '@/pages/OrganizationsPage'
 
 function LegacyAgendaRedirect() {
   const { search } = useLocation()
@@ -36,6 +38,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+      <OrgProvider>
       <BrowserRouter>
         <TrashToastNavigator />
         <Routes>
@@ -52,6 +55,7 @@ export default function App() {
           />
 
           <Route element={<ProtectedRoute />}>
+            <Route path="/empresas" element={<OrganizationsPage />} />
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/operacoes" element={<OperationsPage />} />
@@ -76,6 +80,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       <Toaster richColors closeButton position="top-right" />
+      </OrgProvider>
       </AuthProvider>
     </ThemeProvider>
   )

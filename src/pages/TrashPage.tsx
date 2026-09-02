@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import {
   getDaysUntilExpiry,
   TRASH_CATEGORY_LABELS,
@@ -38,6 +39,7 @@ function formatTrashDate(value: unknown): string {
 
 export function TrashPage() {
   const { user, isAdmin, role } = useAuth()
+  const { activeOrgId } = useOrg()
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<TrashEntityType | 'all'>('all')
   const [trash, setTrash] = useState<Record<TrashEntityType, TrashItem[]>>({
@@ -52,17 +54,17 @@ export function TrashPage() {
   const permanentDialog = useConfirmDelete<TrashItem>()
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     setLoading(true)
     try {
-      setTrash(await listTrashItems(user.uid, isAdmin, role))
+      setTrash(await listTrashItems(activeOrgId, user.uid, isAdmin, role))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar lixeira')
     } finally {
       setLoading(false)
     }
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isAdmin, role])
 
   useEffect(() => {
     void load()

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { jsPDF } from 'jspdf'
 import { toast } from 'sonner'
 import {
@@ -11,6 +11,7 @@ import {
   Users,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { CyclePeriodFields } from '@/components/shared/CyclePeriodFields'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -35,13 +36,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
+import { useCyclePeriod } from '@/hooks/useCyclePeriod'
 import { downloadCsv, formatCurrency, formatDate } from '@/lib/utils'
 import {
   exportTable,
   getExportFormatLabel,
   type TableExportFormat,
 } from '@/lib/export'
-import { getCurrentCycle } from '@/lib/constants'
 import { listVisits } from '@/services/visits'
 import { listVisitors } from '@/services/visitors'
 import { listFinanceItemsByOwner } from '@/services/finance'
@@ -49,7 +51,18 @@ import { listVisitVisitors } from '@/services/visitVisitors'
 import type { FinanceItem, Visit, Visitor } from '@/types'
 
 export function ReportsPage() {
-  const { user, isAdmin, role } = useAuth()
+  const { user, isPlatformAdmin, role } = useAuth()
+  const { activeOrgId } = useOrg()
+  const {
+    cycleLabel,
+    isDefaultCycle,
+    range,
+    cycleStart,
+    cycleEnd,
+    setCycleStart,
+    setCycleEnd,
+    resetCycle,
+  } = useCyclePeriod({ notify: true })
   const [visits, setVisits] = useState<Visit[]>([])
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [financeItems, setFinanceItems] = useState<FinanceItem[]>([])
@@ -58,12 +71,12 @@ export function ReportsPage() {
   const [nfStatus, setNfStatus] = useState('todos')
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     try {
-      const visitsData = await listVisits(user.uid, isAdmin, role)
+      const visitsData = await listVisits(activeOrgId, user.uid, isPlatformAdmin, role)
       const [visitorsData, financeData] = await Promise.all([
-        listVisitors(user.uid, isAdmin),
-        listFinanceItemsByOwner(user.uid, isAdmin, role, visitsData),
+        listVisitors(activeOrgId),
+        listFinanceItemsByOwner(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
       ])
       setVisits(visitsData)
       setVisitors(visitorsData)
@@ -72,7 +85,7 @@ export function ReportsPage() {
       console.error(error)
       toast.error('Erro ao carregar dados dos relatórios')
     }
-  }, [user, isAdmin, role])
+  }, [user, activeOrgId, isPlatformAdmin, role])
 
   useEffect(() => {
     void load()
@@ -113,14 +126,13 @@ export function ReportsPage() {
   }
 
   const exportMonthVisits = (asPdf = false) => {
-    const cycle = getCurrentCycle()
     const rows = visits.filter(
-      (v) => v.startDate >= cycle.startIso && v.startDate <= cycle.endIso,
+      (v) => v.startDate >= range.startIso && v.startDate <= range.endIso,
     )
     if (asPdf) {
       const doc = new jsPDF()
       doc.setFontSize(14)
-      doc.text('Visitas do ciclo', 14, 20)
+      doc.text(`Visitas do ciclo (${cycleLabel})`, 14, 20)
       rows.forEach((visit, index) => {
         doc.setFontSize(10)
         doc.text(
@@ -150,7 +162,7 @@ export function ReportsPage() {
     const counts = new Map<string, number>()
     await Promise.all(
       visits.map(async (visit) => {
-        const links = await listVisitVisitors(visit.id, user!.uid, isAdmin)
+        const links = await listVisitVisitors(visit.id, user!.uid, isPlatformAdmin)
         links.forEach((link) => {
           counts.set(link.visitorId, (counts.get(link.visitorId) ?? 0) + 1)
         })
@@ -314,7 +326,19 @@ export function ReportsPage() {
         <ReportCard
           icon={BarChart3}
           title="Visitas do Mês"
-          description="Relatório de todas as visitas realizadas no ciclo corrente."
+          description={`Relatório de visitas no ciclo ${cycleLabel}.`}
+          footer={
+            <CyclePeriodFields
+              cycleStart={cycleStart}
+              cycleEnd={cycleEnd}
+              isDefaultCycle={isDefaultCycle}
+              onStartChange={setCycleStart}
+              onEndChange={setCycleEnd}
+              onReset={resetCycle}
+              idPrefix="reports-cycle"
+              className="mb-3"
+            />
+          }
           onCsv={() => exportMonthVisits(false)}
           onPdf={() => exportMonthVisits(true)}
         />
@@ -348,12 +372,14 @@ function ReportCard({
   icon: Icon,
   title,
   description,
+  footer,
   onCsv,
   onPdf,
 }: {
   icon: typeof BarChart3
   title: string
   description: string
+  footer?: ReactNode
   onCsv: () => void
   onPdf: () => void
 }) {
@@ -370,13 +396,16 @@ function ReportCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex gap-2">
+      <CardContent>
+        {footer}
+        <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={onCsv}>
           CSV
         </Button>
         <Button variant="outline" size="sm" onClick={onPdf}>
           PDF
         </Button>
+        </div>
       </CardContent>
     </Card>
   )

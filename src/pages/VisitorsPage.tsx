@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
 import { formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
@@ -32,6 +33,7 @@ type ViewMode = 'table' | 'cards' | 'company'
 
 export function VisitorsPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
+  const { activeOrgId } = useOrg()
   const [loading, setLoading] = useState(true)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [search, setSearch] = useState('')
@@ -69,18 +71,18 @@ export function VisitorsPage() {
   })
 
   const load = useCallback(async (options?: { showLoading?: boolean }) => {
-    if (!user) return
+    if (!user || !activeOrgId) return
     const showLoading = options?.showLoading ?? false
     if (showLoading) setLoading(true)
     try {
-      setVisitors(await listVisitors(user.uid, isAdmin))
+      setVisitors(await listVisitors(activeOrgId))
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar visitantes')
     } finally {
       if (showLoading) setLoading(false)
     }
-  }, [user, isAdmin])
+  }, [user, activeOrgId])
 
   useEffect(() => {
     void load({ showLoading: true })
@@ -144,8 +146,12 @@ export function VisitorsPage() {
     })
     setOpen(true)
     if (user) {
+      if (!activeOrgId) {
+        setVisitHistory([])
+        return
+      }
       try {
-        const ids = await listVisitIdsForVisitor(visitor.id, user.uid, isAdmin, role)
+        const ids = await listVisitIdsForVisitor(visitor.id, activeOrgId, user.uid, isAdmin, role)
         const visits = await Promise.all(ids.map((id) => getVisit(id)))
         setVisitHistory(
           visits
@@ -159,7 +165,7 @@ export function VisitorsPage() {
   }
 
   const onSubmit = form.handleSubmit(async (values) => {
-    if (!user || !canWrite) return
+    if (!user || !activeOrgId || !canWrite) return
     setSaving(true)
     const payload = {
       name: values.name,
@@ -186,7 +192,7 @@ export function VisitorsPage() {
         await updateVisitor(editing.id, payload)
         toast.success('Visitante atualizado')
       } else {
-        await createVisitor(user.uid, payload)
+        await createVisitor(user.uid, activeOrgId, payload)
         toast.success('Visitante criado')
       }
       setOpen(false)

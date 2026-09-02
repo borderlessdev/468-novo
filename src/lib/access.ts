@@ -13,9 +13,20 @@ export function mergeModulePermissions(
   return { ...DEFAULT_MODULE_PERMISSIONS, ...partial }
 }
 
-export function canWriteOperations(role: UserRole, isAdmin: boolean): boolean {
-  if (isAdmin) return true
+export function canWriteOperations(role: UserRole, isPlatformAdmin: boolean): boolean {
+  if (isPlatformAdmin) return true
   return role !== 'client'
+}
+
+export function canManageOrgUsers(
+  isPlatformAdmin: boolean,
+  isOrgAdmin: boolean,
+): boolean {
+  return isPlatformAdmin || isOrgAdmin
+}
+
+export function canCreateOrganization(isPlatformAdmin: boolean): boolean {
+  return isPlatformAdmin
 }
 
 /**
@@ -88,6 +99,9 @@ export function isNavAllowed(
   isAdmin: boolean,
   modulePermissions?: Partial<ModulePermissions> | null,
 ): boolean {
+  if (path === '/empresas' || path.startsWith('/empresas/')) {
+    return isAdmin
+  }
   if (isAdmin) return true
   if (role === 'client') {
     if (path === '/') return true
