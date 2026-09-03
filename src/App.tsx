@@ -28,6 +28,8 @@ import ProfilePage from '@/pages/ProfilePage'
 import { TrashPage } from '@/pages/TrashPage'
 import { HelpPage } from '@/pages/HelpPage'
 import { OrganizationsPage } from '@/pages/OrganizationsPage'
+import { OrganizationDetailPage } from '@/pages/OrganizationDetailPage'
+import { MasterShell } from '@/components/layout/MasterShell'
 
 function LegacyAgendaRedirect() {
   const { search } = useLocation()
@@ -55,7 +57,10 @@ export default function App() {
           />
 
           <Route element={<ProtectedRoute />}>
-            <Route path="/empresas" element={<OrganizationsPage />} />
+            <Route element={<MasterShell />}>
+              <Route path="/empresas" element={<OrganizationsPage />} />
+              <Route path="/empresas/:orgId" element={<OrganizationDetailPage />} />
+            </Route>
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/operacoes" element={<OperationsPage />} />

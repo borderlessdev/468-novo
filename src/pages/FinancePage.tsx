@@ -69,10 +69,23 @@ import {
   uploadFinanceFile,
 } from '@/services/finance'
 import { notifyVisitStakeholders } from '@/services/notifications'
-import type { FinanceApprovalStatus, FinanceAttachment, FinanceItem, Visit } from '@/types'
+import type { FinanceApprovalStatus, FinanceAttachment, FinanceItem, FinanceServiceType, Visit } from '@/types'
 
 type ViewMode = 'table' | 'cards' | 'invoice'
 type ApprovalFilter = 'all' | FinanceApprovalStatus
+
+const SERVICE_TYPE_LABEL: Record<FinanceServiceType, string> = {
+  terceiro: 'Serviço de Terceiro',
+  despesa_tributavel: 'Despesa Tributável',
+}
+
+function resolveServiceType(item: Pick<FinanceItem, 'serviceType'>): FinanceServiceType {
+  return item.serviceType === 'despesa_tributavel' ? 'despesa_tributavel' : 'terceiro'
+}
+
+function isTaxableExpense(item: Pick<FinanceItem, 'serviceType'>): boolean {
+  return resolveServiceType(item) === 'despesa_tributavel'
+}
 
 const APPROVAL_LABEL: Record<FinanceApprovalStatus, string> = {
   pending: 'Pendente',
@@ -156,6 +169,7 @@ function BudgetComparison({
   item: FinanceItem
   showCompany?: boolean
 }) {
+  const taxable = isTaxableExpense(item)
   const planned = getPlannedValue(item)
   const realized = getRealizedValue(item)
   const budgets = [
@@ -167,48 +181,58 @@ function BudgetComparison({
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-3">
-        {budgets.map((budget) => {
-          const isPlanned =
-            !plannedMarked && planned != null && budget.value != null && budget.value === planned
-          if (isPlanned) plannedMarked = true
-          return (
-            <div
-              key={budget.label}
-              className={`rounded-lg border p-3 ${
-                isPlanned ? 'border-primary/40 bg-primary/5' : 'bg-muted/20'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {budget.label}
-                </span>
-                {isPlanned ? (
-                  <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-                    Previsto
-                  </Badge>
-                ) : null}
+      {!taxable ? (
+        <div className="grid gap-2 sm:grid-cols-3">
+          {budgets.map((budget) => {
+            const isPlanned =
+              !plannedMarked && planned != null && budget.value != null && budget.value === planned
+            if (isPlanned) plannedMarked = true
+            return (
+              <div
+                key={budget.label}
+                className={`rounded-lg border p-3 ${
+                  isPlanned ? 'border-primary/40 bg-primary/5' : 'bg-muted/20'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {budget.label}
+                  </span>
+                  {isPlanned ? (
+                    <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                      Previsto
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm font-semibold">
+                  {budget.value != null ? formatCurrency(budget.value) : '—'}
+                </p>
               </div>
-              <p className="mt-1 text-sm font-semibold">
-                {budget.value != null ? formatCurrency(budget.value) : '—'}
-              </p>
-            </div>
-          )
-        })}
-      </div>
-      <div className="grid gap-2 text-sm sm:grid-cols-3">
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Despesa tributável — sem orçamentos (recibo/NF direto).
+        </p>
+      )}
+      <div className={`grid gap-2 text-sm ${taxable ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
         <div>
-          <p className="text-xs text-muted-foreground">Contratado</p>
+          <p className="text-xs text-muted-foreground">
+            {taxable ? 'Valor do serviço' : 'Contratado'}
+          </p>
           <p className="font-medium">{formatCurrency(item.serviceValue)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Realizado / pago</p>
           <p className="font-medium">{realized != null ? formatCurrency(realized) : '—'}</p>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Desvio vs previsto</p>
-          <DeviationLabel item={item} className="text-sm" />
-        </div>
+        {!taxable ? (
+          <div>
+            <p className="text-xs text-muted-foreground">Desvio vs previsto</p>
+            <DeviationLabel item={item} className="text-sm" />
+          </div>
+        ) : null}
       </div>
       {showCompany && item.winningCompany ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -237,6 +261,7 @@ function FinanceFiles({
   onChanged: () => Promise<void>
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const taxable = isTaxableExpense(item)
   const budgets = item.budgetAttachments ?? []
   const invoice = item.invoiceAttachment
 
@@ -326,7 +351,8 @@ function FinanceFiles({
   )
 
   return (
-    <div className="grid min-w-64 gap-3 sm:grid-cols-2">
+    <div className={`grid min-w-64 gap-3 ${taxable ? '' : 'sm:grid-cols-2'}`}>
+      {!taxable ? (
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium">Orçamentos</span>
@@ -355,9 +381,10 @@ function FinanceFiles({
           </label>
         ) : null}
       </div>
+      ) : null}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium">Nota fiscal</span>
+          <span className="text-xs font-medium">{taxable ? 'Recibo / Nota fiscal' : 'Nota fiscal'}</span>
           <span className="text-[11px] text-muted-foreground">{invoice ? '1/1' : '0/1'}</span>
         </div>
         {invoice ? fileRow(invoice, 'invoice') : <p className="text-xs text-muted-foreground">Nenhum arquivo</p>}
@@ -375,7 +402,7 @@ function FinanceFiles({
               }}
             />
             {busyKey === 'invoice' ? <Loader2 className="animate-spin" /> : <ReceiptText />}
-            Enviar nota fiscal
+            {taxable ? 'Enviar recibo ou NF' : 'Enviar nota fiscal'}
           </label>
         ) : null}
       </div>
@@ -416,6 +443,7 @@ export function FinancePage() {
   const form = useForm<FinanceItemInput>({
     resolver: zodResolver(financeItemSchema),
     defaultValues: {
+      serviceType: 'terceiro',
       serviceName: '',
       budget1: '',
       budget2: '',
@@ -427,6 +455,9 @@ export function FinancePage() {
       nfDueDate: '',
     },
   })
+
+  const watchedServiceType = form.watch('serviceType')
+  const formIsTaxable = watchedServiceType === 'despesa_tributavel'
 
   useEffect(() => {
     if (!user || !activeOrgId) return
@@ -494,6 +525,7 @@ export function FinancePage() {
     setEditing(null)
     resetNfAttachmentState()
     form.reset({
+      serviceType: 'terceiro',
       serviceName: '',
       budget1: '',
       budget2: '',
@@ -511,6 +543,7 @@ export function FinancePage() {
     setEditing(item)
     resetNfAttachmentState()
     form.reset({
+      serviceType: resolveServiceType(item),
       serviceName: item.serviceName,
       budget1: item.budget1 != null ? formatCurrencyNumber(item.budget1) : '',
       budget2: item.budget2 != null ? formatCurrencyNumber(item.budget2) : '',
@@ -664,11 +697,13 @@ export function FinancePage() {
   const onSubmit = form.handleSubmit(async (values) => {
     if (!user || !visitId) return
     setSaving(true)
+    const taxable = values.serviceType === 'despesa_tributavel'
     const payload = {
+      serviceType: values.serviceType,
       serviceName: values.serviceName,
-      budget1: parseCurrencyInput(values.budget1),
-      budget2: parseCurrencyInput(values.budget2),
-      budget3: parseCurrencyInput(values.budget3),
+      budget1: taxable ? undefined : parseCurrencyInput(values.budget1),
+      budget2: taxable ? undefined : parseCurrencyInput(values.budget2),
+      budget3: taxable ? undefined : parseCurrencyInput(values.budget3),
       serviceValue: parseCurrencyInput(values.serviceValue),
       actualValue: parseCurrencyInput(values.actualValue),
       winningCompany: values.winningCompany,
@@ -679,7 +714,12 @@ export function FinancePage() {
       let itemId = editing?.id
 
       if (editing) {
-        await updateFinanceItem(editing.id, payload)
+        await updateFinanceItem(editing.id, {
+          ...payload,
+          budget1: payload.budget1 ?? null,
+          budget2: payload.budget2 ?? null,
+          budget3: payload.budget3 ?? null,
+        })
         itemId = editing.id
       } else {
         itemId = await createFinanceItem(user.uid, {
@@ -740,6 +780,7 @@ export function FinancePage() {
       setEditing(null)
       resetNfAttachmentState()
       form.reset({
+        serviceType: 'terceiro',
         serviceName: '',
         budget1: '',
         budget2: '',
@@ -804,7 +845,7 @@ export function FinancePage() {
           {
             label: 'Soma prevista',
             value: formatCurrency(metrics.planned),
-            hint: 'Menor orçamento de cada linha',
+            hint: 'Menor orçamento (serviços de terceiro)',
           },
           {
             label: 'Soma contratada',
@@ -925,11 +966,16 @@ export function FinancePage() {
                     </div>
                   </div>
                   <h2 className="mt-4 line-clamp-2 font-semibold">{item.serviceName}</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {SERVICE_TYPE_LABEL[resolveServiceType(item)]}
+                  </p>
                   <p className="mt-1 text-2xl font-semibold text-primary">{formatCurrency(item.serviceValue)}</p>
                   <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2"><Building2 className="h-4 w-4" />{item.winningCompany || 'Empresa não informada'}</div>
                     <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Vencimento: {formatDate(item.nfDueDate)}</div>
-                    <div className="flex items-center gap-2">Desvio vs previsto: <DeviationLabel item={item} /></div>
+                    {!isTaxableExpense(item) ? (
+                      <div className="flex items-center gap-2">Desvio vs previsto: <DeviationLabel item={item} /></div>
+                    ) : null}
                     {item.attachmentName ? <div className="flex items-center gap-2"><Paperclip className="h-4 w-4" /><span className="truncate">{item.attachmentName}</span></div> : null}
                   </div>
                   <div className="mt-3"><PendingTags item={item} /></div>
@@ -971,8 +1017,11 @@ export function FinancePage() {
                         <article key={item.id} className="rounded-lg border bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
                           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.serviceName}</p><p className="mt-1 truncate text-xs text-muted-foreground">{item.winningCompany || 'Empresa não informada'}</p></div><p className="shrink-0 text-sm font-semibold">{formatCurrency(item.serviceValue)}</p></div>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{SERVICE_TYPE_LABEL[resolveServiceType(item)]}</Badge>
                             <ApprovalBadge item={item} />
-                            <span className="text-xs text-muted-foreground">Desvio: <DeviationLabel item={item} className="text-xs" /></span>
+                            {!isTaxableExpense(item) ? (
+                              <span className="text-xs text-muted-foreground">Desvio: <DeviationLabel item={item} className="text-xs" /></span>
+                            ) : null}
                           </div>
                           <div className="mt-3 border-t pt-3">
                             <FinanceFiles item={item} canWrite={canWrite} onChanged={loadItems} />
@@ -994,7 +1043,12 @@ export function FinancePage() {
               {filteredItems.map((item) => (
                 <div key={item.id} className="rounded-lg border border-border p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium">{item.serviceName}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.serviceName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {SERVICE_TYPE_LABEL[resolveServiceType(item)]}
+                      </p>
+                    </div>
                     <ApprovalBadge item={item} />
                   </div>
                   <p className="mt-1 text-lg font-semibold">
@@ -1010,9 +1064,11 @@ export function FinancePage() {
                         ? formatCurrency(getRealizedValue(item))
                         : '—'}
                     </p>
-                    <p className="flex items-center gap-1">
-                      Desvio vs previsto: <DeviationLabel item={item} />
-                    </p>
+                    {!isTaxableExpense(item) ? (
+                      <p className="flex items-center gap-1">
+                        Desvio vs previsto: <DeviationLabel item={item} />
+                      </p>
+                    ) : null}
                     {item.attachmentName ? (
                       <p>Comprovante: {item.attachmentName}</p>
                     ) : null}
@@ -1050,6 +1106,7 @@ export function FinancePage() {
               <table className="min-w-full text-sm">
                 <thead className="border-y bg-muted/40 text-left text-muted-foreground">
                   <tr>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">Tipo</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Serviços contratados</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Primeiro orçamento</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Segundo orçamento</th>
@@ -1068,16 +1125,29 @@ export function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredItems.map((item) => (
+                  {filteredItems.map((item) => {
+                    const taxable = isTaxableExpense(item)
+                    return (
                     <tr
                       key={item.id}
                       className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
                       onClick={() => setViewingItem(item)}
                     >
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <Badge variant="secondary" className="font-normal">
+                          {SERVICE_TYPE_LABEL[resolveServiceType(item)]}
+                        </Badge>
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium">{item.serviceName}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget1)}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget2)}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.budget3)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {taxable ? '—' : formatCurrency(item.budget1)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {taxable ? '—' : formatCurrency(item.budget2)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {taxable ? '—' : formatCurrency(item.budget3)}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3">{formatCurrency(item.serviceValue)}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         {getRealizedValue(item) != null
@@ -1085,7 +1155,7 @@ export function FinancePage() {
                           : '—'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <DeviationLabel item={item} />
+                        {taxable ? '—' : <DeviationLabel item={item} />}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">{item.winningCompany || '—'}</td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -1122,7 +1192,8 @@ export function FinancePage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1147,9 +1218,42 @@ export function FinancePage() {
           </DialogHeader>
           <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
+              <Label>Tipo de Serviço *</Label>
+              <Select
+                value={watchedServiceType}
+                onValueChange={(value) => {
+                  const next = value as FinanceServiceType
+                  form.setValue('serviceType', next, { shouldDirty: true, shouldValidate: true })
+                  if (next === 'despesa_tributavel') {
+                    form.setValue('budget1', '')
+                    form.setValue('budget2', '')
+                    form.setValue('budget3', '')
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="terceiro">{SERVICE_TYPE_LABEL.terceiro}</SelectItem>
+                  <SelectItem value="despesa_tributavel">
+                    {SERVICE_TYPE_LABEL.despesa_tributavel}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {formIsTaxable ? (
+                <p className="text-xs text-muted-foreground">
+                  Despesas como Uber, alimentação ou táxi — sem orçamento; anexe o recibo ou NF
+                  direto.
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2 sm:col-span-2">
               <Label>Serviço *</Label>
               <Input {...form.register('serviceName')} />
             </div>
+            {!formIsTaxable ? (
+              <>
             <div className="space-y-2">
               <Label>Orçamento 1</Label>
               <Input
@@ -1189,6 +1293,8 @@ export function FinancePage() {
                 }}
               />
             </div>
+              </>
+            ) : null}
             <div className="space-y-2">
               <Label>Valor do serviço</Label>
               <Input
@@ -1236,13 +1342,13 @@ export function FinancePage() {
                   }
                 }}
               />
-              NF recebida
+              {formIsTaxable ? 'Recibo / NF recebido' : 'NF recebida'}
             </label>
             {form.watch('nfReceived') ? (
             <div className="space-y-2 sm:col-span-2">
-              <Label>Arquivo da NF (opcional)</Label>
+              <Label>{formIsTaxable ? 'Arquivo do recibo ou NF (opcional)' : 'Arquivo da NF (opcional)'}</Label>
               <p className="text-xs text-muted-foreground">
-                Envie a nota fiscal em PDF, JPG ou PNG. Máximo 10 MB.
+                Envie em PDF, JPG ou PNG. Máximo 10 MB.
               </p>
               {editing?.attachmentPath && !removePendingAttachment && !pendingNfFile ? (
                 <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
@@ -1312,7 +1418,16 @@ export function FinancePage() {
           {viewingItem ? (
             <div className="grid gap-3 text-sm sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <p className="mb-2 text-muted-foreground">Comparativo de orçamentos</p>
+                <Badge variant="secondary">
+                  {SERVICE_TYPE_LABEL[resolveServiceType(viewingItem)]}
+                </Badge>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="mb-2 text-muted-foreground">
+                  {isTaxableExpense(viewingItem)
+                    ? 'Valores da despesa'
+                    : 'Comparativo de orçamentos'}
+                </p>
                 <BudgetComparison item={viewingItem} />
               </div>
               <div className="sm:col-span-2 flex flex-wrap items-center gap-2 border-t pt-3">

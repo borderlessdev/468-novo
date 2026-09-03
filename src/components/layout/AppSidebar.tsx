@@ -173,10 +173,10 @@ export function AppSidebar({
                     : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
                 )
               }
-              title="Empresas"
+              title="Pastas de clientes"
             >
               <Building2 className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span className="truncate">Empresas</span> : null}
+              {!collapsed ? <span className="truncate">Pastas de clientes</span> : null}
             </NavLink>
           ) : null}
           {NAV_ITEMS

@@ -49,6 +49,8 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
   return {
     id,
     visitId: String(data.visitId ?? ''),
+    serviceType:
+      data.serviceType === 'despesa_tributavel' ? 'despesa_tributavel' : 'terceiro',
     serviceName: String(data.serviceName ?? ''),
     budget1: data.budget1 != null ? Number(data.budget1) : undefined,
     budget2: data.budget2 != null ? Number(data.budget2) : undefined,
@@ -114,6 +116,7 @@ export async function createFinanceItem(
 ): Promise<string> {
   const ref = await addDoc(col, {
     visitId: data.visitId,
+    serviceType: data.serviceType ?? 'terceiro',
     serviceName: data.serviceName,
     budget1: data.budget1 ?? null,
     budget2: data.budget2 ?? null,
@@ -142,7 +145,11 @@ export async function createFinanceItem(
 
 export async function updateFinanceItem(
   id: string,
-  data: Partial<Omit<FinanceItem, 'id' | 'ownerId' | 'createdAt'>>,
+  data: Partial<Omit<FinanceItem, 'id' | 'ownerId' | 'createdAt'>> & {
+    budget1?: number | null
+    budget2?: number | null
+    budget3?: number | null
+  },
 ): Promise<void> {
   await updateDoc(doc(col, id), {
     ...data,
@@ -198,6 +205,9 @@ export async function uploadFinanceFile(
   kind: FinanceAttachmentKind,
 ): Promise<void> {
   validateFinanceFile(file)
+  if (kind === 'budget' && item.serviceType === 'despesa_tributavel') {
+    throw new Error('Despesa tributável não possui orçamentos.')
+  }
   if (kind === 'budget' && (item.budgetAttachments?.length ?? 0) >= 3) {
     throw new Error('Cada linha permite no máximo 3 orçamentos.')
   }

@@ -43,7 +43,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
             <Button asChild variant="outline" size="sm" className="shrink-0">
               <Link to="/empresas">
                 <ArrowLeftRight className="h-4 w-4" />
-                Trocar empresa
+                Trocar pasta / cliente
               </Link>
             </Button>
           ) : null}

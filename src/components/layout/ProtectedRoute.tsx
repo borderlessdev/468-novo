@@ -47,8 +47,10 @@ export function ProtectedRoute() {
 
   const isOrganizationsRoute =
     location.pathname === '/empresas' || location.pathname.startsWith('/empresas/')
+  const isMasterAllowedWithoutOrg =
+    isOrganizationsRoute || location.pathname === '/perfil'
 
-  if (isPlatformAdmin && !activeOrgId && !isOrganizationsRoute) {
+  if (isPlatformAdmin && !activeOrgId && !isMasterAllowedWithoutOrg) {
     return <Navigate to="/empresas" replace />
   }
 

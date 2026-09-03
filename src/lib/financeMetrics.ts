@@ -9,10 +9,12 @@ export const FINANCE_NF_ATTENTION_DAYS = 7
 
 /**
  * previsto: menor valor entre budget1/2/3 existentes.
+ * Despesa tributável não tem orçamento → sem previsto.
  * contratado: serviceValue.
  * realizado: actualValue; se ausente e NF recebida, usa serviceValue; senão undefined.
  */
 export function getPlannedValue(item: FinanceItem): number | undefined {
+  if (item.serviceType === 'despesa_tributavel') return undefined
   const budgets = [item.budget1, item.budget2, item.budget3].filter(
     (value): value is number => value != null && !Number.isNaN(value),
   )
@@ -110,7 +112,11 @@ export function financePendingTags(
     tags.push('nf_a_vencer')
   }
   const deviation = deviationContractedVsPlanned(item)
-  if (deviation != null && deviation > FINANCE_DEVIATION_WARN_RATIO) {
+  if (
+    item.serviceType !== 'despesa_tributavel' &&
+    deviation != null &&
+    deviation > FINANCE_DEVIATION_WARN_RATIO
+  ) {
     tags.push('desvio')
   }
   return tags

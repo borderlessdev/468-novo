@@ -113,6 +113,7 @@ export const inviteSchema = z.object({
 })
 
 export const financeItemSchema = z.object({
+  serviceType: z.enum(['terceiro', 'despesa_tributavel']),
   serviceName: z.string().min(2, 'Serviço obrigatório'),
   budget1: z.string().optional(),
   budget2: z.string().optional(),

@@ -136,6 +136,9 @@ export interface Visit extends SoftDeletable {
 
 export type FinanceApprovalStatus = 'pending' | 'approved' | 'rejected'
 
+/** Serviço de Terceiro: com orçamentos. Despesa Tributável: sem orçamento (recibo/NF direto). */
+export type FinanceServiceType = 'terceiro' | 'despesa_tributavel'
+
 export type GuestConfirmationStatus = 'pending' | 'confirmed' | 'declined'
 
 export type CalendarProvider = 'google' | 'outlook'
@@ -219,6 +222,8 @@ export interface Task extends SoftDeletable {
 export interface FinanceItem extends SoftDeletable {
   id: string
   visitId: string
+  /** Linhas antigas sem o campo são tratadas como `terceiro`. */
+  serviceType?: FinanceServiceType
   serviceName: string
   budget1?: number
   budget2?: number
