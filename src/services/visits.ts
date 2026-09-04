@@ -4,7 +4,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -67,12 +66,11 @@ export async function listVisits(
   _role: UserRole = 'user',
 ): Promise<Visit[]> {
   if (!orgId) return []
-  const snap = await getDocs(
-    query(visitsCol, where('orgId', '==', orgId), orderBy('startDate', 'desc')),
-  )
+  const snap = await getDocs(query(visitsCol, where('orgId', '==', orgId)))
   return snap.docs
     .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
     .map((d) => mapVisit(d.id, d.data()))
+    .sort((a, b) => b.startDate.localeCompare(a.startDate))
 }
 
 export async function listVisitTemplates(

@@ -248,7 +248,9 @@ export function SettingsPage() {
       setEmailLogs(await listEmailLogs(user.uid, isAdmin))
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível convidar')
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível convidar',
+      )
     } finally {
       setInviting(false)
     }
@@ -563,7 +565,7 @@ export function SettingsPage() {
             </CardTitle>
             <CardDescription>
               {activeOrg
-                ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes).`
+                ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes). O Master define o limite; aqui você convida funcionários até esse teto.`
                 : 'Gerencie convites e membros da empresa.'}
             </CardDescription>
           </CardHeader>

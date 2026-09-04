@@ -190,7 +190,15 @@ export function OrganizationsPage() {
       navigate(`/empresas/${id}`)
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível criar a pasta')
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: string }).code)
+          : ''
+      toast.error(
+        code === 'permission-denied'
+          ? 'Sem permissão para criar pasta. Confirme o login master e se as rules foram publicadas.'
+          : 'Não foi possível criar a pasta',
+      )
     } finally {
       setCreating(false)
     }
@@ -206,7 +214,13 @@ export function OrganizationsPage() {
         title="Pastas de trabalho"
         description="Cada cliente tem a própria pasta. Entre no sistema de visitas e eventos dele, com limite de acessos por empresa."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            onClick={() => {
+              setName('')
+              setMaxUsers('10')
+              setCreateOpen(true)
+            }}
+          >
             <Plus className="h-4 w-4" />
             Nova pasta de cliente
           </Button>
@@ -344,7 +358,13 @@ export function OrganizationsPage() {
                 </p>
               </div>
               {rows.length === 0 ? (
-                <Button onClick={() => setCreateOpen(true)}>
+                <Button
+                  onClick={() => {
+                    setName('')
+                    setMaxUsers('10')
+                    setCreateOpen(true)
+                  }}
+                >
                   <Plus className="h-4 w-4" />
                   Criar primeira pasta
                 </Button>

@@ -130,14 +130,18 @@ service cloud.firestore {
       allow get: if isSignedIn()
         && (isPlatformAdmin() || resource.data.uid == request.auth.uid || canAccessOrg(resource.data.orgId));
       allow list: if isSignedIn()
-        && (isPlatformAdmin() || (resource.data.orgId is string && canAccessOrg(resource.data.orgId)));
+        && (
+          isPlatformAdmin()
+          || resource.data.uid == request.auth.uid
+          || (resource.data.orgId is string && canAccessOrg(resource.data.orgId))
+        );
       allow create: if isSignedIn()
         && request.resource.data.orgId is string
         && request.resource.data.uid is string
         && request.resource.data.email is string
         && request.resource.data.name is string
         && request.resource.data.orgRole in ['org_admin', 'user', 'team', 'client']
-        && request.resource.data.uid == request.auth.uid;
+        && (isPlatformAdmin() || request.resource.data.uid == request.auth.uid);
       allow update, delete: if isPlatformAdmin();
     }
 
@@ -145,13 +149,20 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if isAdmin();
 
+      // Conta própria OU platform admin criando perfil do admin da empresa.
       allow create: if isSignedIn()
-        && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.name is string
         && request.resource.data.role in ['user', 'team', 'client']
-        && (!('orgId' in request.resource.data) || request.resource.data.orgId is string);
+        && (!('orgId' in request.resource.data) || request.resource.data.orgId is string)
+        && (
+          request.auth.uid == userId
+          || (
+            isPlatformAdmin()
+            && request.resource.data.orgId is string
+          )
+        );
 
       allow update: if isSignedIn()
         && (

@@ -12,7 +12,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ onMenuClick }: AppHeaderProps) {
   const { profile, isPlatformAdmin } = useAuth()
-  const { activeOrg } = useOrg()
+  const { activeOrg, isOrgAdmin } = useOrg()
   const firstName = (profile?.name ?? 'Usuário').split(' ')[0]
   const initials = (profile?.name ?? 'U')
     .split(' ')
@@ -21,16 +21,19 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
     .slice(0, 2)
     .toUpperCase()
 
-  const roleLabel =
-    profile?.role === 'admin'
-      ? 'Administrador'
-      : profile?.role === 'client'
-        ? 'Cliente'
-        : profile?.role === 'team'
-          ? 'Equipe'
-          : profile?.role === 'user'
-            ? 'Usuário'
-            : null
+  const roleLabel = isPlatformAdmin
+    ? 'Admin Master'
+    : isOrgAdmin
+      ? 'Admin da empresa'
+      : profile?.role === 'admin'
+        ? 'Administrador'
+        : profile?.role === 'client'
+          ? 'Cliente'
+          : profile?.role === 'team'
+            ? 'Equipe'
+            : profile?.role === 'user'
+              ? 'Usuário'
+              : null
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-card/85 backdrop-blur-md">

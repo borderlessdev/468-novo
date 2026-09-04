@@ -22,7 +22,12 @@ export function ProtectedRoute() {
     if (loading || orgLoading || !user || allowed) return
     if (deniedPath.current === location.pathname) return
     deniedPath.current = location.pathname
-    toast.error('Você não tem permissão para acessar esta página')
+    // /empresas é só do Master — redireciona em silêncio para o dashboard da empresa
+    const isEmpresas =
+      location.pathname === '/empresas' || location.pathname.startsWith('/empresas/')
+    if (!isEmpresas) {
+      toast.error('Você não tem permissão para acessar esta página')
+    }
   }, [allowed, loading, orgLoading, user, location.pathname])
 
   if (loading || orgLoading) {

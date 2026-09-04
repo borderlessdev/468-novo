@@ -13,6 +13,7 @@ import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/org'
 import {
   getMemberByUid,
   getOrganization,
+  getOrganizationMember,
   listOrganizations,
 } from '@/services/organizations'
 import type { Organization, OrganizationMember } from '@/types'
@@ -42,12 +43,26 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const setActiveOrgId = useCallback(
     (orgId: string | null) => {
       setActiveOrgIdState(orgId)
-      if (isPlatformAdmin) {
-        if (orgId) localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, orgId)
-        else localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY)
+      if (!isPlatformAdmin) return
+
+      if (orgId) {
+        localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, orgId)
+        const cached = organizations.find((org) => org.id === orgId)
+        if (cached) {
+          setActiveOrg(cached)
+          return
+        }
+        void getOrganization(orgId).then((org) => {
+          // Evita aplicar resultado atrasado se o usuário já trocou de pasta.
+          if (localStorage.getItem(ACTIVE_ORG_STORAGE_KEY) !== orgId) return
+          setActiveOrg(org)
+        })
+      } else {
+        localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY)
+        setActiveOrg(null)
       }
     },
-    [isPlatformAdmin],
+    [isPlatformAdmin, organizations],
   )
 
   const refreshOrg = useCallback(async () => {
@@ -65,23 +80,28 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       if (isPlatformAdmin) {
         const orgs = await listOrganizations()
         setOrganizations(orgs)
+        // Releia o storage no momento de aplicar o estado para não sobrescrever
+        // um "Entrar no sistema" feito durante o await de listOrganizations.
         const stored = localStorage.getItem(ACTIVE_ORG_STORAGE_KEY)
         const resolvedOrgId =
           stored && orgs.some((org) => org.id === stored) ? stored : null
-        setActiveOrgIdState(resolvedOrgId)
-        if (resolvedOrgId) {
-          setActiveOrg(orgs.find((org) => org.id === resolvedOrgId) ?? null)
-        } else {
-          setActiveOrg(null)
-        }
+        setActiveOrgIdState((current) => {
+          const latest = localStorage.getItem(ACTIVE_ORG_STORAGE_KEY)
+          if (latest && orgs.some((org) => org.id === latest)) return latest
+          if (current && orgs.some((org) => org.id === current)) return current
+          return resolvedOrgId
+        })
+        const latest = localStorage.getItem(ACTIVE_ORG_STORAGE_KEY)
+        const activeId =
+          latest && orgs.some((org) => org.id === latest) ? latest : null
+        setActiveOrg(activeId ? (orgs.find((org) => org.id === activeId) ?? null) : null)
         setMembership(null)
         return
       }
 
-      const member =
-        (profile?.orgId
-          ? await getMemberByUid(user.uid)
-          : null) ?? (await getMemberByUid(user.uid))
+      const member = profile?.orgId
+        ? await getOrganizationMember(profile.orgId, user.uid)
+        : await getMemberByUid(user.uid)
 
       if (member) {
         const org = await getOrganization(member.orgId)

@@ -22,7 +22,7 @@ import { createUserProfile, getUserProfile, updateUserNotificationPreferences, u
 import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
 import { acceptInvite, getInviteById } from '@/services/invites'
 import { addOrganizationMember } from '@/services/organizations'
-import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
+import { ACTIVE_ORG_STORAGE_KEY, inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import type { UserProfile, UserRole } from '@/types'
 import type { NotificationPreferences } from '@/lib/notificationPreferences'
 import { getAuthErrorMessage } from '@/lib/utils'
@@ -71,6 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = useCallback(async (firebaseUser: User) => {
     let userProfile = await getUserProfile(firebaseUser.uid)
+    // Evita corrida com register(): o onAuthStateChanged pode rodar antes do
+    // createUserProfile com orgId/convite. Aguarda e tenta de novo.
+    if (!userProfile) {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      userProfile = await getUserProfile(firebaseUser.uid)
+    }
     if (!userProfile) {
       await createUserProfile({
         uid: firebaseUser.uid,
@@ -79,6 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         photoURL: firebaseUser.photoURL ?? undefined,
       })
       userProfile = await getUserProfile(firebaseUser.uid)
+    } else if (!userProfile.orgId) {
+      // register() ainda pode estar gravando orgId — uma segunda leitura ajuda.
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      userProfile = (await getUserProfile(firebaseUser.uid)) ?? userProfile
     }
     setProfile(userProfile)
 
@@ -178,15 +188,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (options?.inviteId) {
           await acceptInvite(options.inviteId, credential.user.uid)
         }
+
+        // Garante profile/org no estado após corrida com onAuthStateChanged
+        await loadProfile(credential.user)
       } catch (error) {
         const code = (error as { code?: string }).code ?? ''
         throw new Error(getAuthErrorMessage(code))
       }
     },
-    [],
+    [loadProfile],
   )
 
   const logout = useCallback(async () => {
+    try {
+      localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY)
+    } catch {
+      // ignore
+    }
     await signOut(auth)
   }, [])
 

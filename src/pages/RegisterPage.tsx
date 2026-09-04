@@ -45,6 +45,11 @@ export function RegisterPage() {
         setInviteInvalid(false)
         form.setValue('email', found.email)
       })
+      .catch((error) => {
+        console.error(error)
+        setInviteInvalid(true)
+        toast.error('Não foi possível validar o convite')
+      })
       .finally(() => setInviteLoading(false))
   }, [inviteToken, form])
 

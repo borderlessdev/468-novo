@@ -154,10 +154,11 @@ export async function getInviteById(inviteId: string): Promise<Invite | null> {
 }
 
 export async function getInviteByToken(token: string): Promise<Invite | null> {
-  const snap = await getDocs(query(col, where('token', '==', token)))
+  const snap = await getDocs(
+    query(col, where('token', '==', token), where('status', '==', 'pending')),
+  )
   if (snap.empty) return null
   const invite = mapInvite(snap.docs[0].id, snap.docs[0].data())
-  if (invite.status !== 'pending') return null
   if (new Date(invite.expiresAt).getTime() < Date.now()) return null
   return invite
 }
