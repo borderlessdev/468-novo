@@ -14,7 +14,8 @@
     "seed:accounts": "node scripts/seed-test-accounts.mjs",
     "set:platform-admin": "node scripts/set-platform-admin.mjs",
     "create:organization": "node scripts/create-organization.mjs",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:storage": "firebase deploy --only storage",
     "deploy:hosting": "npm run build && firebase deploy --only hosting",
     "deploy:ai": "node scripts/deploy-ai-functions.mjs",
     "deploy:all": "npm run build && firebase deploy"

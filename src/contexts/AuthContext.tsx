@@ -202,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY)
+      sessionStorage.removeItem('pe-help-chat-v1')
     } catch {
       // ignore
     }

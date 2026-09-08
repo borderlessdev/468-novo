@@ -72,16 +72,23 @@ export function MasterShell() {
       >
         <div
           className={cn(
-            'flex h-16 items-center gap-2 border-b border-white/8',
-            collapsed ? 'justify-center px-2' : 'px-3',
+            'flex border-b border-white/8 px-2.5',
+            collapsed
+              ? 'h-auto flex-col items-center gap-1 py-2'
+              : 'h-16 items-center gap-2',
           )}
         >
           <Link
             to="/empresas"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => {
+              if (collapsed) setCollapsed(false)
+              setMobileOpen(false)
+            }}
             className={cn(
               'flex shrink-0 items-center transition-opacity hover:opacity-90',
-              collapsed ? 'h-9 w-9 justify-center overflow-hidden rounded-lg' : 'min-w-0 flex-1',
+              collapsed
+                ? 'h-9 w-9 justify-center overflow-hidden rounded-lg'
+                : 'min-w-0 flex-1 px-3',
             )}
             aria-label="Console master"
           >
@@ -94,16 +101,15 @@ export function MasterShell() {
               )}
             />
           </Link>
-          {!collapsed ? (
-            <button
-              type="button"
-              className="hidden shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
-              onClick={() => setCollapsed(true)}
-              aria-label="Recolher menu"
-            >
-              <PanelLeft className="h-4 w-4" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="hidden shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
+            onClick={() => setCollapsed((prev) => !prev)}
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <PanelLeft className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} />
+          </button>
           <button
             ref={closeButtonRef}
             type="button"

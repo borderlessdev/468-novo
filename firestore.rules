@@ -172,6 +172,7 @@ service cloud.firestore {
             && request.resource.data.role == resource.data.role
           )
           || isAdmin()
+          || isPlatformAdmin()
         );
 
       allow delete: if isAdmin();
@@ -475,6 +476,11 @@ service cloud.firestore {
 
     match /calendarOAuthStates/{state} {
       allow read, write: if false;
+    }
+
+    // Chat do assistente de ajuda — um documento por usuário.
+    match /helpChats/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
     match /{document=**} {

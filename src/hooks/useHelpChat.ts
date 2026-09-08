@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import { askHelpAssistant, type HelpChatMessage } from '@/services/ai'
+import {
+  loadHelpChat,
+  saveHelpChat,
+  type StoredHelpMessage,
+} from '@/services/helpChat'
 
-const STORAGE_KEY = 'pe-help-chat-v1'
+export type { StoredHelpMessage }
 
 export const HELP_SUGGESTIONS = [
   'Como registro um compromisso na agenda?',
@@ -11,76 +17,118 @@ export const HELP_SUGGESTIONS = [
   'Onde crio e aplico um playbook?',
 ] as const
 
-export type StoredHelpMessage = HelpChatMessage & { id: string }
-
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function normalizeMessage(item: unknown): StoredHelpMessage | null {
-  if (!item || typeof item !== 'object') return null
-  const row = item as Record<string, unknown>
-  const role = row.role === 'assistant' ? 'assistant' : row.role === 'user' ? 'user' : null
-  const content = typeof row.content === 'string' ? row.content : ''
-  const id = typeof row.id === 'string' ? row.id : createId()
-  if (!role || !content.trim()) return null
-  return { role, content, id }
+function sessionKey(uid: string) {
+  return `pe-help-chat-v2:${uid}`
 }
 
-function readStored(): StoredHelpMessage[] {
+function readSession(uid: string): StoredHelpMessage[] | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
+    const raw = sessionStorage.getItem(sessionKey(uid))
+    if (!raw) return null
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.flatMap((item) => {
-      const message = normalizeMessage(item)
-      return message ? [message] : []
-    }).slice(-40)
+    if (!Array.isArray(parsed)) return null
+    return parsed as StoredHelpMessage[]
   } catch {
-    return []
+    return null
   }
 }
 
-function writeStored(messages: StoredHelpMessage[]) {
+function writeSession(uid: string, messages: StoredHelpMessage[]) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40)))
+    sessionStorage.setItem(sessionKey(uid), JSON.stringify(messages.slice(-40)))
   } catch {
     /* ignore quota */
   }
 }
 
+function clearLegacySharedSession() {
+  try {
+    sessionStorage.removeItem('pe-help-chat-v1')
+  } catch {
+    /* ignore */
+  }
+}
+
 export function useHelpChat(route?: string) {
-  const [messages, setMessages] = useState<StoredHelpMessage[]>(() =>
-    typeof window !== 'undefined' ? readStored() : [],
-  )
+  const { user } = useAuth()
+  const uid = user?.uid ?? null
+  const [messages, setMessages] = useState<StoredHelpMessage[]>([])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    writeStored(messages)
-  }, [messages])
+    clearLegacySharedSession()
+  }, [])
 
   useEffect(() => {
-    const syncFromStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY) return
-      setMessages(readStored())
+    if (!uid) {
+      setMessages([])
+      setReady(false)
+      setError(null)
+      return
     }
 
-    window.addEventListener('storage', syncFromStorage)
-    return () => window.removeEventListener('storage', syncFromStorage)
-  }, [])
+    let cancelled = false
+    setReady(false)
+    setError(null)
+
+    const cached = readSession(uid)
+    if (cached && cached.length > 0) {
+      setMessages(cached)
+    } else {
+      setMessages([])
+    }
+
+    void loadHelpChat(uid)
+      .then((fromDb) => {
+        if (cancelled) return
+        setMessages(fromDb)
+        writeSession(uid, fromDb)
+      })
+      .catch((err) => {
+        console.error(err)
+        if (!cancelled && cached) setMessages(cached)
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [uid])
+
+  useEffect(() => {
+    if (!uid || !ready) return
+    writeSession(uid, messages)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      void saveHelpChat(uid, messages).catch(console.error)
+    }, 400)
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [messages, uid, ready])
 
   const clear = useCallback(() => {
     setMessages([])
     setError(null)
-    writeStored([])
-  }, [])
+    if (uid) {
+      writeSession(uid, [])
+      void saveHelpChat(uid, []).catch(console.error)
+    }
+  }, [uid])
 
   const send = useCallback(
     async (text: string) => {
       const message = text.trim()
-      if (!message || sending) return
+      if (!message || sending || !uid) return
 
       setError(null)
       const userMessage: StoredHelpMessage = { role: 'user', content: message, id: createId() }
@@ -122,7 +170,7 @@ export function useHelpChat(route?: string) {
         setSending(false)
       }
     },
-    [route, sending],
+    [route, sending, uid],
   )
 
   return { messages, sending, error, send, clear }

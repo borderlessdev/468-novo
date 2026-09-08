@@ -95,11 +95,7 @@ export async function createVisitor(
     language: data.language ?? null,
     mobilityReduced: data.mobilityReduced ?? false,
     notes: data.notes ?? null,
-    gifts: (data.gifts ?? []).map((g) => ({
-      name: g.name,
-      quantity: g.quantity ?? null,
-      notes: g.notes ?? null,
-    })),
+    gifts: sanitizeGifts(data.gifts),
     ownerId,
     orgId,
     isDeleted: false,
@@ -109,14 +105,43 @@ export async function createVisitor(
   return ref.id
 }
 
+function sanitizeGifts(
+  gifts: Visitor['gifts'] | undefined,
+): { name: string; quantity: number | null; notes: string | null }[] {
+  return (gifts ?? [])
+    .filter((g) => g.name?.trim())
+    .map((g) => ({
+      name: g.name.trim(),
+      quantity: g.quantity != null && Number.isFinite(g.quantity) ? g.quantity : null,
+      notes: g.notes?.trim() ? g.notes.trim() : null,
+    }))
+}
+
+function omitUndefined<T extends Record<string, unknown>>(data: T): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  )
+}
+
 export async function updateVisitor(
   id: string,
   data: Partial<Omit<Visitor, 'id' | 'ownerId' | 'orgId' | 'createdAt'>>,
 ): Promise<void> {
-  await updateDoc(doc(visitorsCol, id), {
+  const payload = omitUndefined({
     ...data,
+    company: data.company !== undefined ? data.company || null : undefined,
+    role: data.role !== undefined ? data.role || null : undefined,
+    country: data.country !== undefined ? data.country || null : undefined,
+    weightKg: data.weightKg !== undefined ? data.weightKg ?? null : undefined,
+    shoeSize: data.shoeSize !== undefined ? data.shoeSize ?? null : undefined,
+    dietaryRestriction:
+      data.dietaryRestriction !== undefined ? data.dietaryRestriction || null : undefined,
+    language: data.language !== undefined ? data.language || null : undefined,
+    notes: data.notes !== undefined ? data.notes || null : undefined,
+    gifts: data.gifts !== undefined ? sanitizeGifts(data.gifts) : undefined,
     updatedAt: serverTimestamp(),
   })
+  await updateDoc(doc(visitorsCol, id), payload as Record<string, unknown> as never)
 }
 
 export async function deleteVisitor(id: string, deletedBy: string): Promise<void> {

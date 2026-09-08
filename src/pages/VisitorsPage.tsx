@@ -199,7 +199,9 @@ export function VisitorsPage() {
       await load()
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível salvar')
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível salvar',
+      )
     } finally {
       setSaving(false)
     }

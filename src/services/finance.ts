@@ -145,7 +145,10 @@ export async function createFinanceItem(
 
 export async function updateFinanceItem(
   id: string,
-  data: Partial<Omit<FinanceItem, 'id' | 'ownerId' | 'createdAt'>> & {
+  data: Omit<
+    Partial<Omit<FinanceItem, 'id' | 'ownerId' | 'createdAt'>>,
+    'budget1' | 'budget2' | 'budget3'
+  > & {
     budget1?: number | null
     budget2?: number | null
     budget3?: number | null

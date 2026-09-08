@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -176,6 +177,10 @@ export async function listInvitesByOrg(orgId: string): Promise<Invite[]> {
   return snap.docs
     .map((d) => mapInvite(d.id, d.data()))
     .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
+}
+
+export async function cancelInvite(inviteId: string): Promise<void> {
+  await deleteDoc(doc(col, inviteId))
 }
 
 export async function listInvitesByCreator(createdBy: string): Promise<Invite[]> {

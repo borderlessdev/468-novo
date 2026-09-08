@@ -12,9 +12,11 @@ import {
   RefreshCw,
   Save,
   Shield,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,12 +40,18 @@ import {
   type CreatedOrgAdminCredentials,
 } from '@/services/orgAdmins'
 import {
+  cancelInvite,
+  createInvite,
+  listInvitesByOrg,
+} from '@/services/invites'
+import {
   countPendingInvites,
   getOrganization,
   listOrganizationMembers,
+  removeOrganizationMember,
   updateOrganization,
 } from '@/services/organizations'
-import type { Organization, OrganizationMember, OrganizationStatus } from '@/types'
+import type { Invite, Organization, OrganizationMember, OrganizationStatus } from '@/types'
 
 const ROLE_LABEL: Record<OrganizationMember['orgRole'], string> = {
   org_admin: 'Admin da empresa',
@@ -71,18 +79,24 @@ export function OrganizationDetailPage() {
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState(() => generateTempPassword())
   const [creatingAdmin, setCreatingAdmin] = useState(false)
+  const [invitingAdmin, setInvitingAdmin] = useState(false)
+  const [showPasswordCreate, setShowPasswordCreate] = useState(false)
+  const [pendingAdminInvites, setPendingAdminInvites] = useState<Invite[]>([])
+  const [lastAdminInviteLink, setLastAdminInviteLink] = useState<string | null>(null)
   const [createdCredentials, setCreatedCredentials] =
     useState<CreatedOrgAdminCredentials | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const removeDialog = useConfirmDelete<OrganizationMember>()
 
   const load = useCallback(async () => {
     if (!orgId) return
     setLoading(true)
     try {
-      const [organization, memberList, pendingCount] = await Promise.all([
+      const [organization, memberList, pendingCount, invites] = await Promise.all([
         getOrganization(orgId),
         listOrganizationMembers(orgId),
         countPendingInvites(orgId),
+        listInvitesByOrg(orgId),
       ])
       if (!organization) {
         toast.error('Pasta não encontrada')
@@ -92,6 +106,9 @@ export function OrganizationDetailPage() {
       setOrg(organization)
       setMembers(memberList)
       setPending(pendingCount)
+      setPendingAdminInvites(
+        invites.filter((invite) => invite.status === 'pending' && invite.role === 'org_admin'),
+      )
       setName(organization.name)
       setMaxUsers(String(organization.maxUsers))
       setStatus(organization.status)
@@ -222,6 +239,42 @@ export function OrganizationDetailPage() {
     }
   }
 
+  const handleInviteAdmin = async () => {
+    if (!user || !orgId || !adminEmail.trim()) return
+    setInvitingAdmin(true)
+    try {
+      const created = await createInvite({
+        email: adminEmail.trim(),
+        role: 'org_admin',
+        createdBy: user.uid,
+        orgId,
+      })
+      setLastAdminInviteLink(created.link)
+      setAdminEmail('')
+      toast.success('Convite de admin criado — copie o link e envie')
+      await load()
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível convidar o administrador',
+      )
+    } finally {
+      setInvitingAdmin(false)
+    }
+  }
+
+  const handleCancelAdminInvite = async (inviteId: string) => {
+    try {
+      await cancelInvite(inviteId)
+      toast.success('Convite cancelado')
+      if (lastAdminInviteLink?.includes(inviteId)) setLastAdminInviteLink(null)
+      await load()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível cancelar o convite')
+    }
+  }
+
   const handleCreateAdmin = async () => {
     if (!user || !orgId) return
     setCreatingAdmin(true)
@@ -255,6 +308,26 @@ export function OrganizationDetailPage() {
     } finally {
       setCreatingAdmin(false)
     }
+  }
+
+  const handleRemoveMember = () => {
+    void removeDialog.confirm(async (member) => {
+      try {
+        await removeOrganizationMember(member.orgId, member.uid)
+        toast.success(
+          member.orgRole === 'org_admin'
+            ? 'Administrador removido da pasta'
+            : 'Membro removido da pasta',
+        )
+        await load()
+      } catch (error) {
+        console.error(error)
+        toast.error(
+          error instanceof Error ? error.message : 'Não foi possível remover o membro',
+        )
+        throw error
+      }
+    })
   }
 
   if (!canCreateOrganization(isPlatformAdmin)) {
@@ -380,8 +453,8 @@ export function OrganizationDetailPage() {
             <div>
               <CardTitle className="text-base">Administrador da empresa</CardTitle>
               <CardDescription>
-                O Master cria o 1º login. Copie e envie para a pessoa; ela convida os demais
-                funcionários em Configurações, respeitando o limite de acessos.
+                O Master convida o admin (gera o link e envia). Depois o admin da empresa
+                convida os funcionários em Configurações → Usuários da empresa.
               </CardDescription>
             </div>
           </div>
@@ -392,85 +465,191 @@ export function OrganizationDetailPage() {
               {orgAdmins.map((admin) => (
                 <div
                   key={admin.id}
-                  className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="text-sm font-medium">{admin.name}</p>
                     <p className="text-xs text-muted-foreground">{admin.email}</p>
                   </div>
-                  <Badge variant="success">Admin da empresa</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="success">Admin da empresa</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeDialog.requestDelete(admin)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover
+                    </Button>
+                  </div>
                 </div>
               ))}
-              <p className="text-xs text-muted-foreground">
-                Para novos acessos, peça ao admin para convidar em Configurações (até o limite
-                desta pasta).
-              </p>
             </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="admin-name">Nome *</Label>
-                <Input
-                  id="admin-name"
-                  value={adminName}
-                  onChange={(event) => setAdminName(event.target.value)}
-                  placeholder="Nome de quem vai administrar"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="admin-email">E-mail de login *</Label>
-                <Input
-                  id="admin-email"
-                  type="email"
-                  value={adminEmail}
-                  onChange={(event) => setAdminEmail(event.target.value)}
-                  placeholder="admin@empresa.com"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="admin-password">Senha temporária *</Label>
+          ) : null}
+
+          {pendingAdminInvites.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Convites de admin pendentes
+              </p>
+              {pendingAdminInvites.map((invite) => (
+                <div
+                  key={invite.id}
+                  className="flex flex-col gap-2 rounded-lg border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{invite.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Aguardando a pessoa criar a conta
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => void handleCancelAdminInvite(invite.id)}
+                  >
+                    Cancelar convite
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-medium">Convidar administrador</p>
+            <p className="text-xs text-muted-foreground">
+              Informe o e-mail, gere o link e envie. A pessoa abre o link, cria a senha e vira
+              admin desta pasta.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="admin-invite-email"
+                type="email"
+                value={adminEmail}
+                onChange={(event) => setAdminEmail(event.target.value)}
+                placeholder="admin@empresa.com"
+                className="sm:flex-1"
+              />
+              <Button
+                type="button"
+                disabled={
+                  invitingAdmin || seatsFull || org.status !== 'active' || !adminEmail.trim()
+                }
+                onClick={() => void handleInviteAdmin()}
+              >
+                <Shield className="h-4 w-4" />
+                {invitingAdmin ? 'Gerando…' : 'Gerar link de convite'}
+              </Button>
+            </div>
+            {seatsFull ? (
+              <p className="text-xs text-destructive">
+                Limite de acessos atingido. Aumente o limite antes de convidar.
+              </p>
+            ) : null}
+            {lastAdminInviteLink ? (
+              <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+                <Label htmlFor="admin-invite-link">Link do convite (copie e envie)</Label>
                 <div className="flex gap-2">
                   <Input
-                    id="admin-password"
-                    value={adminPassword}
-                    onChange={(event) => setAdminPassword(event.target.value)}
-                    className="font-mono"
+                    id="admin-invite-link"
+                    readOnly
+                    value={lastAdminInviteLink}
+                    className="font-mono text-xs"
                   />
                   <Button
                     type="button"
+                    size="sm"
                     variant="outline"
-                    size="icon"
-                    title="Gerar nova senha"
-                    onClick={() => setAdminPassword(generateTempPassword())}
+                    onClick={() => void copyText('Link do convite', lastAdminInviteLink)}
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    {copiedField === 'Link do convite' ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </div>
               </div>
-              <div className="sm:col-span-2">
-                <Button
-                  type="button"
-                  disabled={
-                    creatingAdmin ||
-                    seatsFull ||
-                    org.status !== 'active' ||
-                    !adminName.trim() ||
-                    !adminEmail.trim() ||
-                    adminPassword.trim().length < 8
-                  }
-                  onClick={() => void handleCreateAdmin()}
-                >
-                  <Shield className="h-4 w-4" />
-                  {creatingAdmin ? 'Criando…' : 'Criar login do administrador'}
-                </Button>
-                {seatsFull ? (
-                  <p className="mt-2 text-xs text-destructive">
-                    Limite de acessos atingido. Aumente o limite antes de criar o admin.
-                  </p>
-                ) : null}
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="px-0 text-muted-foreground"
+              onClick={() => setShowPasswordCreate((v) => !v)}
+            >
+              {showPasswordCreate
+                ? 'Ocultar criação com senha'
+                : 'Ou criar login com senha temporária'}
+            </Button>
+            {showPasswordCreate ? (
+              <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="admin-name">Nome *</Label>
+                  <Input
+                    id="admin-name"
+                    value={adminName}
+                    onChange={(event) => setAdminName(event.target.value)}
+                    placeholder="Nome de quem vai administrar"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-email-pass">E-mail de login *</Label>
+                  <Input
+                    id="admin-email-pass"
+                    type="email"
+                    value={adminEmail}
+                    onChange={(event) => setAdminEmail(event.target.value)}
+                    placeholder="admin@empresa.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-password">Senha temporária *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="admin-password"
+                      value={adminPassword}
+                      onChange={(event) => setAdminPassword(event.target.value)}
+                      className="font-mono"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Gerar nova senha"
+                      onClick={() => setAdminPassword(generateTempPassword())}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <Button
+                    type="button"
+                    disabled={
+                      creatingAdmin ||
+                      seatsFull ||
+                      org.status !== 'active' ||
+                      !adminName.trim() ||
+                      !adminEmail.trim() ||
+                      adminPassword.trim().length < 8
+                    }
+                    onClick={() => void handleCreateAdmin()}
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    {creatingAdmin ? 'Criando…' : 'Criar login do administrador'}
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            ) : null}
+          </div>
 
           {createdCredentials ? (
             <div className="space-y-3 rounded-xl border border-brand/30 bg-brand/5 p-4">
@@ -550,8 +729,8 @@ export function OrganizationDetailPage() {
               <div>
                 <CardTitle className="text-base">Membros com acesso</CardTitle>
                 <CardDescription>
-                  Após o 1º admin, os demais acessos são criados por ele em Configurações (até o
-                  limite definido pelo Master).
+                  O Master pode remover acessos aqui. Novos funcionários entram pelo convite
+                  que o admin da empresa envia em Configurações → Usuários da empresa.
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="gap-1">
@@ -563,7 +742,7 @@ export function OrganizationDetailPage() {
           <CardContent>
             {members.length === 0 ? (
               <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                Nenhum membro ainda. Crie o administrador da empresa acima para iniciar.
+                Nenhum membro ainda. Convide o administrador da empresa acima para iniciar.
               </p>
             ) : (
               <div className="overflow-x-auto rounded-lg border">
@@ -573,6 +752,7 @@ export function OrganizationDetailPage() {
                       <th className="px-4 py-2.5 font-medium">Nome</th>
                       <th className="px-4 py-2.5 font-medium">E-mail</th>
                       <th className="px-4 py-2.5 font-medium">Papel</th>
+                      <th className="px-4 py-2.5 font-medium text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -583,6 +763,18 @@ export function OrganizationDetailPage() {
                         <td className="px-4 py-2.5">
                           <Badge variant="secondary">{ROLE_LABEL[member.orgRole]}</Badge>
                         </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => removeDialog.requestDelete(member)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Remover
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -592,6 +784,21 @@ export function OrganizationDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmDeleteDialog
+        open={removeDialog.open}
+        onOpenChange={removeDialog.handleOpenChange}
+        title="Remover acesso desta pasta?"
+        description={
+          removeDialog.target
+            ? `"${removeDialog.target.name}" (${removeDialog.target.email}) perderá o acesso a esta empresa. A conta de login continua existindo; só o vínculo com a pasta é removido.`
+            : undefined
+        }
+        itemName={removeDialog.target?.name}
+        confirmLabel="Remover"
+        loading={removeDialog.loading}
+        onConfirm={handleRemoveMember}
+      />
     </div>
   )
 }

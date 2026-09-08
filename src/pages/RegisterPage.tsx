@@ -114,7 +114,15 @@ export function RegisterPage() {
       title="Criar conta"
       subtitle={
         invite
-          ? `Convite como ${invite.role === 'team' ? 'equipe' : 'cliente'}.`
+          ? `Convite como ${
+              invite.role === 'org_admin'
+                ? 'admin da empresa'
+                : invite.role === 'team'
+                  ? 'equipe'
+                  : invite.role === 'user'
+                    ? 'usuário'
+                    : 'cliente'
+            }.`
           : 'Cadastre-se para começar a organizar visitas.'
       }
     >

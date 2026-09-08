@@ -1,6 +1,8 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -180,4 +182,23 @@ export async function updateOrganization(
     ...data,
     updatedAt: serverTimestamp(),
   })
+}
+
+/** Remove o vínculo do membro com a pasta (Master). Não apaga a conta Auth. */
+export async function removeOrganizationMember(
+  orgId: string,
+  uid: string,
+): Promise<void> {
+  await deleteDoc(doc(membersCol, organizationMemberId(orgId, uid)))
+
+  const userRef = doc(db, 'users', uid)
+  const userSnap = await getDoc(userRef)
+  if (!userSnap.exists()) return
+  const data = userSnap.data()
+  if (data.orgId === orgId) {
+    await updateDoc(userRef, {
+      orgId: deleteField(),
+      updatedAt: serverTimestamp(),
+    })
+  }
 }

@@ -117,6 +117,7 @@ export function SettingsPage() {
     resetPassword,
     isClient,
     isAdmin,
+    isPlatformAdmin,
     user,
   } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
@@ -565,7 +566,9 @@ export function SettingsPage() {
             </CardTitle>
             <CardDescription>
               {activeOrg
-                ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes). O Master define o limite; aqui você convida funcionários até esse teto.`
+                ? isPlatformAdmin
+                  ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos. Master convida admins na pasta do cliente; aqui (como admin da empresa) você convida funcionários.`
+                  : `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes). Convide funcionários da empresa até o limite definido pelo Master.`
                 : 'Gerencie convites e membros da empresa.'}
             </CardDescription>
           </CardHeader>
@@ -622,9 +625,9 @@ export function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(isAdmin || isOrgAdmin) && (
+                    {isPlatformAdmin ? (
                       <SelectItem value="org_admin">Admin da empresa</SelectItem>
-                    )}
+                    ) : null}
                     <SelectItem value="user">Usuário</SelectItem>
                     <SelectItem value="team">Equipe</SelectItem>
                     <SelectItem value="client">Cliente</SelectItem>
