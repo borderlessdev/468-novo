@@ -4,20 +4,38 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Camera, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrg } from '@/contexts/OrgContext'
 import { profileSchema, type ProfileInput } from '@/lib/validations'
 
+function getRoleLabel(
+  isPlatformAdmin: boolean,
+  isOrgAdmin: boolean,
+  role: string | undefined,
+): string {
+  if (isPlatformAdmin) return 'Admin Master'
+  if (isOrgAdmin) return 'Admin da empresa'
+  if (role === 'admin') return 'Administrador'
+  if (role === 'client') return 'Cliente'
+  if (role === 'team') return 'Equipe'
+  return 'Usuário'
+}
+
 export function ProfilePage() {
-  const { profile, updateProfileData, uploadAvatar, removeAvatar, resetPassword } = useAuth()
+  const { profile, isPlatformAdmin, updateProfileData, uploadAvatar, removeAvatar, resetPassword } =
+    useAuth()
+  const { isOrgAdmin } = useOrg()
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const roleLabel = getRoleLabel(isPlatformAdmin, isOrgAdmin, profile?.role)
 
   const form = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
@@ -112,7 +130,10 @@ export function ProfilePage() {
                 </Avatar>
                 <div className="min-w-0 flex-1 space-y-3">
                   <div>
-                    <p className="text-lg font-medium">{profile?.name}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-lg font-medium">{profile?.name}</p>
+                      <Badge variant="secondary">{roleLabel}</Badge>
+                    </div>
                     <p className="text-sm text-muted-foreground">{profile?.email}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -193,7 +214,7 @@ export function ProfilePage() {
             </p>
             <div className="mt-4 text-sm">
               <p className="mb-2 font-medium">Papel</p>
-              <p className="text-sm text-muted-foreground">{profile?.role ?? 'Usuário'}</p>
+              <Badge variant="secondary">{roleLabel}</Badge>
             </div>
           </CardContent>
         </Card>

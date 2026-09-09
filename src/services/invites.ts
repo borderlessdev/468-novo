@@ -172,6 +172,15 @@ export async function acceptInvite(inviteId: string, uid: string): Promise<void>
   })
 }
 
+export async function listPendingInvitesByOrg(orgId: string): Promise<Invite[]> {
+  const snap = await getDocs(
+    query(col, where('orgId', '==', orgId), where('status', '==', 'pending')),
+  )
+  return snap.docs
+    .map((d) => mapInvite(d.id, d.data()))
+    .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
+}
+
 export async function listInvitesByOrg(orgId: string): Promise<Invite[]> {
   const snap = await getDocs(query(col, where('orgId', '==', orgId)))
   return snap.docs

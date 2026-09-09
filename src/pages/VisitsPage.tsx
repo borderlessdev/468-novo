@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/PageHeader'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -111,37 +111,45 @@ export function VisitsPage() {
       />
 
       <Card>
-        <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:gap-3">
-          <div className="flex h-9 shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
             <Filter className="h-4 w-4" />
             Filtros
-          </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 pt-0 lg:flex-row lg:items-end lg:gap-3">
           <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os status</SelectItem>
-                <SelectItem value="planejamento">Planejamento</SelectItem>
-                <SelectItem value="em_andamento">Em andamento</SelectItem>
-                <SelectItem value="concluida">Concluída</SelectItem>
-                <SelectItem value="cancelada">Cancelada</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={stateFilter} onValueChange={setStateFilter}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os estados</SelectItem>
-                {BRAZILIAN_STATES.map((uf) => (
-                  <SelectItem key={uf} value={uf}>
-                    {uf}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="planejamento">Planejamento</SelectItem>
+                  <SelectItem value="em_andamento">Em andamento</SelectItem>
+                  <SelectItem value="concluida">Concluída</SelectItem>
+                  <SelectItem value="cancelada">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Estado</Label>
+              <Select value={stateFilter} onValueChange={setStateFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os estados</SelectItem>
+                  {BRAZILIAN_STATES.map((uf) => (
+                    <SelectItem key={uf} value={uf}>
+                      {uf}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="visits-start-date" className="text-xs text-muted-foreground">
                 Data de início
@@ -167,7 +175,10 @@ export function VisitsPage() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1 lg:ml-auto" aria-label="Modo de visualização">
+          <div
+            className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1 lg:ml-auto"
+            aria-label="Modo de visualização"
+          >
             {([
               { value: 'table', label: 'Tabela', icon: List },
               { value: 'cards', label: 'Cards', icon: LayoutGrid },
@@ -178,7 +189,7 @@ export function VisitsPage() {
                 type="button"
                 variant={viewMode === value ? 'secondary' : 'ghost'}
                 size="sm"
-                className="flex-1 gap-2 lg:flex-none"
+                className="h-8 flex-1 gap-2 lg:flex-none"
                 onClick={() => changeViewMode(value)}
                 aria-pressed={viewMode === value}
               >

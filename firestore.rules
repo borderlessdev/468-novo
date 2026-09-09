@@ -27,6 +27,16 @@ service cloud.firestore {
       return isPlatformAdmin() || (isSignedIn() && userOrgId() == orgId);
     }
 
+    function memberDocPath(orgId, uid) {
+      return /databases/$(database)/documents/organizationMembers/$(orgId + '_' + uid);
+    }
+
+    function isOrgAdminOf(orgId) {
+      return isSignedIn()
+        && exists(memberDocPath(orgId, request.auth.uid))
+        && get(memberDocPath(orgId, request.auth.uid)).data.orgRole == 'org_admin';
+    }
+
     function visitData(visitId) {
       return get(/databases/$(database)/documents/visits/$(visitId)).data;
     }
@@ -142,7 +152,14 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.orgRole in ['org_admin', 'user', 'team', 'client']
         && (isPlatformAdmin() || request.resource.data.uid == request.auth.uid);
-      allow update, delete: if isPlatformAdmin();
+      allow update: if isPlatformAdmin();
+      // Master ou admin da empresa (não remove a si mesmo pela rule — UI também bloqueia).
+      allow delete: if isPlatformAdmin()
+        || (
+          resource.data.orgId is string
+          && isOrgAdminOf(resource.data.orgId)
+          && resource.data.uid != request.auth.uid
+        );
     }
 
     match /users/{userId} {
@@ -173,6 +190,14 @@ service cloud.firestore {
           )
           || isAdmin()
           || isPlatformAdmin()
+          // Admin da empresa removendo vínculo: só limpa orgId do membro da sua pasta.
+          || (
+            resource.data.orgId is string
+            && isOrgAdminOf(resource.data.orgId)
+            && !('orgId' in request.resource.data)
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.role == resource.data.role
+          )
         );
 
       allow delete: if isAdmin();
@@ -341,7 +366,12 @@ service cloud.firestore {
 
     match /invites/{inviteId} {
       allow read: if resource.data.status == 'pending'
-        || (isSignedIn() && (resource.data.createdBy == request.auth.uid || isAdmin()));
+        || (isSignedIn() && (
+          resource.data.createdBy == request.auth.uid
+          || isAdmin()
+          || isPlatformAdmin()
+          || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
+        ));
       allow create: if isSignedIn()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.email is string
@@ -354,9 +384,16 @@ service cloud.firestore {
           (resource.data.status == 'pending' && request.resource.data.status == 'accepted')
           || resource.data.createdBy == request.auth.uid
           || isAdmin()
+          || isPlatformAdmin()
+          || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
         );
       allow delete: if isSignedIn()
-        && (resource.data.createdBy == request.auth.uid || isAdmin());
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isAdmin()
+          || isPlatformAdmin()
+          || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
+        );
     }
 
     // Portal do visitante: o ID do documento é o token secreto do link.

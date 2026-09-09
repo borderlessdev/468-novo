@@ -7,6 +7,7 @@ import { AuthLayout } from '@/components/layout/AuthLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/AuthContext'
 import { registerSchema, type RegisterInput } from '@/lib/validations'
@@ -148,14 +149,18 @@ export function RegisterPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Senha</Label>
-          <Input id="password" type="password" {...form.register('password')} />
+          <PasswordInput id="password" autoComplete="new-password" {...form.register('password')} />
           {form.formState.errors.password ? (
             <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
           ) : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirmar senha</Label>
-          <Input id="confirmPassword" type="password" {...form.register('confirmPassword')} />
+          <PasswordInput
+            id="confirmPassword"
+            autoComplete="new-password"
+            {...form.register('confirmPassword')}
+          />
           {form.formState.errors.confirmPassword ? (
             <p className="text-xs text-destructive">
               {form.formState.errors.confirmPassword.message}

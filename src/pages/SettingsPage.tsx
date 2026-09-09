@@ -44,18 +44,28 @@ import {
   startGoogleOAuth,
   type CalendarStatuses,
 } from '@/services/calendar'
-import { createInvite } from '@/services/invites'
+import { createInvite, cancelInvite, listPendingInvitesByOrg } from '@/services/invites'
 import {
   countOrganizationSeats,
   countPendingInvites,
   listOrganizationMembers,
+  removeOrganizationMember,
 } from '@/services/organizations'
 import { listEmailLogs } from '@/services/emailLogs'
 import {
   listUsers,
   updateUserModulePermissions,
 } from '@/services/users'
-import type { EmailLog, InviteRole, ModulePermissions, OrganizationMember, UserProfile } from '@/types'
+import type {
+  EmailLog,
+  Invite,
+  InviteRole,
+  ModulePermissions,
+  OrganizationMember,
+  UserProfile,
+} from '@/types'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
+import { Badge } from '@/components/ui/badge'
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Claro', icon: Sun },
@@ -127,6 +137,7 @@ export function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<InviteRole>('team')
   const [inviteDepartment, setInviteDepartment] = useState('')
   const [orgMembers, setOrgMembers] = useState<OrganizationMember[]>([])
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([])
   const [seatUsage, setSeatUsage] = useState({ members: 0, pending: 0 })
   const [inviting, setInviting] = useState(false)
   const [lastInviteLink, setLastInviteLink] = useState('')
@@ -140,6 +151,7 @@ export function SettingsPage() {
   const [calendar, setCalendar] = useState<CalendarStatuses | null>(null)
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [calendarBusy, setCalendarBusy] = useState(false)
+  const removeMemberDialog = useConfirmDelete<OrganizationMember>()
 
   // profile editing moved to Profile page
 
@@ -155,17 +167,22 @@ export function SettingsPage() {
     void listEmailLogs(user.uid, isAdmin).then(setEmailLogs).catch(console.error)
   }, [user, isAdmin])
 
-  useEffect(() => {
+  const reloadOrgUsers = useCallback(async () => {
     if (!user || !activeOrgId || !canManageOrgUsers(isAdmin, isOrgAdmin)) return
-    void Promise.all([
+    const [members, membersCount, pendingCount, invites] = await Promise.all([
       listOrganizationMembers(activeOrgId),
       countOrganizationSeats(activeOrgId),
       countPendingInvites(activeOrgId),
-    ]).then(([members, membersCount, pendingCount]) => {
-      setOrgMembers(members)
-      setSeatUsage({ members: membersCount, pending: pendingCount })
-    })
-  }, [user, activeOrgId, isAdmin, isOrgAdmin, lastInviteLink])
+      listPendingInvitesByOrg(activeOrgId),
+    ])
+    setOrgMembers(members)
+    setSeatUsage({ members: membersCount, pending: pendingCount })
+    setPendingInvites(invites)
+  }, [user, activeOrgId, isAdmin, isOrgAdmin])
+
+  useEffect(() => {
+    void reloadOrgUsers().catch(console.error)
+  }, [reloadOrgUsers, lastInviteLink])
 
   // As credenciais GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET moram em functions/.env
   // (ou no Secret Manager). Sem elas as callables respondem erro tratado e o card
@@ -247,6 +264,7 @@ export function SettingsPage() {
       setInviteEmail('')
       setInviteDepartment('')
       setEmailLogs(await listEmailLogs(user.uid, isAdmin))
+      await reloadOrgUsers()
     } catch (error) {
       console.error(error)
       toast.error(
@@ -255,6 +273,33 @@ export function SettingsPage() {
     } finally {
       setInviting(false)
     }
+  }
+
+  const handleCancelInvite = async (inviteId: string) => {
+    try {
+      await cancelInvite(inviteId)
+      toast.success('Convite cancelado — vaga liberada')
+      await reloadOrgUsers()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível cancelar o convite')
+    }
+  }
+
+  const handleRemoveMember = () => {
+    void removeMemberDialog.confirm(async (member) => {
+      try {
+        await removeOrganizationMember(member.orgId, member.uid)
+        toast.success('Usuário removido da empresa')
+        await reloadOrgUsers()
+      } catch (error) {
+        console.error(error)
+        toast.error(
+          error instanceof Error ? error.message : 'Não foi possível remover o usuário',
+        )
+        throw error
+      }
+    })
   }
 
   const handleModuleToggle = async (
@@ -566,34 +611,90 @@ export function SettingsPage() {
             </CardTitle>
             <CardDescription>
               {activeOrg
-                ? isPlatformAdmin
-                  ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos. Master convida admins na pasta do cliente; aqui (como admin da empresa) você convida funcionários.`
-                  : `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes). Convide funcionários da empresa até o limite definido pelo Master.`
+                ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes). Convide funcionários, cancele convites não usados ou remova acessos.`
                 : 'Gerencie convites e membros da empresa.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {orgMembers.length > 0 ? (
               <div className="space-y-2">
-                {orgMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{member.name}</p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
+                <p className="text-xs font-medium text-muted-foreground">Membros ativos</p>
+                {orgMembers.map((member) => {
+                  const isSelf = user?.uid === member.uid
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{member.name}</p>
+                        <p className="text-xs text-muted-foreground">{member.email}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {orgRoleLabel(member.orgRole)}
+                          {member.department ? ` · ${member.department}` : ''}
+                        </span>
+                        {!isSelf ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => removeMemberDialog.requestDelete(member)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Remover
+                          </Button>
+                        ) : (
+                          <Badge variant="secondary">Você</Badge>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {orgRoleLabel(member.orgRole)}
-                      {member.department ? ` · ${member.department}` : ''}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Nenhum membro cadastrado ainda.</p>
             )}
+
+            {pendingInvites.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Convites pendentes (ocupam vaga até a pessoa criar a conta ou você cancelar)
+                </p>
+                {pendingInvites.map((invite) => (
+                  <div
+                    key={invite.id}
+                    className="flex flex-col gap-2 rounded-lg border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{invite.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {invite.role === 'org_admin'
+                          ? 'Admin da empresa'
+                          : invite.role === 'team'
+                            ? 'Equipe'
+                            : invite.role === 'client'
+                              ? 'Cliente'
+                              : 'Usuário'}
+                        {' · '}
+                        aguardando cadastro
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => void handleCancelInvite(invite.id)}
+                    >
+                      Cancelar convite
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             <form
               className="space-y-3 border-t pt-4"
@@ -752,6 +853,21 @@ export function SettingsPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <ConfirmDeleteDialog
+        open={removeMemberDialog.open}
+        onOpenChange={removeMemberDialog.handleOpenChange}
+        title="Remover usuário da empresa?"
+        description={
+          removeMemberDialog.target
+            ? `"${removeMemberDialog.target.name}" (${removeMemberDialog.target.email}) perderá o acesso a esta empresa. A conta de login continua existindo.`
+            : undefined
+        }
+        itemName={removeMemberDialog.target?.name}
+        confirmLabel="Remover"
+        loading={removeMemberDialog.loading}
+        onConfirm={handleRemoveMember}
+      />
     </div>
   )
 }

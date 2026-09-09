@@ -82,6 +82,7 @@ export function OrganizationDetailPage() {
   const [invitingAdmin, setInvitingAdmin] = useState(false)
   const [showPasswordCreate, setShowPasswordCreate] = useState(false)
   const [pendingAdminInvites, setPendingAdminInvites] = useState<Invite[]>([])
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([])
   const [lastAdminInviteLink, setLastAdminInviteLink] = useState<string | null>(null)
   const [createdCredentials, setCreatedCredentials] =
     useState<CreatedOrgAdminCredentials | null>(null)
@@ -109,6 +110,7 @@ export function OrganizationDetailPage() {
       setPendingAdminInvites(
         invites.filter((invite) => invite.status === 'pending' && invite.role === 'org_admin'),
       )
+      setPendingInvites(invites.filter((invite) => invite.status === 'pending'))
       setName(organization.name)
       setMaxUsers(String(organization.maxUsers))
       setStatus(organization.status)
@@ -275,6 +277,19 @@ export function OrganizationDetailPage() {
     }
   }
 
+  const handleCancelAllPendingInvites = async () => {
+    if (pendingInvites.length === 0) return
+    try {
+      await Promise.all(pendingInvites.map((invite) => cancelInvite(invite.id)))
+      toast.success(`${pendingInvites.length} convite(s) cancelado(s) — vagas liberadas`)
+      setLastAdminInviteLink(null)
+      await load()
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível cancelar todos os convites')
+    }
+  }
+
   const handleCreateAdmin = async () => {
     if (!user || !orgId) return
     setCreatingAdmin(true)
@@ -435,11 +450,58 @@ export function OrganizationDetailPage() {
               {pending > 0
                 ? ` (${pending} convite${pending === 1 ? '' : 's'} pendente${pending === 1 ? '' : 's'})`
                 : ''}
+              . Convites pendentes ocupam vaga até a pessoa criar a conta ou você cancelar.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <ReactECharts option={gaugeOption} style={{ height: 220 }} opts={{ renderer: 'svg' }} />
             <Progress value={pct} className="mt-2 h-2" />
+            {pendingInvites.length > 0 ? (
+              <div className="space-y-2 border-t pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Convites pendentes
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => void handleCancelAllPendingInvites()}
+                  >
+                    Cancelar todos
+                  </Button>
+                </div>
+                {pendingInvites.map((invite) => (
+                  <div
+                    key={invite.id}
+                    className="flex flex-col gap-1 rounded-lg border border-dashed p-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{invite.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {invite.role === 'org_admin'
+                          ? 'Admin'
+                          : invite.role === 'team'
+                            ? 'Equipe'
+                            : invite.role === 'client'
+                              ? 'Cliente'
+                              : 'Usuário'}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => void handleCancelAdminInvite(invite.id)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>
