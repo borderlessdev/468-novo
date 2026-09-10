@@ -1,16 +1,18 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { isNavAllowed } from '@/lib/access'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export function ProtectedRoute() {
-  const { user, loading, role, isPlatformAdmin, profile } = useAuth()
+  const { user, loading, role, isPlatformAdmin, profile, logout } = useAuth()
   const { activeOrgId, loading: orgLoading } = useOrg()
   const location = useLocation()
   const deniedPath = useRef<string | null>(null)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const allowed =
     !user ||
@@ -60,6 +62,16 @@ export function ProtectedRoute() {
   }
 
   if (!isPlatformAdmin && !activeOrgId && !isOrganizationsRoute) {
+    const handleLogout = async () => {
+      setLoggingOut(true)
+      try {
+        await logout()
+        toast.success('Sessão encerrada')
+      } finally {
+        setLoggingOut(false)
+      }
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="max-w-md text-center">
@@ -67,6 +79,15 @@ export function ProtectedRoute() {
           <p className="mt-2 text-sm text-muted-foreground">
             Peça um convite ao administrador da sua empresa para acessar o sistema.
           </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-6"
+            disabled={loggingOut}
+            onClick={handleLogout}
+          >
+            {loggingOut ? 'Saindo…' : 'Sair da conta'}
+          </Button>
         </div>
       </div>
     )

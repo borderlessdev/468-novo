@@ -579,18 +579,6 @@ export function SettingsPage() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Outlook</p>
-                  <p className="text-sm text-muted-foreground">
-                    Integração com Microsoft 365 ainda em desenvolvimento.
-                  </p>
-                </div>
-                <Button variant="outline" disabled>
-                  Em breve
-                </Button>
-              </div>
-
               {!calendarLoading && calendar && !calendar.credentialsConfigured ? (
                 <p className="text-xs text-muted-foreground">
                   Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET nas Functions para habilitar a

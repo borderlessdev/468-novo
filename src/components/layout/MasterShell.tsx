@@ -72,10 +72,8 @@ export function MasterShell() {
       >
         <div
           className={cn(
-            'flex border-b border-white/8 px-2.5',
-            collapsed
-              ? 'h-auto flex-col items-center gap-1 py-2'
-              : 'h-16 items-center gap-2',
+            'flex h-16 shrink-0 items-center border-b border-white/8 px-2.5',
+            collapsed ? 'flex-col justify-center gap-1' : 'gap-2',
           )}
         >
           <Link
@@ -122,7 +120,7 @@ export function MasterShell() {
         </div>
 
         {!collapsed ? (
-          <div className="border-b border-white/8 px-4 py-3">
+          <div className="shrink-0 border-b border-white/8 px-4 py-3">
             <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-brand" />
               <div>
@@ -135,7 +133,7 @@ export function MasterShell() {
           </div>
         ) : null}
 
-        <nav className="scrollbar-thin space-y-1 overflow-y-auto px-2.5 py-4">
+        <nav className="scrollbar-thin min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 py-4">
           {MASTER_NAV.map((item) => {
             const Icon = item.icon
             return (
@@ -205,8 +203,8 @@ export function MasterShell() {
           collapsed ? 'lg:ml-[72px]' : 'lg:ml-64',
         )}
       >
-        <header className="sticky top-0 z-30 border-b border-border/70 bg-card/85 backdrop-blur-md">
-          <div className="flex h-14 items-center justify-between gap-3 px-4 md:h-16 md:px-6">
+        <header className="sticky top-0 z-30 shrink-0 bg-card/85 backdrop-blur-md">
+          <div className="flex h-16 items-center justify-between gap-3 border-b border-border/70 px-4 md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <Button
                 variant="ghost"
