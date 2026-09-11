@@ -75,6 +75,9 @@ export async function saveVisitAsTemplate(
     startDate: source.startDate,
     endDate: source.endDate,
     status: 'planejamento',
+    eventKind: source.eventKind,
+    vipSubtype: source.vipSubtype,
+    eventScope: source.eventScope,
     objective: source.objective,
     language: source.language,
     arrivalInstructions: source.arrivalInstructions,
@@ -107,6 +110,9 @@ export async function duplicateVisit(
     startDate,
     endDate,
     status: 'planejamento',
+    eventKind: source.eventKind,
+    vipSubtype: source.vipSubtype,
+    eventScope: source.eventScope,
     objective: source.objective,
     language: source.language,
     arrivalInstructions: source.arrivalInstructions,
@@ -127,11 +133,25 @@ export async function createVisitFromTemplate(
   templateId: string,
   ownerId: string,
   overrides: Pick<Visit, 'title' | 'startDate' | 'endDate'> &
-    Partial<Pick<Visit, 'company' | 'state' | 'city' | 'objective' | 'language' | 'pvNumber'>>,
+    Partial<
+      Pick<
+        Visit,
+        | 'company'
+        | 'state'
+        | 'city'
+        | 'objective'
+        | 'language'
+        | 'pvNumber'
+        | 'eventKind'
+        | 'vipSubtype'
+        | 'eventScope'
+      >
+    >,
 ): Promise<string> {
   const template = await getVisit(templateId)
   if (!template || !template.isTemplate) throw new Error('Template não encontrado')
 
+  const eventKind = overrides.eventKind ?? template.eventKind
   const newId = await createVisit(ownerId, template.orgId, {
     title: overrides.title,
     company: overrides.company ?? template.company,
@@ -140,6 +160,15 @@ export async function createVisitFromTemplate(
     startDate: overrides.startDate,
     endDate: overrides.endDate,
     status: 'planejamento',
+    eventKind,
+    vipSubtype:
+      eventKind === 'visita_vip'
+        ? (overrides.vipSubtype ?? template.vipSubtype)
+        : undefined,
+    eventScope:
+      eventKind === 'evento'
+        ? (overrides.eventScope ?? template.eventScope)
+        : undefined,
     objective: overrides.objective ?? template.objective,
     language: overrides.language ?? template.language,
     arrivalInstructions: template.arrivalInstructions,

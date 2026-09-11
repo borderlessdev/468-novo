@@ -74,10 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Evita corrida com register(): o onAuthStateChanged pode rodar antes do
     // createUserProfile com orgId/convite. Aguarda e tenta de novo.
     if (!userProfile) {
-      await new Promise((resolve) => setTimeout(resolve, 400))
+      await new Promise((resolve) => setTimeout(resolve, 500))
       userProfile = await getUserProfile(firebaseUser.uid)
     }
     if (!userProfile) {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      userProfile = await getUserProfile(firebaseUser.uid)
+    }
+    if (!userProfile) {
+      // Placeholder mínimo — sem orgId:null forçado (merge preserva vínculo).
       await createUserProfile({
         uid: firebaseUser.uid,
         name: firebaseUser.displayName ?? 'Usuário',
@@ -86,9 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       userProfile = await getUserProfile(firebaseUser.uid)
     } else if (!userProfile.orgId) {
-      // register() ainda pode estar gravando orgId — uma segunda leitura ajuda.
-      await new Promise((resolve) => setTimeout(resolve, 400))
-      userProfile = (await getUserProfile(firebaseUser.uid)) ?? userProfile
+      // register() ainda pode estar gravando orgId — releituras ajudam.
+      for (let attempt = 0; attempt < 3 && !userProfile.orgId; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        userProfile = (await getUserProfile(firebaseUser.uid)) ?? userProfile
+      }
     }
     setProfile(userProfile)
 

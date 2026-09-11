@@ -31,6 +31,7 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
       ? String(data.dietaryRestriction)
       : undefined,
     language: data.language ? String(data.language) : undefined,
+    whatsapp: data.whatsapp ? String(data.whatsapp) : undefined,
     mobilityReduced: data.mobilityReduced === true,
     notes: data.notes ? String(data.notes) : undefined,
     gifts: giftsRaw.map((g) => {
@@ -41,6 +42,8 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
         notes: item.notes ? String(item.notes) : undefined,
       }
     }),
+    lgpdConsent: data.lgpdConsent === true,
+    lgpdConsentAt: data.lgpdConsentAt ? String(data.lgpdConsentAt) : undefined,
     ownerId: String(data.ownerId ?? ''),
     orgId: String(data.orgId ?? ''),
     isDeleted: data.isDeleted === true,
@@ -137,8 +140,12 @@ export async function updateVisitor(
     dietaryRestriction:
       data.dietaryRestriction !== undefined ? data.dietaryRestriction || null : undefined,
     language: data.language !== undefined ? data.language || null : undefined,
+    whatsapp: data.whatsapp !== undefined ? data.whatsapp || null : undefined,
     notes: data.notes !== undefined ? data.notes || null : undefined,
     gifts: data.gifts !== undefined ? sanitizeGifts(data.gifts) : undefined,
+    lgpdConsent: data.lgpdConsent !== undefined ? data.lgpdConsent : undefined,
+    lgpdConsentAt:
+      data.lgpdConsentAt !== undefined ? data.lgpdConsentAt || null : undefined,
     updatedAt: serverTimestamp(),
   })
   await updateDoc(doc(visitorsCol, id), payload as Record<string, unknown> as never)

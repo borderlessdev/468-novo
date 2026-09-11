@@ -45,8 +45,10 @@ interface DraftForm {
   role: string
   dietaryRestriction: string
   language: string
+  whatsapp: string
   notes: string
   mobilityReduced: boolean
+  lgpdConsent: boolean
 }
 
 const EMPTY_DRAFT: DraftForm = {
@@ -56,8 +58,10 @@ const EMPTY_DRAFT: DraftForm = {
   role: '',
   dietaryRestriction: '',
   language: '',
+  whatsapp: '',
   notes: '',
   mobilityReduced: false,
+  lgpdConsent: false,
 }
 
 const RATINGS = [1, 2, 3, 4, 5]
@@ -139,8 +143,26 @@ function draftFromLink(link: VisitGuestLink): DraftForm {
     role: draft?.role ?? '',
     dietaryRestriction: draft?.dietaryRestriction ?? '',
     language: draft?.language ?? '',
+    whatsapp: draft?.whatsapp ?? '',
     notes: draft?.notes ?? '',
     mobilityReduced: draft?.mobilityReduced === true,
+    lgpdConsent: draft?.lgpdConsent === true,
+  }
+}
+
+function toDraftPayload(draft: DraftForm): GuestVisitorDraft {
+  return {
+    name: draft.name,
+    document: draft.document,
+    company: draft.company,
+    role: draft.role,
+    dietaryRestriction: draft.dietaryRestriction,
+    language: draft.language,
+    whatsapp: draft.whatsapp,
+    notes: draft.notes,
+    mobilityReduced: draft.mobilityReduced,
+    lgpdConsent: draft.lgpdConsent,
+    lgpdConsentAt: draft.lgpdConsent ? new Date().toISOString() : undefined,
   }
 }
 
@@ -199,6 +221,17 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (!link || state !== 'ok') return
+    const brand = link.orgName?.trim()
+    document.title = brand
+      ? `${link.visitTitle} · ${brand}`
+      : `${link.visitTitle} · Portal do visitante`
+    return () => {
+      document.title = 'Promover Experience'
+    }
+  }, [link, state])
+
   const agendaByDate = useMemo(
     () => groupAgendaByDate(link?.agenda ?? []),
     [link?.agenda],
@@ -206,10 +239,24 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
   const handleConfirmation = async (status: GuestConfirmationStatus) => {
     if (!link) return
+    if (status === 'confirmed' && !draft.lgpdConsent) {
+      toast.error(
+        'Para confirmar, aceite o uso dos seus dados neste evento (LGPD).',
+      )
+      return
+    }
     setConfirming(true)
     try {
-      await updateGuestPortal(link.id, { confirmationStatus: status })
-      setLink({ ...link, confirmationStatus: status })
+      const payload: GuestVisitorDraft = toDraftPayload(draft)
+      await updateGuestPortal(link.id, {
+        confirmationStatus: status,
+        visitorDraft: payload,
+      })
+      setLink({
+        ...link,
+        confirmationStatus: status,
+        visitorDraft: { ...payload, updatedAt: new Date().toISOString() },
+      })
       toast.success(
         status === 'confirmed' ? 'Presença confirmada. Obrigado!' : 'Recusa registrada',
       )
@@ -225,17 +272,12 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
     if (!link) return
     setSavingDraft(true)
     try {
-      const payload: GuestVisitorDraft = {
-        name: draft.name,
-        document: draft.document,
-        company: draft.company,
-        role: draft.role,
-        dietaryRestriction: draft.dietaryRestriction,
-        language: draft.language,
-        notes: draft.notes,
-        mobilityReduced: draft.mobilityReduced,
-      }
+      const payload = toDraftPayload(draft)
       await updateGuestPortal(link.id, { visitorDraft: payload })
+      setLink({
+        ...link,
+        visitorDraft: { ...payload, updatedAt: new Date().toISOString() },
+      })
       toast.success('Dados enviados para a organização')
     } catch (error) {
       console.error(error)
@@ -301,10 +343,21 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
       <PortalShell>
         <Card className="overflow-hidden">
           <div className="bg-primary px-6 py-4 text-primary-foreground">
-            <p className="text-xs font-medium uppercase tracking-wide opacity-80">
-              Crachá do visitante
-            </p>
-            <p className="font-display text-lg font-semibold">{link.visitTitle}</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide opacity-80">
+                  Crachá do visitante
+                </p>
+                <p className="font-display text-lg font-semibold">{link.visitTitle}</p>
+              </div>
+              {link.orgLogoUrl ? (
+                <img
+                  src={link.orgLogoUrl}
+                  alt=""
+                  className="h-10 w-auto max-w-[96px] rounded bg-white/95 object-contain p-1"
+                />
+              ) : null}
+            </div>
           </div>
           <CardContent className="space-y-6 pt-6">
             <div>
@@ -347,13 +400,24 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
   return (
     <PortalShell>
-      <header className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-primary">
-          Portal do visitante
-        </p>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-          {link.visitTitle}
-        </h1>
+      <header className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-primary">
+              {link.orgName || 'Portal do visitante'}
+            </p>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+              {link.visitTitle}
+            </h1>
+          </div>
+          {link.orgLogoUrl ? (
+            <img
+              src={link.orgLogoUrl}
+              alt={link.orgName ? `Logo ${link.orgName}` : 'Logo da empresa'}
+              className="h-12 w-auto max-w-[140px] shrink-0 object-contain sm:h-14 sm:max-w-[180px]"
+            />
+          ) : null}
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <CalendarDays className="h-4 w-4" />
@@ -377,24 +441,29 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
           <CardTitle>Confirmação de presença</CardTitle>
           <ConfirmationBadge status={link.confirmationStatus} />
         </CardHeader>
-        <CardContent className="flex flex-col gap-2 sm:flex-row">
-          <Button
-            className="sm:w-auto"
-            disabled={confirming || link.confirmationStatus === 'confirmed'}
-            onClick={() => void handleConfirmation('confirmed')}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            Confirmar presença
-          </Button>
-          <Button
-            variant="outline"
-            className="sm:w-auto"
-            disabled={confirming || link.confirmationStatus === 'declined'}
-            onClick={() => void handleConfirmation('declined')}
-          >
-            <XCircle className="h-4 w-4" />
-            Não vou participar
-          </Button>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Confirme após revisar seus dados e aceitar o uso das informações neste evento.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              className="sm:w-auto"
+              disabled={confirming || link.confirmationStatus === 'confirmed'}
+              onClick={() => void handleConfirmation('confirmed')}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Confirmar presença
+            </Button>
+            <Button
+              variant="outline"
+              className="sm:w-auto"
+              disabled={confirming || link.confirmationStatus === 'declined'}
+              onClick={() => void handleConfirmation('declined')}
+            >
+              <XCircle className="h-4 w-4" />
+              Não vou participar
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -512,6 +581,16 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
                 onChange={(e) => setDraft({ ...draft, language: e.target.value })}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="portal-whatsapp">WhatsApp</Label>
+              <Input
+                id="portal-whatsapp"
+                placeholder="(11) 99999-9999"
+                inputMode="tel"
+                value={draft.whatsapp}
+                onChange={(e) => setDraft({ ...draft, whatsapp: e.target.value })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="portal-notes">Observações</Label>
@@ -530,6 +609,23 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
               }
             />
             Preciso de apoio de mobilidade reduzida
+          </label>
+          <label className="flex items-start gap-3 text-sm leading-snug">
+            <Checkbox
+              className="mt-0.5"
+              checked={draft.lgpdConsent}
+              onCheckedChange={(checked) =>
+                setDraft({ ...draft, lgpdConsent: checked === true })
+              }
+            />
+            <span>
+              <span className="font-medium">Aceite LGPD (obrigatório para confirmar):</span>{' '}
+              autorizo o tratamento dos meus dados pessoais pela organização responsável
+              pela visita/evento, com a finalidade de organizar a presença, logística,
+              comunicação e segurança do evento. Os dados serão acessados apenas por
+              usuários autorizados da empresa e poderão ser atualizados ou excluídos
+              mediante solicitação, conforme a LGPD.
+            </span>
           </label>
           <Button disabled={savingDraft} onClick={() => void handleSaveDraft()}>
             {savingDraft ? 'Enviando...' : 'Enviar meus dados'}
@@ -605,7 +701,8 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
       </Card>
 
       <p className="pb-4 text-center text-xs text-muted-foreground">
-        Link válido até {formatDate(link.expiresAt.slice(0, 10))} · Promover Experience
+        Link válido até {formatDate(link.expiresAt.slice(0, 10))}
+        {link.orgName ? ` · ${link.orgName}` : ' · Promover Experience'}
       </p>
     </PortalShell>
   )

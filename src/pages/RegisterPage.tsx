@@ -149,7 +149,16 @@ export function RegisterPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Senha</Label>
-          <PasswordInput id="password" autoComplete="new-password" {...form.register('password')} />
+          <PasswordInput
+            id="password"
+            autoComplete="new-password"
+            allowGenerate
+            {...form.register('password')}
+            onGenerated={(password) => {
+              form.setValue('password', password, { shouldValidate: true })
+              form.setValue('confirmPassword', password, { shouldValidate: true })
+            }}
+          />
           {form.formState.errors.password ? (
             <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
           ) : null}

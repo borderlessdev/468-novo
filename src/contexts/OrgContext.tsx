@@ -99,9 +99,14 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const member = profile?.orgId
+      let member = profile?.orgId
         ? await getOrganizationMember(profile.orgId, user.uid)
-        : await getMemberByUid(user.uid)
+        : null
+      // Sempre tenta por uid: cobre perfil sem orgId (corrida no cadastro)
+      // e membership existente mesmo se get por org falhar.
+      if (!member) {
+        member = await getMemberByUid(user.uid)
+      }
 
       if (member) {
         const org = await getOrganization(member.orgId)
@@ -120,6 +125,22 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setActiveOrgIdState(null)
         setActiveOrg(null)
         setOrganizations([])
+      }
+    } catch (error) {
+      console.error('Falha ao carregar empresa ativa', error)
+      // Fallback: tenta vínculo por uid mesmo se a leitura por orgId falhou.
+      try {
+        const fallback = await getMemberByUid(user.uid)
+        if (fallback) {
+          const org = await getOrganization(fallback.orgId)
+          setMembership(fallback)
+          setActiveOrgIdState(fallback.orgId)
+          setActiveOrg(org)
+          setOrganizations(org ? [org] : [])
+          return
+        }
+      } catch (fallbackError) {
+        console.error('Fallback de membership falhou', fallbackError)
       }
     } finally {
       setLoading(false)

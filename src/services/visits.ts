@@ -12,7 +12,14 @@ import {
 import { db } from '@/lib/firebase'
 import { isActiveRecord } from '@/lib/trash'
 import { softDeleteEntity } from '@/services/trash'
-import type { UserRole, Visit, VisitStatus } from '@/types'
+import type {
+  UserRole,
+  Visit,
+  VisitEventKind,
+  VisitEventScope,
+  VisitStatus,
+  VisitVipSubtype,
+} from '@/types'
 
 const visitsCol = collection(db, 'visits')
 
@@ -26,6 +33,9 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     startDate: String(data.startDate ?? ''),
     endDate: String(data.endDate ?? ''),
     status: (data.status as VisitStatus) ?? 'planejamento',
+    eventKind: data.eventKind ? (data.eventKind as VisitEventKind) : undefined,
+    vipSubtype: data.vipSubtype ? (data.vipSubtype as VisitVipSubtype) : undefined,
+    eventScope: data.eventScope ? (data.eventScope as VisitEventScope) : undefined,
     objective: data.objective ? String(data.objective) : undefined,
     language: data.language ? String(data.language) : undefined,
     pvNumber: data.pvNumber ? String(data.pvNumber) : undefined,
@@ -129,6 +139,9 @@ export async function createVisit(
     startDate: data.startDate,
     endDate: data.endDate,
     status: data.status,
+    eventKind: data.eventKind ?? null,
+    vipSubtype: data.eventKind === 'visita_vip' ? (data.vipSubtype ?? null) : null,
+    eventScope: data.eventKind === 'evento' ? (data.eventScope ?? null) : null,
     objective: data.objective ?? null,
     language: data.language ?? null,
     arrivalInstructions: data.arrivalInstructions ?? null,
@@ -150,10 +163,17 @@ export async function updateVisit(
   id: string,
   data: Partial<Omit<Visit, 'id' | 'ownerId' | 'orgId' | 'createdAt'>>,
 ): Promise<void> {
-  await updateDoc(doc(visitsCol, id), {
+  const payload: Record<string, unknown> = {
     ...data,
     updatedAt: serverTimestamp(),
-  })
+  }
+  if ('eventKind' in data) {
+    payload.vipSubtype =
+      data.eventKind === 'visita_vip' ? (data.vipSubtype ?? null) : null
+    payload.eventScope =
+      data.eventKind === 'evento' ? (data.eventScope ?? null) : null
+  }
+  await updateDoc(doc(visitsCol, id), payload)
 }
 
 export async function deleteVisit(id: string, deletedBy: string): Promise<void> {

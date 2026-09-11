@@ -71,5 +71,30 @@ service firebase.storage {
 
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
+
+    // Logo white-label da empresa (portal público e preview de convite).
+    match /organizations/{orgId}/{fileName} {
+      allow read: if true;
+
+      allow write: if isSignedIn()
+        && (
+          isPlatformAdmin()
+          || (
+            firestore.exists(/databases/(default)/documents/organizationMembers/$(orgId + '_' + request.auth.uid))
+            && firestore.get(/databases/(default)/documents/organizationMembers/$(orgId + '_' + request.auth.uid)).data.orgRole == 'org_admin'
+          )
+        )
+        && request.resource.size < 5 * 1024 * 1024
+        && isImage();
+
+      allow delete: if isSignedIn()
+        && (
+          isPlatformAdmin()
+          || (
+            firestore.exists(/databases/(default)/documents/organizationMembers/$(orgId + '_' + request.auth.uid))
+            && firestore.get(/databases/(default)/documents/organizationMembers/$(orgId + '_' + request.auth.uid)).data.orgRole == 'org_admin'
+          )
+        );
+    }
   }
 }

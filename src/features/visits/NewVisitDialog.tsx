@@ -40,6 +40,7 @@ import { createTasksBatch } from '@/services/tasks'
 import { notifyVisitStakeholders } from '@/services/notifications'
 import type { Playbook, Visit, Visitor } from '@/types'
 import { Search, UserPlus, X } from 'lucide-react'
+import { VisitEventFields } from '@/features/visits/VisitEventFields'
 
 interface NewVisitDialogProps {
   onCreated?: () => void
@@ -67,6 +68,9 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       startDate: '',
       endDate: '',
       status: 'planejamento',
+      eventKind: undefined,
+      vipSubtype: undefined,
+      eventScope: undefined,
       objective: '',
       language: '',
       pvNumber: '',
@@ -159,6 +163,9 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           objective: values.objective,
           language: values.language,
           pvNumber: values.pvNumber,
+          eventKind: values.eventKind,
+          vipSubtype: values.vipSubtype,
+          eventScope: values.eventScope,
         })
       } else {
         visitId = await createVisit(user.uid, activeOrgId, {
@@ -169,6 +176,9 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           startDate: values.startDate,
           endDate: values.endDate,
           status: values.status,
+          eventKind: values.eventKind,
+          vipSubtype: values.vipSubtype,
+          eventScope: values.eventScope,
           objective: values.objective,
           language: values.language,
           pvNumber: values.pvNumber,
@@ -316,6 +326,21 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                 <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
               ) : null}
             </div>
+            <VisitEventFields
+              eventKind={form.watch('eventKind')}
+              vipSubtype={form.watch('vipSubtype')}
+              eventScope={form.watch('eventScope')}
+              onEventKindChange={(value) =>
+                form.setValue('eventKind', value, { shouldValidate: true })
+              }
+              onVipSubtypeChange={(value) =>
+                form.setValue('vipSubtype', value, { shouldValidate: true })
+              }
+              onEventScopeChange={(value) =>
+                form.setValue('eventScope', value, { shouldValidate: true })
+              }
+              errors={form.formState.errors}
+            />
             <div className="space-y-2">
               <Label htmlFor="company">Empresa</Label>
               <Input id="company" {...form.register('company')} />

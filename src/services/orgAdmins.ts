@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { generatePassword } from '@/lib/password'
 import {
   addOrganizationMember,
   canAddOrganizationMember,
@@ -30,20 +31,6 @@ export type CreatedOrgAdminCredentials = {
   name: string
   email: string
   password: string
-}
-
-function generateTempPassword(length = 12): string {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
-  const lower = 'abcdefghijkmnopqrstuvwxyz'
-  const digits = '23456789'
-  const symbols = '!@#$%'
-  const all = upper + lower + digits + symbols
-  const pick = (chars: string) => chars[Math.floor(Math.random() * chars.length)]!
-  const required = [pick(upper), pick(lower), pick(digits), pick(symbols)]
-  const rest = Array.from({ length: Math.max(0, length - required.length) }, () =>
-    pick(all),
-  )
-  return [...required, ...rest].sort(() => Math.random() - 0.5).join('')
 }
 
 async function withSecondaryAuth<T>(
@@ -106,7 +93,7 @@ export async function createOrganizationAdmin(input: {
   const password =
     input.password?.trim() && input.password.trim().length >= 8
       ? input.password.trim()
-      : generateTempPassword()
+      : generatePassword(8)
 
   const uid = await withSecondaryAuth(async (secondaryApp) => {
     const secondaryAuth = getAuth(secondaryApp)
@@ -142,4 +129,7 @@ export async function createOrganizationAdmin(input: {
   return { uid, name, email, password }
 }
 
-export { generateTempPassword }
+/** @deprecated Use `generatePassword` from `@/lib/password`. */
+export function generateTempPassword(length = 8): string {
+  return generatePassword(length)
+}

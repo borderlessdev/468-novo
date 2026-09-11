@@ -68,6 +68,8 @@ function mapGuestLink(id: string, data: Record<string, unknown>): VisitGuestLink
         location: item.location ? String(item.location) : undefined,
       }
     }),
+    orgName: data.orgName ? String(data.orgName) : undefined,
+    orgLogoUrl: data.orgLogoUrl ? String(data.orgLogoUrl) : undefined,
     confirmationStatus: CONFIRMATION_STATUSES.includes(status) ? status : 'pending',
     visitorDraft: draftRaw ? mapDraft(draftRaw) : undefined,
     lastAppliedAt: data.lastAppliedAt ? String(data.lastAppliedAt) : undefined,
@@ -88,7 +90,10 @@ function mapDraft(data: Record<string, unknown>): GuestVisitorDraft {
     mobilityReduced:
       data.mobilityReduced == null ? undefined : data.mobilityReduced === true,
     language: data.language ? String(data.language) : undefined,
+    whatsapp: data.whatsapp ? String(data.whatsapp) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
+    lgpdConsent: data.lgpdConsent === true,
+    lgpdConsentAt: data.lgpdConsentAt ? String(data.lgpdConsentAt) : undefined,
     updatedAt: data.updatedAt ? String(data.updatedAt) : undefined,
   }
 }
@@ -107,8 +112,13 @@ function cleanDraft(draft: GuestVisitorDraft): Record<string, unknown> {
   result.role = text(draft.role)
   result.dietaryRestriction = text(draft.dietaryRestriction)
   result.language = text(draft.language)
+  result.whatsapp = text(draft.whatsapp)
   result.notes = text(draft.notes)
   result.mobilityReduced = draft.mobilityReduced === true
+  result.lgpdConsent = draft.lgpdConsent === true
+  result.lgpdConsentAt = draft.lgpdConsent === true
+    ? (draft.lgpdConsentAt?.trim() || new Date().toISOString())
+    : null
   return result
 }
 
@@ -159,6 +169,8 @@ export interface GuestLinkSnapshot {
   city?: string
   arrivalInstructions?: string
   agenda?: GuestAgendaItem[]
+  orgName?: string
+  orgLogoUrl?: string
 }
 
 export interface CreateGuestLinkInput extends GuestLinkSnapshot {
@@ -178,6 +190,8 @@ function snapshotPayload(snapshot: GuestLinkSnapshot): Record<string, unknown> {
     city: snapshot.city ?? null,
     arrivalInstructions: snapshot.arrivalInstructions ?? null,
     agenda: snapshot.agenda ?? [],
+    orgName: snapshot.orgName ?? null,
+    orgLogoUrl: snapshot.orgLogoUrl ?? null,
   }
 }
 
@@ -224,6 +238,8 @@ export async function createGuestLink(
     city: input.city,
     arrivalInstructions: input.arrivalInstructions,
     agenda: input.agenda ?? [],
+    orgName: input.orgName,
+    orgLogoUrl: input.orgLogoUrl,
     confirmationStatus: 'pending',
   }
 }
@@ -320,8 +336,14 @@ export async function applyVisitorDraft(
   if (draft.role) payload.role = draft.role
   if (draft.dietaryRestriction) payload.dietaryRestriction = draft.dietaryRestriction
   if (draft.language) payload.language = draft.language
+  if (draft.whatsapp) payload.whatsapp = draft.whatsapp
   if (draft.notes) payload.notes = draft.notes
   if (draft.mobilityReduced != null) payload.mobilityReduced = draft.mobilityReduced
+  if (draft.lgpdConsent === true) {
+    payload.lgpdConsent = true
+    payload.lgpdConsentAt =
+      draft.lgpdConsentAt?.trim() || new Date().toISOString()
+  }
 
   if (Object.keys(payload).length > 0) {
     await updateVisitor(visitorId, payload)

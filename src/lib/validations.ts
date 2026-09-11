@@ -21,6 +21,24 @@ export const resetPasswordSchema = z.object({
   email: z.email('E-mail inválido'),
 })
 
+const visitEventKindSchema = z.enum([
+  'visita_vip',
+  'comunidade_prioritaria',
+  'visita_comunidade',
+  'evento',
+])
+
+const visitVipSubtypeSchema = z.enum([
+  'institucional',
+  'comercial',
+  'investidores',
+  'governamental',
+  'imprensa',
+  'influenciadores',
+])
+
+const visitEventScopeSchema = z.enum(['interno', 'externo'])
+
 const visitBaseSchema = z.object({
   title: z.string().min(2, 'Título obrigatório'),
   company: z.string().optional(),
@@ -29,6 +47,9 @@ const visitBaseSchema = z.object({
   startDate: z.string().min(1, 'Data início obrigatória'),
   endDate: z.string().min(1, 'Data fim obrigatória'),
   status: z.enum(['planejamento', 'em_andamento', 'concluida', 'cancelada']),
+  eventKind: visitEventKindSchema,
+  vipSubtype: visitVipSubtypeSchema.optional(),
+  eventScope: visitEventScopeSchema.optional(),
   objective: z.string().optional(),
   language: z.string().optional(),
   arrivalInstructions: z.string().optional(),
@@ -38,13 +59,28 @@ const visitBaseSchema = z.object({
   startWithChecklist: z.boolean(),
 })
 
-export const visitSchema = visitBaseSchema.refine(
-  (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
-  {
-    message: 'Data fim deve ser igual ou posterior à data início',
-    path: ['endDate'],
-  },
-)
+export const visitSchema = visitBaseSchema
+  .refine(
+    (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+    {
+      message: 'Data fim deve ser igual ou posterior à data início',
+      path: ['endDate'],
+    },
+  )
+  .refine(
+    (data) => data.eventKind !== 'visita_vip' || Boolean(data.vipSubtype),
+    {
+      message: 'Selecione o subtipo da Visita VIP',
+      path: ['vipSubtype'],
+    },
+  )
+  .refine(
+    (data) => data.eventKind !== 'evento' || Boolean(data.eventScope),
+    {
+      message: 'Selecione se o evento é interno ou externo',
+      path: ['eventScope'],
+    },
+  )
 
 export const visitEditSchema = visitBaseSchema
   .omit({
@@ -57,6 +93,20 @@ export const visitEditSchema = visitBaseSchema
     {
       message: 'Data fim deve ser igual ou posterior à data início',
       path: ['endDate'],
+    },
+  )
+  .refine(
+    (data) => data.eventKind !== 'visita_vip' || Boolean(data.vipSubtype),
+    {
+      message: 'Selecione o subtipo da Visita VIP',
+      path: ['vipSubtype'],
+    },
+  )
+  .refine(
+    (data) => data.eventKind !== 'evento' || Boolean(data.eventScope),
+    {
+      message: 'Selecione se o evento é interno ou externo',
+      path: ['eventScope'],
     },
   )
 

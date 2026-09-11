@@ -20,14 +20,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
-import { formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
+import { formatDateTime, formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
-import { listVisitIdsForVisitor } from '@/services/visitVisitors'
-import { getVisit } from '@/services/visits'
-import type { Visitor } from '@/types'
+import { listVisitIdsForVisitor, listVisitVisitors } from '@/services/visitVisitors'
+import { getVisit, listVisits } from '@/services/visits'
+import type { Visit, Visitor } from '@/types'
+import { Badge } from '@/components/ui/badge'
 
 type ViewMode = 'table' | 'cards' | 'company'
 
@@ -36,7 +44,10 @@ export function VisitorsPage() {
   const { activeOrgId } = useOrg()
   const [loading, setLoading] = useState(true)
   const [visitors, setVisitors] = useState<Visitor[]>([])
+  const [visits, setVisits] = useState<Visit[]>([])
   const [search, setSearch] = useState('')
+  const [visitFilter, setVisitFilter] = useState<string>('todos')
+  const [visitVisitorIds, setVisitVisitorIds] = useState<Set<string> | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('visitors-view-mode')
     return saved === 'table' || saved === 'cards' || saved === 'company' ? saved : 'table'
@@ -75,30 +86,65 @@ export function VisitorsPage() {
     const showLoading = options?.showLoading ?? false
     if (showLoading) setLoading(true)
     try {
-      setVisitors(await listVisitors(activeOrgId))
+      const [visitorList, visitList] = await Promise.all([
+        listVisitors(activeOrgId),
+        listVisits(activeOrgId, user.uid, isAdmin, role),
+      ])
+      setVisitors(visitorList)
+      setVisits(visitList)
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar visitantes')
     } finally {
       if (showLoading) setLoading(false)
     }
-  }, [user, activeOrgId])
+  }, [user, activeOrgId, isAdmin, role])
 
   useEffect(() => {
     void load({ showLoading: true })
   }, [load])
 
+  useEffect(() => {
+    if (visitFilter === 'todos') {
+      setVisitVisitorIds(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const visit = visits.find((item) => item.id === visitFilter)
+        const links = await listVisitVisitors(
+          visitFilter,
+          visit?.ownerId ?? user?.uid,
+          isAdmin,
+        )
+        if (!cancelled) {
+          setVisitVisitorIds(new Set(links.map((link) => link.visitorId)))
+        }
+      } catch (error) {
+        console.error(error)
+        if (!cancelled) setVisitVisitorIds(new Set())
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [visitFilter, visits, user?.uid, isAdmin])
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return visitors
-    return visitors.filter(
-      (v) =>
+    return visitors.filter((v) => {
+      const visitOk = visitVisitorIds == null || visitVisitorIds.has(v.id)
+      if (!visitOk) return false
+      if (!term) return true
+      return (
         v.name.toLowerCase().includes(term) ||
         v.document.toLowerCase().includes(term) ||
         (v.company ?? '').toLowerCase().includes(term) ||
-        (v.gifts ?? []).some((g) => g.name.toLowerCase().includes(term)),
-    )
-  }, [visitors, search])
+        (v.gifts ?? []).some((g) => g.name.toLowerCase().includes(term))
+      )
+    })
+  }, [visitors, search, visitVisitorIds])
 
   const openCreate = () => {
     if (!canWrite) return
@@ -228,16 +274,29 @@ export function VisitorsPage() {
         title="CRM de Visitantes"
         description="Base de dados de todos os visitantes"
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="pl-9 sm:w-80"
+                className="pl-9 sm:w-64"
                 placeholder="Buscar por nome ou documento"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <Select value={visitFilter} onValueChange={setVisitFilter}>
+              <SelectTrigger className="sm:w-64">
+                <SelectValue placeholder="Filtrar por visita" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as visitas</SelectItem>
+                {visits.map((visit) => (
+                  <SelectItem key={visit.id} value={visit.id}>
+                    {visit.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {canWrite ? (
               <Button onClick={openCreate}>
                 <Plus className="h-4 w-4" />
@@ -316,6 +375,11 @@ export function VisitorsPage() {
                     <div className="flex items-center gap-2"><Globe2 className="h-4 w-4" />{visitor.country || 'País não informado'}</div>
                     {visitor.dietaryRestriction ? <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400"><Utensils className="mt-0.5 h-4 w-4 shrink-0" />{visitor.dietaryRestriction}</div> : null}
                     {(visitor.gifts?.length ?? 0) > 0 ? <div className="flex items-start gap-2 text-primary"><Gift className="mt-0.5 h-4 w-4 shrink-0" />{visitor.gifts!.map((gift) => gift.name).join(', ')}</div> : null}
+                    {visitor.lgpdConsent ? (
+                      <Badge variant="outline" className="font-normal">
+                        LGPD · {visitor.lgpdConsentAt ? formatDateTime(visitor.lgpdConsentAt) : 'ok'}
+                      </Badge>
+                    ) : null}
                   </div>
                   {canWrite ? (
                     <div className="mt-auto flex gap-2 pt-5">
@@ -628,6 +692,16 @@ export function VisitorsPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+            {editing?.lgpdConsent ? (
+              <div className="space-y-1 sm:col-span-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                <p className="font-medium">Aceite LGPD registrado</p>
+                <p className="text-muted-foreground">
+                  {editing.lgpdConsentAt
+                    ? `Data/hora do aceite: ${formatDateTime(editing.lgpdConsentAt)}`
+                    : 'Consentimento confirmado (sem horário no registro).'}
+                </p>
               </div>
             ) : null}
             <div className="flex justify-end gap-2 sm:col-span-2">

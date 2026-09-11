@@ -5,6 +5,7 @@ import {
   Bell,
   CalendarDays,
   ClipboardList,
+  ImagePlus,
   KeyRound,
   Monitor,
   Moon,
@@ -52,6 +53,10 @@ import {
   removeOrganizationMember,
 } from '@/services/organizations'
 import { listEmailLogs } from '@/services/emailLogs'
+import {
+  removeOrganizationLogo,
+  uploadOrganizationLogo,
+} from '@/services/orgLogo'
 import {
   listUsers,
   updateUserModulePermissions,
@@ -130,7 +135,7 @@ export function SettingsPage() {
     isPlatformAdmin,
     user,
   } = useAuth()
-  const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
+  const { activeOrgId, activeOrg, isOrgAdmin, refreshOrg } = useOrg()
   const { theme, setTheme } = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inviteEmail, setInviteEmail] = useState('')
@@ -151,6 +156,7 @@ export function SettingsPage() {
   const [calendar, setCalendar] = useState<CalendarStatuses | null>(null)
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [calendarBusy, setCalendarBusy] = useState(false)
+  const [logoBusy, setLogoBusy] = useState(false)
   const removeMemberDialog = useConfirmDelete<OrganizationMember>()
 
   // profile editing moved to Profile page
@@ -283,6 +289,38 @@ export function SettingsPage() {
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível cancelar o convite')
+    }
+  }
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!activeOrgId || !file) return
+    setLogoBusy(true)
+    try {
+      await uploadOrganizationLogo(activeOrgId, file)
+      await refreshOrg()
+      toast.success('Logo da empresa atualizada')
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível enviar a logo',
+      )
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    if (!activeOrgId) return
+    setLogoBusy(true)
+    try {
+      await removeOrganizationLogo(activeOrgId)
+      await refreshOrg()
+      toast.success('Logo removida')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível remover a logo')
+    } finally {
+      setLogoBusy(false)
     }
   }
 
@@ -589,6 +627,65 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {canManageOrgUsers(isAdmin, isOrgAdmin) && activeOrgId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImagePlus className="h-5 w-5" />
+              Marca da empresa
+            </CardTitle>
+            <CardDescription>
+              A logo aparece no portal do visitante e nos links de confirmação desta pasta
+              {activeOrg?.name ? ` (${activeOrg.name})` : ''}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 p-2">
+              {activeOrg?.logoUrl ? (
+                <img
+                  src={activeOrg.logoUrl}
+                  alt={`Logo ${activeOrg.name}`}
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <p className="text-center text-xs text-muted-foreground">Sem logo</p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" disabled={logoBusy} asChild>
+                <label className="cursor-pointer">
+                  <ImagePlus className="h-4 w-4" />
+                  {logoBusy ? 'Enviando...' : 'Enviar logo'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={logoBusy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null
+                      event.target.value = ''
+                      void handleLogoUpload(file)
+                    }}
+                  />
+                </label>
+              </Button>
+              {activeOrg?.logoUrl ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  disabled={logoBusy}
+                  onClick={() => void handleLogoRemove()}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remover
+                </Button>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {canManageOrgUsers(isAdmin, isOrgAdmin) && activeOrgId ? (
         <Card>

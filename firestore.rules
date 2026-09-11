@@ -133,7 +133,13 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.maxUsers is number
         && request.resource.data.status in ['active', 'suspended'];
-      allow update, delete: if isPlatformAdmin();
+      allow update: if isPlatformAdmin()
+        || (
+          isOrgAdminOf(orgId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['logoUrl', 'logoStoragePath', 'updatedAt'])
+        );
+      allow delete: if isPlatformAdmin();
     }
 
     match /organizationMembers/{memberId} {

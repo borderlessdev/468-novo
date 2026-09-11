@@ -35,6 +35,9 @@ export interface Organization {
   maxUsers: number
   status: OrganizationStatus
   createdBy: string
+  /** Logo white-label exibida no portal e nos convites. */
+  logoUrl?: string
+  logoStoragePath?: string
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -110,6 +113,22 @@ export interface UserProfile {
   updatedAt?: unknown
 }
 
+export type VisitEventKind =
+  | 'visita_vip'
+  | 'comunidade_prioritaria'
+  | 'visita_comunidade'
+  | 'evento'
+
+export type VisitVipSubtype =
+  | 'institucional'
+  | 'comercial'
+  | 'investidores'
+  | 'governamental'
+  | 'imprensa'
+  | 'influenciadores'
+
+export type VisitEventScope = 'interno' | 'externo'
+
 export interface Visit extends SoftDeletable {
   id: string
   title: string
@@ -119,6 +138,12 @@ export interface Visit extends SoftDeletable {
   startDate: string
   endDate: string
   status: VisitStatus
+  /** Classificação operacional (tipo de evento). Visitas antigas podem não ter. */
+  eventKind?: VisitEventKind
+  /** Obrigatório quando eventKind === 'visita_vip'. */
+  vipSubtype?: VisitVipSubtype
+  /** Obrigatório quando eventKind === 'evento'. */
+  eventScope?: VisitEventScope
   objective?: string
   language?: string
   pvNumber?: string
@@ -165,12 +190,17 @@ export interface Visitor extends SoftDeletable {
   role?: string
   country?: string
   language?: string
+  whatsapp?: string
   weightKg?: number
   shoeSize?: number
   dietaryRestriction?: string
   mobilityReduced?: boolean
   notes?: string
   gifts?: VisitorGift[]
+  /** Aceite LGPD do titular (portal ou CRM). */
+  lgpdConsent?: boolean
+  /** ISO timestamp do aceite. */
+  lgpdConsentAt?: string
   ownerId: string
   orgId: string
   createdAt?: unknown
@@ -411,7 +441,11 @@ export interface GuestVisitorDraft {
   dietaryRestriction?: string
   mobilityReduced?: boolean
   language?: string
+  whatsapp?: string
   notes?: string
+  /** Consentimento LGPD para uso dos dados neste evento. */
+  lgpdConsent?: boolean
+  lgpdConsentAt?: string
   updatedAt?: string
 }
 
@@ -433,6 +467,9 @@ export interface VisitGuestLink {
   city?: string
   arrivalInstructions?: string
   agenda?: GuestAgendaItem[]
+  /** Marca da empresa organizadora (white-label no portal). */
+  orgName?: string
+  orgLogoUrl?: string
   confirmationStatus: GuestConfirmationStatus
   visitorDraft?: GuestVisitorDraft
   lastAppliedAt?: string

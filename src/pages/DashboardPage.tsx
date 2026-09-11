@@ -20,11 +20,17 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import {
+  VISIT_EVENT_KINDS,
+  visitEventKindLabel,
+  visitEventLabel,
+} from '@/lib/visitEvent'
 import { listVisits } from '@/services/visits'
 import { listPendingTasks } from '@/services/tasks'
 import { listFinanceItemsByOwner } from '@/services/finance'
 import { listVisitVisitors } from '@/services/visitVisitors'
-import type { FinanceItem, Task, Visit } from '@/types'
+import type { FinanceItem, Task, Visit, VisitEventKind } from '@/types'
+import { Badge } from '@/components/ui/badge'
 
 type KpiRecord = {
   id: string
@@ -142,6 +148,22 @@ export function DashboardPage() {
 
   const planningVisits = cycleVisits.filter((v) => v.status === 'planejamento')
   const ongoingVisits = cycleVisits.filter((v) => v.status === 'em_andamento')
+  const vipCommercialVisits = cycleVisits.filter(
+    (v) => v.eventKind === 'visita_vip' && v.vipSubtype === 'comercial',
+  )
+
+  const eventKindCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      VISIT_EVENT_KINDS.map((kind) => [kind, [] as Visit[]]),
+    ) as Record<VisitEventKind, Visit[]>
+    for (const visit of cycleVisits) {
+      if (visit.eventKind && counts[visit.eventKind]) {
+        counts[visit.eventKind].push(visit)
+      }
+    }
+    return counts
+  }, [cycleVisits])
+
   const toKpiRecords = (items: Visit[]): KpiRecord[] =>
     [...items]
       .sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -162,14 +184,29 @@ export function DashboardPage() {
       })
     : upcoming
 
+  const eventKindTone: Record<VisitEventKind, string> = {
+    visita_vip: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
+    comunidade_prioritaria: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    visita_comunidade: 'bg-teal-500/10 text-teal-700 dark:text-teal-400',
+    evento: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
+  }
+
   const kpis = [
-    {
-      label: 'Visitas no ciclo',
-      value: String(cycleVisits.length),
-      records: toKpiRecords(cycleVisits),
-      hint: `Ciclo ${cycleLabel}`,
+    ...VISIT_EVENT_KINDS.map((kind) => ({
+      label: visitEventKindLabel(kind),
+      value: String(eventKindCounts[kind].length),
+      records: toKpiRecords(eventKindCounts[kind]),
+      hint: `Tipo de evento · ciclo ${cycleLabel}`,
       icon: CalendarDays,
-      tone: 'bg-primary/8 text-primary dark:bg-primary/15',
+      tone: eventKindTone[kind],
+    })),
+    {
+      label: 'VIP comerciais',
+      value: String(vipCommercialVisits.length),
+      records: toKpiRecords(vipCommercialVisits),
+      hint: `Subtipo Comercial · ciclo ${cycleLabel}`,
+      icon: TrendingUp,
+      tone: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
     },
     {
       label: 'Em planejamento',
@@ -223,13 +260,13 @@ export function DashboardPage() {
       />
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {Array.from({ length: isClient ? 4 : 5 }).map((_, i) => (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: isClient ? 8 : 9 }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {kpis.map((kpi, index) => (
             <Card
               key={kpi.label}
@@ -264,7 +301,7 @@ export function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <SectionCardHeader
-            title={previewRecordIds ? 'Visitas selecionadas' : 'Próximas visitas'}
+            title={previewRecordIds ? 'Eventos selecionados' : 'Próximos eventos'}
             icon={MapPin}
             count={loading ? undefined : displayedVisits.length}
             action={
@@ -272,7 +309,7 @@ export function DashboardPage() {
                 to="/visitas"
                 className="text-xs font-medium text-primary underline-offset-4 hover:underline"
               >
-                Ver todas
+                Ver todos
               </Link>
             }
           />
@@ -285,8 +322,8 @@ export function DashboardPage() {
               <EmptyState
                 compact
                 icon={MapPin}
-                title="Nenhuma visita no ciclo"
-                description="Ajuste o período do ciclo ou crie uma nova visita."
+                title="Nenhum evento no ciclo"
+                description="Ajuste o período do ciclo ou cadastre uma nova visita com tipo de evento."
               />
             ) : (
               displayedVisits.map((visit) => (
@@ -294,8 +331,15 @@ export function DashboardPage() {
                   key={visit.id}
                   to={`/visitas/${visit.id}`}
                   title={visit.title}
-                  meta={`${formatDate(visit.startDate)}${visit.city ? ` · ${visit.city}` : ''}`}
-                  trailing={<VisitStatusBadge status={visit.status} />}
+                  meta={`${visitEventLabel(visit)} · ${formatDate(visit.startDate)}${visit.city ? ` · ${visit.city}` : ''}`}
+                  trailing={
+                    <div className="flex flex-col items-end gap-1">
+                      <VisitStatusBadge status={visit.status} />
+                      <Badge variant="secondary" className="font-normal text-[10px]">
+                        {visitEventKindLabel(visit.eventKind)}
+                      </Badge>
+                    </div>
+                  }
                 />
               ))
             )}

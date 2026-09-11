@@ -55,11 +55,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canDeleteVisit, canManageVisitAccess, isNavAllowed } from '@/lib/access'
 import { BRAZILIAN_STATES } from '@/lib/constants'
+import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
+import { VisitEventFields } from '@/features/visits/VisitEventFields'
 import {
   calculateVisitProgress,
   formatCurrency,
   formatDate,
+  formatDateTime,
 } from '@/lib/utils'
 import { listFinanceItems } from '@/services/finance'
 import { listTasks, updateTask } from '@/services/tasks'
@@ -135,7 +138,7 @@ export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, isAdmin, role, canWrite, profile } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, activeOrg } = useOrg()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
@@ -209,6 +212,9 @@ export function VisitDetailPage() {
         startDate: visitData.startDate,
         endDate: visitData.endDate,
         status: visitData.status,
+        eventKind: visitData.eventKind,
+        vipSubtype: visitData.vipSubtype,
+        eventScope: visitData.eventScope,
         objective: visitData.objective ?? '',
         language: visitData.language ?? '',
         arrivalInstructions: visitData.arrivalInstructions ?? '',
@@ -342,6 +348,9 @@ export function VisitDetailPage() {
         startDate: values.startDate,
         endDate: values.endDate,
         status: values.status,
+        eventKind: values.eventKind,
+        vipSubtype: values.vipSubtype,
+        eventScope: values.eventScope,
         objective: values.objective || undefined,
         language: values.language || undefined,
         arrivalInstructions: values.arrivalInstructions || undefined,
@@ -473,6 +482,30 @@ export function VisitDetailPage() {
 
   const feedbackAverage = useMemo(() => averageRating(feedbacks), [feedbacks])
 
+  const confirmationSummary = useMemo(() => {
+    const total = linkedVisitors.length
+    const rows = linkedVisitors.map((visitor) => {
+      const link = activeLinkByVisitorId.get(visitor.id)
+      const draftWhatsapp = link?.visitorDraft?.whatsapp?.trim()
+      const lgpdConsent =
+        link?.visitorDraft?.lgpdConsent === true || visitor.lgpdConsent === true
+      const lgpdConsentAt =
+        link?.visitorDraft?.lgpdConsentAt || visitor.lgpdConsentAt
+      return {
+        visitor,
+        link,
+        status: link?.confirmationStatus ?? ('pending' as const),
+        whatsapp: draftWhatsapp || visitor.whatsapp?.trim() || '',
+        lgpdConsent,
+        lgpdConsentAt,
+      }
+    })
+    const confirmed = rows.filter((row) => row.status === 'confirmed')
+    const declined = rows.filter((row) => row.status === 'declined')
+    const pending = rows.filter((row) => row.status === 'pending')
+    return { total, confirmed, declined, pending, rows }
+  }, [linkedVisitors, activeLinkByVisitorId])
+
   const buildSnapshot = useCallback(
     (visitor: Visitor): GuestLinkSnapshot | null => {
       if (!visit) return null
@@ -485,9 +518,11 @@ export function VisitDetailPage() {
         city: visit.city,
         arrivalInstructions: visit.arrivalInstructions,
         agenda: buildGuestAgenda(activities),
+        orgName: activeOrg?.name,
+        orgLogoUrl: activeOrg?.logoUrl,
       }
     },
-    [visit, activities],
+    [visit, activities, activeOrg?.name, activeOrg?.logoUrl],
   )
 
   const copyPortalUrl = async (token: string) => {
@@ -577,6 +612,7 @@ export function VisitDetailPage() {
                   language: draft.language ?? visitor.language,
                   notes: draft.notes ?? visitor.notes,
                   mobilityReduced: draft.mobilityReduced ?? visitor.mobilityReduced,
+                  whatsapp: draft.whatsapp ?? visitor.whatsapp,
                 }
               : visitor,
           ),
@@ -1126,6 +1162,21 @@ export function VisitDetailPage() {
                 <Label>Título *</Label>
                 <Input {...form.register('title')} />
               </div>
+              <VisitEventFields
+                eventKind={form.watch('eventKind')}
+                vipSubtype={form.watch('vipSubtype')}
+                eventScope={form.watch('eventScope')}
+                onEventKindChange={(value) =>
+                  form.setValue('eventKind', value, { shouldValidate: true })
+                }
+                onVipSubtypeChange={(value) =>
+                  form.setValue('vipSubtype', value, { shouldValidate: true })
+                }
+                onEventScopeChange={(value) =>
+                  form.setValue('eventScope', value, { shouldValidate: true })
+                }
+                errors={form.formState.errors}
+              />
               <div className="space-y-2">
                 <Label>Empresa</Label>
                 <Input {...form.register('company')} />
@@ -1231,6 +1282,7 @@ export function VisitDetailPage() {
             </form>
             ) : (
               <dl className="space-y-2 text-sm">
+                <div><dt className="text-muted-foreground">Tipo de evento</dt><dd>{visitEventLabel(visit)}</dd></div>
                 <div><dt className="text-muted-foreground">Empresa</dt><dd>{visit.company || '—'}</dd></div>
                 <div><dt className="text-muted-foreground">Local</dt><dd>{visit.city || '—'}{visit.state ? `, ${visit.state}` : ''}</dd></div>
                 <div><dt className="text-muted-foreground">Período</dt><dd>{formatDate(visit.startDate)} — {formatDate(visit.endDate)}</dd></div>
@@ -1466,6 +1518,52 @@ export function VisitDetailPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
+            {linkedVisitors.length > 0 ? (
+              <div className="rounded-lg border bg-muted/30 px-3 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">
+                    {confirmationSummary.confirmed.length} de {confirmationSummary.total}{' '}
+                    confirmados
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {confirmationSummary.declined.length} recusou(aram) ·{' '}
+                    {confirmationSummary.pending.length} aguardando
+                  </p>
+                </div>
+                {confirmationSummary.confirmed.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Ainda ninguém confirmou presença.
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {confirmationSummary.confirmed.map((row) => (
+                      <li
+                        key={row.visitor.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium">{row.visitor.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.visitor.company || row.visitor.document || '—'}
+                            {row.whatsapp ? ` · WhatsApp ${row.whatsapp}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="success">Confirmado</Badge>
+                          {row.lgpdConsent ? (
+                            <Badge variant="outline" title={row.lgpdConsentAt ? `Aceite em ${formatDateTime(row.lgpdConsentAt)}` : undefined}>
+                              LGPD ok
+                              {row.lgpdConsentAt ? ` · ${formatDateTime(row.lgpdConsentAt)}` : ''}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
             {linkedVisitors.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Vincule visitantes à visita para gerar links do portal.
@@ -1476,6 +1574,7 @@ export function VisitDetailPage() {
                 const availability = link ? getGuestLinkAvailability(link) : null
                 const busy = portalBusyId === visitor.id || portalBusyId === link?.id
                 const pendingDraft = link ? hasPendingGuestDraft(link) : false
+                const draftWhatsapp = link?.visitorDraft?.whatsapp?.trim()
 
                 return (
                   <div
@@ -1487,6 +1586,9 @@ export function VisitDetailPage() {
                         <p className="font-medium">{visitor.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {visitor.company || visitor.document}
+                          {draftWhatsapp || visitor.whatsapp
+                            ? ` · WhatsApp ${draftWhatsapp || visitor.whatsapp}`
+                            : ''}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -1496,6 +1598,21 @@ export function VisitDetailPage() {
                         ) : null}
                         {pendingDraft ? (
                           <Badge variant="warning">Atualização pendente</Badge>
+                        ) : null}
+                        {link?.visitorDraft?.lgpdConsent || visitor.lgpdConsent ? (
+                          <Badge
+                            variant="outline"
+                            title={
+                              link?.visitorDraft?.lgpdConsentAt || visitor.lgpdConsentAt
+                                ? `Aceite em ${formatDateTime(link?.visitorDraft?.lgpdConsentAt || visitor.lgpdConsentAt)}`
+                                : undefined
+                            }
+                          >
+                            LGPD ok
+                            {(link?.visitorDraft?.lgpdConsentAt || visitor.lgpdConsentAt)
+                              ? ` · ${formatDateTime(link?.visitorDraft?.lgpdConsentAt || visitor.lgpdConsentAt)}`
+                              : ''}
+                          </Badge>
                         ) : null}
                       </div>
                     </div>

@@ -14,6 +14,14 @@ export function formatDate(value?: string | Date | null): string {
   return format(date, 'dd/MM/yyyy', { locale: ptBR })
 }
 
+/** Data e horário (ex.: aceite LGPD). */
+export function formatDateTime(value?: string | Date | null): string {
+  if (!value) return '—'
+  const date = typeof value === 'string' ? parseISO(value) : value
+  if (!isValid(date)) return '—'
+  return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+}
+
 export function formatDateShort(value?: string | Date | null): string {
   if (!value) return '—'
   const date = typeof value === 'string' ? parseISO(value) : value

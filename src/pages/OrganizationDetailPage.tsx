@@ -34,9 +34,9 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canCreateOrganization } from '@/lib/access'
+import { generatePassword } from '@/lib/password'
 import {
   createOrganizationAdmin,
-  generateTempPassword,
   type CreatedOrgAdminCredentials,
 } from '@/services/orgAdmins'
 import {
@@ -77,7 +77,7 @@ export function OrganizationDetailPage() {
 
   const [adminName, setAdminName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
-  const [adminPassword, setAdminPassword] = useState(() => generateTempPassword())
+  const [adminPassword, setAdminPassword] = useState(() => generatePassword(8))
   const [creatingAdmin, setCreatingAdmin] = useState(false)
   const [invitingAdmin, setInvitingAdmin] = useState(false)
   const [showPasswordCreate, setShowPasswordCreate] = useState(false)
@@ -304,7 +304,7 @@ export function OrganizationDetailPage() {
       setCreatedCredentials(credentials)
       setAdminName('')
       setAdminEmail('')
-      setAdminPassword(generateTempPassword())
+      setAdminPassword(generatePassword(8))
       toast.success('Administrador da empresa criado')
       await load()
     } catch (error) {
@@ -674,21 +674,24 @@ export function OrganizationDetailPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="admin-password">Senha temporária *</Label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <Input
                       id="admin-password"
                       value={adminPassword}
                       onChange={(event) => setAdminPassword(event.target.value)}
                       className="font-mono"
+                      maxLength={32}
                     />
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
-                      title="Gerar nova senha"
-                      onClick={() => setAdminPassword(generateTempPassword())}
+                      className="h-10 w-10 shrink-0"
+                      title="Gerar senha de 8 caracteres"
+                      aria-label="Gerar senha"
+                      onClick={() => setAdminPassword(generatePassword(8))}
                     >
-                      <RefreshCw className="h-4 w-4" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>

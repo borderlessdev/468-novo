@@ -38,6 +38,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
+import { visitEventLabel, visitVipSubtypeLabel } from '@/lib/visitEvent'
 import { downloadCsv, formatCurrency, formatDate } from '@/lib/utils'
 import {
   exportTable,
@@ -136,7 +137,7 @@ export function ReportsPage() {
       rows.forEach((visit, index) => {
         doc.setFontSize(10)
         doc.text(
-          `${visit.title} | ${formatDate(visit.startDate)} | ${visit.city ?? '—'} | ${visit.status}`,
+          `${visit.title} | ${visitEventLabel(visit)} | ${formatDate(visit.startDate)} | ${visit.city ?? '—'} | ${visit.status}`,
           14,
           32 + index * 8,
         )
@@ -144,9 +145,10 @@ export function ReportsPage() {
       doc.save('visitas-do-ciclo.pdf')
     } else {
       downloadCsv('visitas-do-ciclo.csv', [
-        ['Título', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
+        ['Título', 'Tipo de evento', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
         ...rows.map((v) => [
           v.title,
+          visitEventLabel(v),
           formatDate(v.startDate),
           formatDate(v.endDate),
           v.city ?? '',
@@ -156,6 +158,53 @@ export function ReportsPage() {
       ])
     }
     toast.success(asPdf ? 'PDF exportado' : 'CSV exportado')
+  }
+
+  const exportVipVisits = (onlyCommercial: boolean, asPdf = false) => {
+    const rows = visits.filter(
+      (v) =>
+        v.startDate >= range.startIso &&
+        v.startDate <= range.endIso &&
+        v.eventKind === 'visita_vip' &&
+        (!onlyCommercial || v.vipSubtype === 'comercial'),
+    )
+    const title = onlyCommercial
+      ? `Visitas VIP comerciais (${cycleLabel})`
+      : `Visitas VIP (${cycleLabel})`
+    const filenameBase = onlyCommercial ? 'visitas-vip-comerciais' : 'visitas-vip'
+
+    if (asPdf) {
+      const doc = new jsPDF()
+      doc.setFontSize(14)
+      doc.text(title, 14, 20)
+      rows.forEach((visit, index) => {
+        doc.setFontSize(10)
+        doc.text(
+          `${visit.title} | ${visitVipSubtypeLabel(visit.vipSubtype)} | ${formatDate(visit.startDate)} | ${visit.city ?? '—'} | ${visit.status}`,
+          14,
+          32 + index * 8,
+        )
+      })
+      doc.save(`${filenameBase}.pdf`)
+    } else {
+      downloadCsv(`${filenameBase}.csv`, [
+        ['Título', 'Subtipo VIP', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
+        ...rows.map((v) => [
+          v.title,
+          visitVipSubtypeLabel(v.vipSubtype),
+          formatDate(v.startDate),
+          formatDate(v.endDate),
+          v.city ?? '',
+          v.state ?? '',
+          v.status,
+        ]),
+      ])
+    }
+    toast.success(
+      asPdf
+        ? `PDF exportado (${rows.length} visita${rows.length === 1 ? '' : 's'})`
+        : `CSV exportado (${rows.length} visita${rows.length === 1 ? '' : 's'})`,
+    )
   }
 
   const exportRecurringVisitors = async (asPdf = false) => {
@@ -341,6 +390,20 @@ export function ReportsPage() {
           }
           onCsv={() => exportMonthVisits(false)}
           onPdf={() => exportMonthVisits(true)}
+        />
+        <ReportCard
+          icon={Users}
+          title="Visitas VIP do Mês"
+          description={`Quantidade e lista de Visitas VIP no ciclo ${cycleLabel}.`}
+          onCsv={() => exportVipVisits(false, false)}
+          onPdf={() => exportVipVisits(false, true)}
+        />
+        <ReportCard
+          icon={BarChart3}
+          title="Visitas VIP Comerciais"
+          description={`Visitas VIP do subtipo Comercial no ciclo ${cycleLabel}.`}
+          onCsv={() => exportVipVisits(true, false)}
+          onPdf={() => exportVipVisits(true, true)}
         />
         <ReportCard
           icon={Users}

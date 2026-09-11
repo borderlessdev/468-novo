@@ -21,9 +21,15 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useVisitDialog } from '@/contexts/VisitDialogContext'
 import { BRAZILIAN_STATES } from '@/lib/constants'
+import {
+  VISIT_EVENT_KINDS,
+  visitEventKindLabel,
+  visitEventLabel,
+} from '@/lib/visitEvent'
 import { formatDate } from '@/lib/utils'
 import { listVisits } from '@/services/visits'
-import type { Visit, VisitStatus } from '@/types'
+import type { Visit, VisitEventKind, VisitStatus } from '@/types'
+import { Badge } from '@/components/ui/badge'
 
 type ViewMode = 'table' | 'cards' | 'status'
 
@@ -47,6 +53,7 @@ export function VisitsPage() {
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('todos')
+  const [eventKindFilter, setEventKindFilter] = useState<string>('todos')
   const [stateFilter, setStateFilter] = useState<string>('todos')
   const [startDateFilter, setStartDateFilter] = useState('')
   const [endDateFilter, setEndDateFilter] = useState('')
@@ -83,6 +90,11 @@ export function VisitsPage() {
     return visits.filter((visit) => {
       const statusOk =
         statusFilter === 'todos' || visit.status === (statusFilter as VisitStatus)
+      const eventKindOk =
+        eventKindFilter === 'todos' ||
+        (eventKindFilter === '_none'
+          ? !visit.eventKind
+          : visit.eventKind === (eventKindFilter as VisitEventKind))
       const stateOk = stateFilter === 'todos' || visit.state === stateFilter
       const visitStart = dateValue(visit.startDate)
       const visitEnd = dateValue(visit.endDate, true)
@@ -91,9 +103,9 @@ export function VisitsPage() {
       const endsWithinPeriod =
         periodEnd === null || (visitEnd !== null && visitEnd <= periodEnd)
 
-      return statusOk && stateOk && startsWithinPeriod && endsWithinPeriod
+      return statusOk && eventKindOk && stateOk && startsWithinPeriod && endsWithinPeriod
     })
-  }, [visits, statusFilter, stateFilter, startDateFilter, endDateFilter])
+  }, [visits, statusFilter, eventKindFilter, stateFilter, startDateFilter, endDateFilter])
 
   return (
     <div className="animate-fade-in space-y-5">
@@ -118,7 +130,7 @@ export function VisitsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 pt-0 lg:flex-row lg:items-end lg:gap-3">
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Status</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -131,6 +143,23 @@ export function VisitsPage() {
                   <SelectItem value="em_andamento">Em andamento</SelectItem>
                   <SelectItem value="concluida">Concluída</SelectItem>
                   <SelectItem value="cancelada">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Tipo de evento</Label>
+              <Select value={eventKindFilter} onValueChange={setEventKindFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  {VISIT_EVENT_KINDS.map((kind) => (
+                    <SelectItem key={kind} value={kind}>
+                      {visitEventKindLabel(kind)}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="_none">Não classificado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -235,6 +264,9 @@ export function VisitsPage() {
                     <div className="min-w-0">
                       <p className="line-clamp-2 font-semibold transition-opacity group-hover:opacity-90">{visit.title}</p>
                       {visit.pvNumber ? <p className="mt-1 font-mono text-xs text-muted-foreground">PV {visit.pvNumber}</p> : null}
+                      <Badge variant="secondary" className="mt-2 font-normal">
+                        {visitEventLabel(visit)}
+                      </Badge>
                     </div>
                     <VisitStatusBadge status={visit.status} />
                   </div>
@@ -266,6 +298,9 @@ export function VisitsPage() {
                         <Link key={visit.id} to={`/visitas/${visit.id}`} className="block rounded-lg border border-border/70 bg-card p-3 transition-all hover:border-border hover:shadow-[0_2px_8px_rgba(15,47,42,0.05)]">
                           <p className="line-clamp-2 text-sm font-medium">{visit.title}</p>
                           {visit.pvNumber ? <p className="mt-1 font-mono text-[11px] text-muted-foreground">PV {visit.pvNumber}</p> : null}
+                          <Badge variant="secondary" className="mt-2 font-normal text-[11px]">
+                            {visitEventLabel(visit)}
+                          </Badge>
                           <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5 opacity-70" />{formatDate(visit.startDate)}</div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5 opacity-70" />{[visit.city, visit.state].filter(Boolean).join(' · ') || '—'}</div>
                           <div className="mt-3 flex items-center gap-2"><Progress value={visit.progress} className="flex-1" /><span className="text-[11px] tabular-nums text-muted-foreground">{visit.progress}%</span></div>
@@ -299,6 +334,9 @@ export function VisitsPage() {
                           PV: {visit.pvNumber}
                         </p>
                       ) : null}
+                      <Badge variant="secondary" className="mt-2 font-normal">
+                        {visitEventLabel(visit)}
+                      </Badge>
                     </div>
                     <VisitStatusBadge status={visit.status} />
                   </div>
@@ -316,6 +354,7 @@ export function VisitsPage() {
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Número da PV</th>
                     <th className="px-4 py-3 font-medium">Título da visita</th>
+                    <th className="px-4 py-3 font-medium">Tipo de evento</th>
                     <th className="px-4 py-3 font-medium">Data início</th>
                     <th className="px-4 py-3 font-medium">Data fim</th>
                     <th className="px-4 py-3 font-medium">Local</th>
@@ -340,6 +379,11 @@ export function VisitsPage() {
                         >
                           {visit.title}
                         </Link>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge variant="secondary" className="font-normal">
+                          {visitEventLabel(visit)}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3.5 tabular-nums">{formatDate(visit.startDate)}</td>
                       <td className="px-4 py-3.5 tabular-nums">{formatDate(visit.endDate)}</td>

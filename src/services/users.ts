@@ -45,17 +45,28 @@ export async function createUserProfile(input: {
   role?: UserRole
   orgId?: string
 }): Promise<void> {
-  await setDoc(doc(usersCol, input.uid), {
+  const ref = doc(usersCol, input.uid)
+  const existing = await getDoc(ref)
+  const payload: Record<string, unknown> = {
     uid: input.uid,
     name: input.name,
     email: input.email,
     photoURL: input.photoURL ?? null,
-    role: input.role ?? 'user',
-    orgId: input.orgId ?? null,
-    modulePermissions: mergeModulePermissions(null),
-    createdAt: serverTimestamp(),
+    role: input.role ?? existing.data()?.role ?? 'user',
     updatedAt: serverTimestamp(),
-  })
+  }
+  // Só grava orgId quando informado — evita corrida do onAuthStateChanged
+  // apagar o vínculo criado pelo fluxo de convite.
+  if (input.orgId !== undefined) {
+    payload.orgId = input.orgId || null
+  } else if (!existing.exists()) {
+    payload.orgId = null
+  }
+  if (!existing.exists()) {
+    payload.modulePermissions = mergeModulePermissions(null)
+    payload.createdAt = serverTimestamp()
+  }
+  await setDoc(ref, payload, { merge: true })
 }
 
 export async function updateUserProfile(

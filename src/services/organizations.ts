@@ -26,6 +26,8 @@ function mapOrganization(id: string, data: Record<string, unknown>): Organizatio
     maxUsers: Number(data.maxUsers ?? 10),
     status: data.status === 'suspended' ? 'suspended' : 'active',
     createdBy: String(data.createdBy ?? ''),
+    logoUrl: data.logoUrl ? String(data.logoUrl) : undefined,
+    logoStoragePath: data.logoStoragePath ? String(data.logoStoragePath) : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -176,7 +178,9 @@ export function mapInviteRoleToOrgRole(role: InviteRole): OrgRole {
 
 export async function updateOrganization(
   orgId: string,
-  data: Partial<Pick<Organization, 'name' | 'maxUsers' | 'status'>>,
+  data: Partial<
+    Pick<Organization, 'name' | 'maxUsers' | 'status' | 'logoUrl' | 'logoStoragePath'>
+  >,
 ): Promise<void> {
   await updateDoc(doc(organizationsCol, orgId), {
     ...data,
