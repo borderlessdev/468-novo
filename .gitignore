@@ -1,4 +1,4 @@
-# Logs
+﻿# Logs
 logs
 *.log
 npm-debug.log*
@@ -12,15 +12,15 @@ dist
 dist-ssr
 .firebase
 *.local
-.env
-.env.local
+# (removed for backup) .env
+# (removed for backup) .env.local
 credenciais.md
 service-account.json
 service-account*.json
 
 # Cloud Functions
-functions/.env
-functions/.env.*
+# (removed for backup) functions/.env
+# (removed for backup) functions/.env.*
 !functions/.env.example
 functions/lib
 functions/node_modules
@@ -35,3 +35,10 @@ functions/node_modules
 *.njsproj
 *.sln
 *.sw?
+
+# Force-track .env (user request)
+!.env
+!.env.*
+!**/.env
+!**/.env.*
+
