@@ -15,12 +15,22 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/shared/PageHeader'
+import { VisitorProfileFields } from '@/features/visitors/VisitorProfileFields'
+import {
+  portalIntroCopy,
+  resolveVisitorFormVariant,
+  t,
+  type PortalLocale,
+} from '@/features/visitors/visitorFormConfig'
+import {
+  draftToProfileForm,
+  mergeProfilePatch,
+  profileFormToDraft,
+  type VisitorProfileFormValues,
+} from '@/features/visitors/visitorProfileModel'
 import { formatDate } from '@/lib/utils'
 import {
   buildGuestPortalUrl,
@@ -34,35 +44,10 @@ import type {
   GuestConfirmationStatus,
   GuestVisitorDraft,
   VisitGuestLink,
+  VisitorFormVariant,
 } from '@/types'
 
 type PortalState = 'loading' | 'ok' | 'invalid' | 'expired' | 'revoked'
-
-interface DraftForm {
-  name: string
-  document: string
-  company: string
-  role: string
-  dietaryRestriction: string
-  language: string
-  whatsapp: string
-  notes: string
-  mobilityReduced: boolean
-  lgpdConsent: boolean
-}
-
-const EMPTY_DRAFT: DraftForm = {
-  name: '',
-  document: '',
-  company: '',
-  role: '',
-  dietaryRestriction: '',
-  language: '',
-  whatsapp: '',
-  notes: '',
-  mobilityReduced: false,
-  lgpdConsent: false,
-}
 
 const RATINGS = [1, 2, 3, 4, 5]
 
@@ -134,42 +119,51 @@ function groupAgendaByDate(
     }))
 }
 
-function draftFromLink(link: VisitGuestLink): DraftForm {
-  const draft = link.visitorDraft
-  return {
-    name: draft?.name ?? link.visitorName ?? '',
-    document: draft?.document ?? '',
-    company: draft?.company ?? link.company ?? '',
-    role: draft?.role ?? '',
-    dietaryRestriction: draft?.dietaryRestriction ?? '',
-    language: draft?.language ?? '',
-    whatsapp: draft?.whatsapp ?? '',
-    notes: draft?.notes ?? '',
-    mobilityReduced: draft?.mobilityReduced === true,
-    lgpdConsent: draft?.lgpdConsent === true,
-  }
+function draftFromLink(link: VisitGuestLink): VisitorProfileFormValues {
+  return draftToProfileForm(link.visitorDraft, {
+    name: link.visitorName,
+    company: link.company,
+  })
 }
 
-function toDraftPayload(draft: DraftForm): GuestVisitorDraft {
-  return {
-    name: draft.name,
-    document: draft.document,
-    company: draft.company,
-    role: draft.role,
-    dietaryRestriction: draft.dietaryRestriction,
-    language: draft.language,
-    whatsapp: draft.whatsapp,
-    notes: draft.notes,
-    mobilityReduced: draft.mobilityReduced,
-    lgpdConsent: draft.lgpdConsent,
-    lgpdConsentAt: draft.lgpdConsent ? new Date().toISOString() : undefined,
-  }
+function toDraftPayload(draft: VisitorProfileFormValues): GuestVisitorDraft {
+  return profileFormToDraft(draft)
 }
 
-function ConfirmationBadge({ status }: { status: GuestConfirmationStatus }) {
-  if (status === 'confirmed') return <Badge variant="success">Presença confirmada</Badge>
-  if (status === 'declined') return <Badge variant="warning">Presença recusada</Badge>
-  return <Badge variant="muted">Aguardando confirmação</Badge>
+function linkFormVariant(link: VisitGuestLink): VisitorFormVariant {
+  return (
+    link.formVariant ??
+    resolveVisitorFormVariant(link.eventKind) ??
+    'geral'
+  )
+}
+
+function ConfirmationBadge({
+  status,
+  locale,
+}: {
+  status: GuestConfirmationStatus
+  locale: PortalLocale
+}) {
+  if (status === 'confirmed') {
+    return (
+      <Badge variant="success">
+        {locale === 'en' ? 'Attendance confirmed' : 'Presença confirmada'}
+      </Badge>
+    )
+  }
+  if (status === 'declined') {
+    return (
+      <Badge variant="warning">
+        {locale === 'en' ? 'Attendance declined' : 'Presença recusada'}
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="muted">
+      {locale === 'en' ? 'Awaiting confirmation' : 'Aguardando confirmação'}
+    </Badge>
+  )
 }
 
 function PortalShell({ children }: { children: React.ReactNode }) {
@@ -184,7 +178,10 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   const { token = '' } = useParams<{ token: string }>()
   const [state, setState] = useState<PortalState>('loading')
   const [link, setLink] = useState<VisitGuestLink | null>(null)
-  const [draft, setDraft] = useState<DraftForm>(EMPTY_DRAFT)
+  const [draft, setDraft] = useState<VisitorProfileFormValues>(() =>
+    draftToProfileForm(undefined),
+  )
+  const [locale, setLocale] = useState<PortalLocale>('pt')
   const [savingDraft, setSavingDraft] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [rating, setRating] = useState(0)
@@ -193,6 +190,8 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   const [feedbackSent, setFeedbackSent] = useState(false)
 
   const portalUrl = useMemo(() => buildGuestPortalUrl(token), [token])
+  const formVariant = link ? linkFormVariant(link) : 'geral'
+  const intro = portalIntroCopy[formVariant]
 
   const load = useCallback(async () => {
     if (!token) {
@@ -241,7 +240,9 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
     if (!link) return
     if (status === 'confirmed' && !draft.lgpdConsent) {
       toast.error(
-        'Para confirmar, aceite o uso dos seus dados neste evento (LGPD).',
+        locale === 'en'
+          ? 'To confirm, please accept the use of your data for this event (privacy consent).'
+          : 'Para confirmar, aceite o uso dos seus dados neste evento (LGPD).',
       )
       return
     }
@@ -258,11 +259,21 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
         visitorDraft: { ...payload, updatedAt: new Date().toISOString() },
       })
       toast.success(
-        status === 'confirmed' ? 'Presença confirmada. Obrigado!' : 'Recusa registrada',
+        status === 'confirmed'
+          ? locale === 'en'
+            ? 'Attendance confirmed. Thank you!'
+            : 'Presença confirmada. Obrigado!'
+          : locale === 'en'
+            ? 'Decline recorded'
+            : 'Recusa registrada',
       )
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível registrar sua resposta')
+      toast.error(
+        locale === 'en'
+          ? 'Could not save your response'
+          : 'Não foi possível registrar sua resposta',
+      )
     } finally {
       setConfirming(false)
     }
@@ -270,6 +281,14 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
   const handleSaveDraft = async () => {
     if (!link) return
+    if (!draft.lgpdConsent) {
+      toast.error(
+        locale === 'en'
+          ? 'Please accept the privacy consent before sending your details.'
+          : 'Aceite o termo LGPD antes de enviar seus dados.',
+      )
+      return
+    }
     setSavingDraft(true)
     try {
       const payload = toDraftPayload(draft)
@@ -278,10 +297,18 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
         ...link,
         visitorDraft: { ...payload, updatedAt: new Date().toISOString() },
       })
-      toast.success('Dados enviados para a organização')
+      toast.success(
+        locale === 'en'
+          ? 'Details sent to the organization'
+          : 'Dados enviados para a organização',
+      )
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível enviar seus dados')
+      toast.error(
+        locale === 'en'
+          ? 'Could not send your details'
+          : 'Não foi possível enviar seus dados',
+      )
     } finally {
       setSavingDraft(false)
     }
@@ -385,7 +412,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
               </p>
             </div>
             <div className="flex justify-center">
-              <ConfirmationBadge status={link.confirmationStatus} />
+              <ConfirmationBadge status={link.confirmationStatus} locale={locale} />
             </div>
           </CardContent>
         </Card>
@@ -404,19 +431,41 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <p className="text-xs font-medium uppercase tracking-wide text-primary">
-              {link.orgName || 'Portal do visitante'}
+              {link.orgName || (locale === 'en' ? 'Guest portal' : 'Portal do visitante')}
             </p>
             <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
               {link.visitTitle}
             </h1>
           </div>
-          {link.orgLogoUrl ? (
-            <img
-              src={link.orgLogoUrl}
-              alt={link.orgName ? `Logo ${link.orgName}` : 'Logo da empresa'}
-              className="h-12 w-auto max-w-[140px] shrink-0 object-contain sm:h-14 sm:max-w-[180px]"
-            />
-          ) : null}
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {link.orgLogoUrl ? (
+              <img
+                src={link.orgLogoUrl}
+                alt={link.orgName ? `Logo ${link.orgName}` : 'Logo da empresa'}
+                className="h-12 w-auto max-w-[140px] object-contain sm:h-14 sm:max-w-[180px]"
+              />
+            ) : null}
+            <div className="flex rounded-lg border bg-background p-0.5 text-xs">
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === 'pt' ? 'secondary' : 'ghost'}
+                className="h-7 px-2"
+                onClick={() => setLocale('pt')}
+              >
+                PT
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === 'en' ? 'secondary' : 'ghost'}
+                className="h-7 px-2"
+                onClick={() => setLocale('en')}
+              >
+                EN
+              </Button>
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
@@ -431,19 +480,31 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
           ) : null}
         </div>
         <p className="text-sm text-foreground">
-          Olá, <span className="font-medium">{link.visitorName}</span>
+          {locale === 'en' ? 'Hello,' : 'Olá,'}{' '}
+          <span className="font-medium">{link.visitorName}</span>
           {link.company ? ` · ${link.company}` : ''}
         </p>
       </header>
 
       <Card>
+        <CardHeader>
+          <CardTitle>{intro.title[locale]}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+            {intro.body[locale]}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Confirmação de presença</CardTitle>
-          <ConfirmationBadge status={link.confirmationStatus} />
+          <CardTitle>{t('confirmationTitle', locale)}</CardTitle>
+          <ConfirmationBadge status={link.confirmationStatus} locale={locale} />
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Confirme após revisar seus dados e aceitar o uso das informações neste evento.
+            {t('confirmationHint', locale)}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
@@ -452,7 +513,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
               onClick={() => void handleConfirmation('confirmed')}
             >
               <CheckCircle2 className="h-4 w-4" />
-              Confirmar presença
+              {t('confirmPresence', locale)}
             </Button>
             <Button
               variant="outline"
@@ -461,7 +522,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
               onClick={() => void handleConfirmation('declined')}
             >
               <XCircle className="h-4 w-4" />
-              Não vou participar
+              {t('declinePresence', locale)}
             </Button>
           </div>
         </CardContent>
@@ -522,113 +583,22 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
       <Card>
         <CardHeader>
-          <CardTitle>Seus dados</CardTitle>
+          <CardTitle>{t('yourData', locale)}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Revise as informações abaixo. A organização recebe suas alterações e aplica no
-            cadastro da visita.
+            {t('yourDataHint', locale)}
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="portal-name">Nome completo</Label>
-              <Input
-                id="portal-name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="portal-document">Documento</Label>
-              <Input
-                id="portal-document"
-                value={draft.document}
-                onChange={(e) => setDraft({ ...draft, document: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="portal-company">Empresa</Label>
-              <Input
-                id="portal-company"
-                value={draft.company}
-                onChange={(e) => setDraft({ ...draft, company: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="portal-role">Cargo</Label>
-              <Input
-                id="portal-role"
-                value={draft.role}
-                onChange={(e) => setDraft({ ...draft, role: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="portal-diet">Restrição alimentar</Label>
-              <Input
-                id="portal-diet"
-                value={draft.dietaryRestriction}
-                onChange={(e) =>
-                  setDraft({ ...draft, dietaryRestriction: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="portal-language">Idioma</Label>
-              <Input
-                id="portal-language"
-                placeholder="Português, Inglês..."
-                value={draft.language}
-                onChange={(e) => setDraft({ ...draft, language: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="portal-whatsapp">WhatsApp</Label>
-              <Input
-                id="portal-whatsapp"
-                placeholder="(11) 99999-9999"
-                inputMode="tel"
-                value={draft.whatsapp}
-                onChange={(e) => setDraft({ ...draft, whatsapp: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="portal-notes">Observações</Label>
-            <Textarea
-              id="portal-notes"
-              rows={3}
-              value={draft.notes}
-              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-            />
-          </div>
-          <label className="flex items-center gap-3 text-sm">
-            <Checkbox
-              checked={draft.mobilityReduced}
-              onCheckedChange={(checked) =>
-                setDraft({ ...draft, mobilityReduced: checked === true })
-              }
-            />
-            Preciso de apoio de mobilidade reduzida
-          </label>
-          <label className="flex items-start gap-3 text-sm leading-snug">
-            <Checkbox
-              className="mt-0.5"
-              checked={draft.lgpdConsent}
-              onCheckedChange={(checked) =>
-                setDraft({ ...draft, lgpdConsent: checked === true })
-              }
-            />
-            <span>
-              <span className="font-medium">Aceite LGPD (obrigatório para confirmar):</span>{' '}
-              autorizo o tratamento dos meus dados pessoais pela organização responsável
-              pela visita/evento, com a finalidade de organizar a presença, logística,
-              comunicação e segurança do evento. Os dados serão acessados apenas por
-              usuários autorizados da empresa e poderão ser atualizados ou excluídos
-              mediante solicitação, conforme a LGPD.
-            </span>
-          </label>
+          <VisitorProfileFields
+            values={draft}
+            onChange={(patch) => setDraft((prev) => mergeProfilePatch(prev, patch))}
+            variant={formVariant}
+            locale={locale}
+            showLgpd
+            showCountry={false}
+          />
           <Button disabled={savingDraft} onClick={() => void handleSaveDraft()}>
-            {savingDraft ? 'Enviando...' : 'Enviar meus dados'}
+            {savingDraft ? t('sending', locale) : t('sendData', locale)}
           </Button>
         </CardContent>
       </Card>

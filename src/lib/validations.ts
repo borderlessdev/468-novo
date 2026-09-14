@@ -116,19 +116,49 @@ export const visitorGiftSchema = z.object({
   notes: z.string().optional(),
 })
 
+export const visitorFlightSchema = z.object({
+  origin: z.string().optional(),
+  date: z.string().optional(),
+  airline: z.string().optional(),
+  flightNumber: z.string().optional(),
+  time: z.string().optional(),
+})
+
 export const visitorSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   document: z.string().min(3, 'Documento obrigatório'),
+  cpf: z.string().optional(),
   company: z.string().optional(),
   role: z.string().optional(),
   country: z.string().optional(),
+  nationality: z.string().optional(),
+  sex: z
+    .enum(['', 'feminino', 'masculino', 'outro', 'prefiro_nao_informar'])
+    .optional(),
+  birthDate: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  emergencyPhone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  language: z.string().optional(),
+  neighborhood: z.string().optional(),
   weightKg: z.string().optional(),
   shoeSize: z.string().optional(),
+  shirtSize: z.string().optional(),
+  dietaryHasRestriction: z.boolean().optional(),
   dietaryRestriction: z.string().optional(),
-  language: z.string().optional(),
   mobilityReduced: z.boolean().optional(),
+  mobilityNotes: z.string().optional(),
+  comorbidity: z.boolean().optional(),
+  comorbidityNotes: z.string().optional(),
+  specialAttention: z.boolean().optional(),
+  specialAttentionNotes: z.string().optional(),
+  fliesByAir: z.boolean().optional(),
+  hasFlightData: z.boolean().optional(),
+  hotelName: z.string().optional(),
   notes: z.string().optional(),
   gifts: z.array(visitorGiftSchema).optional(),
+  lgpdConsent: z.boolean().optional(),
 })
 
 export const quickVisitorSchema = z.object({

@@ -182,19 +182,62 @@ export interface VisitorGift {
   notes?: string
 }
 
+/** Perfil do formulário CRM/portal (VIP vs Comunidade). */
+export type VisitorFormVariant = 'vip' | 'comunidade' | 'geral'
+
+export type VisitorSex =
+  | 'feminino'
+  | 'masculino'
+  | 'outro'
+  | 'prefiro_nao_informar'
+
+/** Dados de voo (chegada ou partida). */
+export interface VisitorFlightInfo {
+  origin?: string
+  date?: string
+  airline?: string
+  flightNumber?: string
+  time?: string
+}
+
 export interface Visitor extends SoftDeletable {
   id: string
   name: string
+  /** RG, passaporte ou documento principal de identificação. */
   document: string
+  /** CPF quando informado à parte do documento principal. */
+  cpf?: string
   company?: string
   role?: string
   country?: string
+  nationality?: string
+  sex?: VisitorSex
+  /** YYYY-MM-DD */
+  birthDate?: string
+  phone?: string
+  email?: string
+  emergencyPhone?: string
   language?: string
   whatsapp?: string
+  /** Bairro — formulário Comunidade. */
+  neighborhood?: string
   weightKg?: number
+  /** Número da bota / calçado. */
   shoeSize?: number
+  shirtSize?: string
+  dietaryHasRestriction?: boolean
   dietaryRestriction?: string
   mobilityReduced?: boolean
+  mobilityNotes?: string
+  comorbidity?: boolean
+  comorbidityNotes?: string
+  specialAttention?: boolean
+  specialAttentionNotes?: string
+  fliesByAir?: boolean
+  hasFlightData?: boolean
+  arrivalFlight?: VisitorFlightInfo
+  departureFlight?: VisitorFlightInfo
+  hotelName?: string
   notes?: string
   gifts?: VisitorGift[]
   /** Aceite LGPD do titular (portal ou CRM). */
@@ -436,10 +479,32 @@ export interface GuestAgendaItem {
 export interface GuestVisitorDraft {
   name?: string
   document?: string
+  cpf?: string
   company?: string
   role?: string
+  nationality?: string
+  sex?: VisitorSex
+  birthDate?: string
+  phone?: string
+  email?: string
+  emergencyPhone?: string
+  neighborhood?: string
+  weightKg?: number
+  shoeSize?: number
+  shirtSize?: string
+  dietaryHasRestriction?: boolean
   dietaryRestriction?: string
   mobilityReduced?: boolean
+  mobilityNotes?: string
+  comorbidity?: boolean
+  comorbidityNotes?: string
+  specialAttention?: boolean
+  specialAttentionNotes?: string
+  fliesByAir?: boolean
+  hasFlightData?: boolean
+  arrivalFlight?: VisitorFlightInfo
+  departureFlight?: VisitorFlightInfo
+  hotelName?: string
   language?: string
   whatsapp?: string
   notes?: string
@@ -467,6 +532,10 @@ export interface VisitGuestLink {
   city?: string
   arrivalInstructions?: string
   agenda?: GuestAgendaItem[]
+  /** Tipo da visita no momento da geração do link (portal escolhe o form). */
+  eventKind?: VisitEventKind
+  /** Variante de formulário denormalizada (vip | comunidade | geral). */
+  formVariant?: VisitorFormVariant
   /** Marca da empresa organizadora (white-label no portal). */
   orgName?: string
   orgLogoUrl?: string

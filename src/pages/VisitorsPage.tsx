@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
 import { Building2, Columns3, Gift, Globe2, LayoutGrid, List, Plus, Search, Utensils, Users } from 'lucide-react'
@@ -9,10 +7,8 @@ import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
@@ -29,12 +25,24 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { visitorSchema, parseOptionalNumber, type VisitorInput } from '@/lib/validations'
-import { formatDateTime, formatWeightKgInput, formatWeightKgNumber, parseWeightKg } from '@/lib/utils'
+import { VisitorProfileFields } from '@/features/visitors/VisitorProfileFields'
+import {
+  resolveVisitorFormVariant,
+  t,
+} from '@/features/visitors/visitorFormConfig'
+import {
+  EMPTY_VISITOR_PROFILE,
+  mergeProfilePatch,
+  profileFormToVisitorPayload,
+  visitorToProfileForm,
+  type VisitorProfileFormValues,
+} from '@/features/visitors/visitorProfileModel'
+import { visitorSchema, parseOptionalNumber } from '@/lib/validations'
+import { formatDateTime, formatWeightKgNumber } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
 import { listVisitIdsForVisitor, listVisitVisitors } from '@/services/visitVisitors'
 import { getVisit, listVisits } from '@/services/visits'
-import type { Visit, Visitor } from '@/types'
+import type { Visit, Visitor, VisitorFormVariant } from '@/types'
 import { Badge } from '@/components/ui/badge'
 
 type ViewMode = 'table' | 'cards' | 'company'
@@ -57,29 +65,15 @@ export function VisitorsPage() {
   const [visitHistory, setVisitHistory] = useState<{ id: string; title: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [gifts, setGifts] = useState<{ name: string; quantity: string; notes: string }[]>([])
+  const [profile, setProfile] = useState<VisitorProfileFormValues>(EMPTY_VISITOR_PROFILE)
+  const [formVariant, setFormVariant] = useState<VisitorFormVariant>('vip')
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'document', string>>>({})
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
 
   const changeViewMode = (mode: ViewMode) => {
     setViewMode(mode)
     localStorage.setItem('visitors-view-mode', mode)
   }
-
-  const form = useForm<VisitorInput>({
-    resolver: zodResolver(visitorSchema),
-    defaultValues: {
-      name: '',
-      document: '',
-      company: '',
-      role: '',
-      country: 'Brasil',
-      weightKg: '',
-      shoeSize: '',
-      dietaryRestriction: '',
-      notes: '',
-      language: '',
-      mobilityReduced: false,
-    },
-  })
 
   const load = useCallback(async (options?: { showLoading?: boolean }) => {
     if (!user || !activeOrgId) return
@@ -151,19 +145,14 @@ export function VisitorsPage() {
     setEditing(null)
     setVisitHistory([])
     setGifts([])
-    form.reset({
-      name: '',
-      document: '',
-      company: '',
-      role: '',
-      country: 'Brasil',
-      weightKg: '',
-      shoeSize: '',
-      dietaryRestriction: '',
-      notes: '',
-      language: '',
-      mobilityReduced: false,
-    })
+    setProfile(EMPTY_VISITOR_PROFILE)
+    setFieldErrors({})
+    const filteredVisit = visits.find((item) => item.id === visitFilter)
+    setFormVariant(
+      filteredVisit
+        ? resolveVisitorFormVariant(filteredVisit.eventKind)
+        : 'vip',
+    )
     setOpen(true)
   }
 
@@ -177,19 +166,9 @@ export function VisitorsPage() {
         notes: g.notes ?? '',
       })),
     )
-    form.reset({
-      name: visitor.name,
-      document: visitor.document,
-      company: visitor.company ?? '',
-      role: visitor.role ?? '',
-      country: visitor.country ?? '',
-      weightKg: visitor.weightKg != null ? formatWeightKgNumber(visitor.weightKg) : '',
-      shoeSize: visitor.shoeSize != null ? String(visitor.shoeSize) : '',
-      dietaryRestriction: visitor.dietaryRestriction ?? '',
-      notes: visitor.notes ?? '',
-      language: visitor.language ?? '',
-      mobilityReduced: visitor.mobilityReduced ?? false,
-    })
+    setProfile(visitorToProfileForm(visitor))
+    setFieldErrors({})
+    setFormVariant('vip')
     setOpen(true)
     if (user) {
       if (!activeOrgId) {
@@ -198,33 +177,68 @@ export function VisitorsPage() {
       }
       try {
         const ids = await listVisitIdsForVisitor(visitor.id, activeOrgId, user.uid, isAdmin, role)
-        const visits = await Promise.all(ids.map((id) => getVisit(id)))
-        setVisitHistory(
-          visits
-            .filter(Boolean)
-            .map((v) => ({ id: v!.id, title: v!.title })),
-        )
+        const linkedVisits = await Promise.all(ids.map((id) => getVisit(id)))
+        const active = linkedVisits.filter(Boolean) as Visit[]
+        setVisitHistory(active.map((v) => ({ id: v.id, title: v.title })))
+        const withKind = active.find((v) => v.eventKind)
+        if (withKind) {
+          setFormVariant(resolveVisitorFormVariant(withKind.eventKind))
+        }
       } catch {
         setVisitHistory([])
       }
     }
   }
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const onSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (!user || !activeOrgId || !canWrite) return
+    const parsed = visitorSchema.safeParse({
+      name: profile.name,
+      document: profile.document,
+      cpf: profile.cpf,
+      company: profile.company,
+      role: profile.role,
+      country: profile.country,
+      nationality: profile.nationality,
+      sex: profile.sex || '',
+      birthDate: profile.birthDate,
+      phone: profile.phone,
+      email: profile.email,
+      emergencyPhone: profile.emergencyPhone,
+      whatsapp: profile.whatsapp,
+      language: profile.language,
+      neighborhood: profile.neighborhood,
+      weightKg: profile.weightKg,
+      shoeSize: profile.shoeSize,
+      shirtSize: profile.shirtSize,
+      dietaryHasRestriction: profile.dietaryHasRestriction,
+      dietaryRestriction: profile.dietaryRestriction,
+      mobilityReduced: profile.mobilityReduced,
+      mobilityNotes: profile.mobilityNotes,
+      comorbidity: profile.comorbidity,
+      comorbidityNotes: profile.comorbidityNotes,
+      specialAttention: profile.specialAttention,
+      specialAttentionNotes: profile.specialAttentionNotes,
+      fliesByAir: profile.fliesByAir,
+      hasFlightData: profile.hasFlightData,
+      hotelName: profile.hotelName,
+      notes: profile.notes,
+    })
+    if (!parsed.success) {
+      const nextErrors: Partial<Record<'name' | 'document', string>> = {}
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0]
+        if (key === 'name' || key === 'document') nextErrors[key] = issue.message
+      }
+      setFieldErrors(nextErrors)
+      toast.error('Revise os campos obrigatórios')
+      return
+    }
+    setFieldErrors({})
     setSaving(true)
     const payload = {
-      name: values.name,
-      document: values.document,
-      company: values.company,
-      role: values.role,
-      country: values.country,
-      weightKg: parseWeightKg(values.weightKg),
-      shoeSize: parseOptionalNumber(values.shoeSize),
-      dietaryRestriction: values.dietaryRestriction,
-      language: values.language,
-      mobilityReduced: values.mobilityReduced,
-      notes: values.notes,
+      ...profileFormToVisitorPayload(profile),
       gifts: gifts
         .filter((g) => g.name.trim())
         .map((g) => ({
@@ -235,7 +249,11 @@ export function VisitorsPage() {
     }
     try {
       if (editing) {
-        await updateVisitor(editing.id, payload)
+        await updateVisitor(editing.id, {
+          ...payload,
+          lgpdConsent: editing.lgpdConsent,
+          lgpdConsentAt: editing.lgpdConsentAt,
+        })
         toast.success('Visitante atualizado')
       } else {
         await createVisitor(user.uid, activeOrgId, payload)
@@ -251,7 +269,7 @@ export function VisitorsPage() {
     } finally {
       setSaving(false)
     }
-  })
+  }
 
   const handleDeleteConfirm = () => {
     void deleteDialog.confirm(async (item) => {
@@ -547,72 +565,44 @@ export function VisitorsPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editing ? 'Editar visitante' : 'Novo visitante'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Nome *</Label>
-              <Input {...form.register('name')} />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Documento *</Label>
-              <Input {...form.register('document')} />
-            </div>
+          <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
             <div className="space-y-2">
-              <Label>Empresa</Label>
-              <Input {...form.register('company')} />
-            </div>
-            <div className="space-y-2">
-              <Label>Cargo</Label>
-              <Input {...form.register('role')} />
-            </div>
-            <div className="space-y-2">
-              <Label>País</Label>
-              <Input {...form.register('country')} />
-            </div>
-            <div className="space-y-2">
-              <Label>Peso (kg)</Label>
-              <Input
-                inputMode="decimal"
-                placeholder="0,0"
-                value={form.watch('weightKg')}
-                onChange={(e) => {
-                  form.setValue('weightKg', formatWeightKgInput(e.target.value), {
-                    shouldDirty: true,
-                  })
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Nº calçado</Label>
-              <Input type="number" {...form.register('shoeSize')} />
-            </div>
-            <div className="space-y-2">
-              <Label>Restrição alimentar</Label>
-              <Input {...form.register('dietaryRestriction')} />
-            </div>
-            <div className="space-y-2">
-              <Label>Idioma</Label>
-              <Input {...form.register('language')} placeholder="Português, Inglês..." />
-            </div>
-            <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <Checkbox
-                checked={form.watch('mobilityReduced')}
-                onCheckedChange={(checked) =>
-                  form.setValue('mobilityReduced', checked === true)
+              <Label>{t('formProfile', 'pt')}</Label>
+              <Select
+                value={formVariant}
+                onValueChange={(value) =>
+                  setFormVariant(value as VisitorFormVariant)
                 }
-              />
-              Mobilidade reduzida
-            </label>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Observações</Label>
-              <Textarea {...form.register('notes')} rows={3} />
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vip">{t('profileVip', 'pt')}</SelectItem>
+                  <SelectItem value="comunidade">
+                    {t('profileComunidade', 'pt')}
+                  </SelectItem>
+                  <SelectItem value="geral">{t('profileGeral', 'pt')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2 sm:col-span-2">
+
+            <VisitorProfileFields
+              values={profile}
+              onChange={(patch) => setProfile((prev) => mergeProfilePatch(prev, patch))}
+              variant={formVariant}
+              locale="pt"
+              showCountry
+              errors={fieldErrors}
+            />
+
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Brindes</Label>
                 <Button
@@ -681,7 +671,7 @@ export function VisitorsPage() {
               )}
             </div>
             {editing && visitHistory.length > 0 ? (
-              <div className="space-y-2 sm:col-span-2">
+              <div className="space-y-2">
                 <Label>Histórico de visitas</Label>
                 <ul className="space-y-1 rounded-lg border p-3 text-sm">
                   {visitHistory.map((visit) => (
@@ -695,7 +685,7 @@ export function VisitorsPage() {
               </div>
             ) : null}
             {editing?.lgpdConsent ? (
-              <div className="space-y-1 sm:col-span-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <div className="space-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
                 <p className="font-medium">Aceite LGPD registrado</p>
                 <p className="text-muted-foreground">
                   {editing.lgpdConsentAt
@@ -704,7 +694,7 @@ export function VisitorsPage() {
                 </p>
               </div>
             ) : null}
-            <div className="flex justify-end gap-2 sm:col-span-2">
+            <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>

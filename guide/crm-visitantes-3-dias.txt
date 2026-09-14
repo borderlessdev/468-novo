@@ -1,0 +1,481 @@
+CRM VISITANTES — IMPLEMENTACAO 3 (3 DIAS)
+=========================================
+Fonte: guide/SISTEMA DE VISITAS IMPLEMENTAÇÃO 3.pdf
+Repo: Promover Experience (468-novo)
+
+Como usar
+---------
+1. Abra o Cursor no repositorio 468-novo.
+2. Trabalhe 1 dia por vez (DIA 1, depois DIA 2, depois DIA 3).
+3. Cole o bloco do dia (entre as linhas --- ) no chat em modo Agent.
+4. Ao concluir cada item, marque [x] neste arquivo (substitua [ ] por [x]).
+5. So avance para o proximo dia depois do checklist manual do dia atual.
+6. Se o Agent nao terminar o dia, continue no mesmo dia no dia seguinte.
+   Nao cole o DIA N+1 em cima de trabalho pela metade.
+
+Progresso geral (marque ao fechar cada dia)
+-------------------------------------------
+[x] DIA 1 — Modelo + forms VIP/Comunidade + PT/EN + LGPD
+[ ] DIA 2 — Link por visita + multi-visitante + autofill CRM
+[ ] DIA 3 — E-mail/SMS (Functions) + relatorios
+
+Mapa dos 3 dias
+---------------
+Dia 1   Expandir modelo Visitor/GuestVisitorDraft; formularios condicionais
+        VIP vs Comunidade no CRM e no portal; toggle PT/EN; LGPD.
+Dia 2   Link de pre-cadastro ligado a visita; varios visitantes numa
+        solicitacao; autofill por nome completo na confirmacao.
+Dia 3   Confirmacao por e-mail (VIP) e celular (Comunidade) via Cloud
+        Functions; relatorios com filtro, Excel/PDF e metricas.
+
+O que JA existe (nao reinventar)
+--------------------------------
+Stack: React 19 + Vite + TypeScript + Firebase (Auth, Firestore, Storage,
+Cloud Functions em functions/).
+
+Portal do visitante
+- Token, rota publica /portal/:token, snapshot denormalizado, revogar link
+- Confirmacao / recusa, visitorDraft, botao "Aplicar dados do portal"
+- LGPD: lgpdConsent + lgpdConsentAt
+- Cracha/QR e feedback
+- Arquivos: src/services/visitGuestLinks.ts, src/pages/GuestPortalPage.tsx,
+  VisitDetailPage (secao portal), firestore.rules
+
+CRM visitantes
+- CRUD, vinculo visita↔visitante, historico simples, brindes
+- Campos atuais: name, document, company, role, country, language,
+  whatsapp, weightKg, shoeSize, dietaryRestriction, mobilityReduced,
+  notes, gifts, LGPD
+- Arquivos: src/services/visitors.ts, visitVisitors.ts,
+  src/pages/VisitorsPage.tsx, src/types/index.ts
+
+Tipo da visita (para escolher o form)
+- eventKind: visita_vip | comunidade_prioritaria | visita_comunidade | evento
+- src/lib/visitEvent.ts
+
+E-mail ja no projeto
+- Colecao mail + extensao Trigger Email (VITE_EMAIL_MODE=firestore)
+- src/services/email.ts, emailLogs.ts
+- Resumo da visita por e-mail no VisitDetailPage
+
+Relatorios parciais
+- ReportsPage: VIP, recorrentes, CSV/PDF; Dashboard com contagens
+- src/lib/export.ts
+
+Fora de escopo destes 3 dias
+----------------------------
+- Identidade visual Vale no CRM/portal (PDF: esperar cliente fechar sistema;
+  white-label orgName/orgLogoUrl no portal ja basta)
+- Redesign visual geral
+- App nativo / login do visitante
+- Outlook Calendar
+- Nao commitar .env, tokens OAuth, service-account
+
+Regras de ouro para o Agent
+---------------------------
+- Mexer so no que o dia pede. Nao adiantar o dia seguinte.
+- Types em src/types/index.ts. Validacoes em src/lib/validations.ts.
+- Services em src/services/. Paginas em src/pages/.
+- Portal publico so escreve em visitGuestLinks (drafts). Nao abrir
+  visitors/visits ao anonimo.
+- Campos novos opcionais (nao quebrar docs antigos).
+- npm run build deve passar ao fim de CADA dia.
+- Cliente (role client) continua sem escrita operacional.
+- Preferir soft-delete se a entidade for irma de visit/visitor.
+
+
+==============================================================================
+DIA 1 — Modelo + formularios VIP / Comunidade + PT/EN + LGPD
+==============================================================================
+Status do dia: [ ] nao iniciado  [ ] em andamento  [x] concluido
+
+Estado atual:
+- Visitor e GuestVisitorDraft em src/types/index.ts com campos basicos
+  (sem voo, hotel, camisa, bairro, sexo, CPF separado, emergencia tipada, etc.).
+- Um unico formulario no CRM (VisitorsPage) e no portal (GuestPortalPage).
+- visitEventKind existe (visita_vip, comunidade_*, evento) em src/lib/visitEvent.ts.
+- Portal: confirmacao + LGPD + visitorDraft; operador aplica no CRM.
+- UI so em portugues (campo "idioma" e texto livre, nao toggle PT/EN).
+
+Objetivo do dia:
+1. Expandir o modelo Visitor e GuestVisitorDraft (campos opcionais) para cobrir
+   o PDF VIP e Comunidade. Incluir no minimo:
+
+   Comuns / identidade
+   - sex?: 'feminino' | 'masculino' | 'outro' | 'prefiro_nao_informar' (ou string controlada)
+   - birthDate?: string (YYYY-MM-DD)
+   - nationality?: string
+   - phone?: string (celular)
+   - email?: string
+   - emergencyPhone?: string
+   - rgOrPassport?: string (se document atual for generico, documentizar a semantica
+     e/ou adicionar cpf?: string separado quando fizer sentido)
+
+   Logistica / saude (sim/nao + texto quando sim)
+   - mobilityReduced?: boolean + mobilityNotes?: string
+   - dietaryRestriction?: string (manter) + dietaryHasRestriction?: boolean se precisar
+   - comorbidity?: boolean + comorbidityNotes?: string
+   - specialAttention?: boolean + specialAttentionNotes?: string
+
+   VIP / logistica extra
+   - shoeSize / bootSize (alinhar com weightKg/shoeSize ja existentes; mapear
+     "numero da bota" para shoeSize ou bootSize?: number)
+   - shirtSize?: string
+   - weightKg?: number (ja existe)
+   - fliesByAir?: boolean
+   - hasFlightData?: boolean
+   - arrivalFlight?: { origin?, date?, airline?, flightNumber?, time? }
+   - departureFlight?: { origin?, date?, airline?, flightNumber?, time? }
+   - hotelName?: string
+
+   Comunidade
+   - neighborhood?: string (bairro)
+
+   LGPD (ja existe — garantir persistencia no createVisitor e no apply draft)
+   - lgpdConsent, lgpdConsentAt
+
+2. Helper de formulario por tipo de visita:
+   - VIP form quando eventKind === 'visita_vip' (e subtipos)
+   - Comunidade form quando eventKind === 'comunidade_prioritaria'
+     ou 'visita_comunidade'
+   - Para 'evento' ou sem kind: usar VIP completo OU um form "geral" com
+     uniao segura dos campos comuns (documente a escolha no codigo).
+   - Arquivo sugerido: src/features/visitors/visitorFormConfig.ts
+     (ou equivalente) com listas de campos + labels PT/EN.
+
+3. CRM (VisitorsPage / dialog de criar-editar):
+   - Mostrar campos conforme contexto (se editando visitante vinculado a uma
+     visita, use o eventKind da visita; senao, toggle/select "Perfil do form:
+     VIP | Comunidade" no dialog).
+   - Restricoes: checkbox sim/nao; se sim, abrir textarea.
+   - Voo: so se fliesByAir; detalhe do voo so se hasFlightData.
+   - Validacao Zod alinhada em src/lib/validations.ts.
+   - createVisitor/updateVisitor/applyVisitorDraft devem persistir os novos campos
+     (hoje createVisitor pode omitir whatsapp/LGPD — corrigir junto).
+
+4. Portal (GuestPortalPage):
+   - Mensagem inicial do PDF (PT e EN), conforme tipo VIP vs Comunidade.
+   - Toggle de idioma PT/EN no topo (nao so o campo "idioma" do visitante).
+   - Formulario condicional igual ao CRM (campos do draft).
+   - LGPD obrigatorio para confirmar / enviar dados, com termo curto e
+     registro de data/hora no draft.
+   - Snapshot do link: incluir eventKind (ou formVariant) denormalizado na
+     geracao/refresh do link para o portal saber qual form mostrar sem
+     ler a visita.
+
+5. applyVisitorDraft / VisitDetailPage:
+   - Copiar todos os novos campos do draft para o Visitor ao aplicar.
+   - Badge "atualizacao pendente" continua funcionando.
+
+6. npm run build deve passar.
+
+Fora de escopo do DIA 1:
+- "Deseja cadastrar mais um visitante?"
+- Link de pre-cadastro sem visitorId
+- Autofill por nome no CRM
+- E-mail/SMS automaticos
+- Relatorios novos
+- Branding Vale
+
+Restricoes:
+- Nao abrir visitors/visits ao publico nas rules.
+- Campos novos opcionais.
+- Nao quebrar links/portal/confirmacao atuais.
+- Reutilizar UI (Card, Dialog, Button, Label, Input, Select, Checkbox, Textarea).
+
+Entregaveis:
+- Types + validations + services atualizados
+- Forms CRM e portal VIP/Comunidade
+- Toggle PT/EN + mensagens iniciais
+- LGPD consistente
+- Build verde
+
+---
+
+Checklist de tarefas (DIA 1) — marque [x] ao concluir:
+[x] Types Visitor / GuestVisitorDraft / arrivalFlight / departureFlight
+[x] Validacoes Zod
+[x] visitors.ts create/update persistem novos campos + LGPD/whatsapp/email
+[x] applyVisitorDraft copia novos campos
+[x] visitorFormConfig (ou equivalente) VIP vs Comunidade + labels PT/EN
+[x] VisitorsPage form condicional
+[x] GuestPortalPage form condicional + mensagem inicial
+[x] Toggle PT/EN no portal
+[x] eventKind/formVariant no snapshot do guest link
+[x] npm run build passa
+
+Checklist manual (DIA 1):
+[ ] Criar visitante VIP no CRM com voo + hotel + restricoes
+[ ] Criar visitante Comunidade com bairro + restricoes
+[ ] Portal VIP em PT e EN mostra campos e mensagem corretos
+[ ] Portal Comunidade nao exige voo/hotel
+[ ] Confirmar com LGPD grava lgpdConsentAt
+[ ] Aplicar dados do portal atualiza o CRM com os novos campos
+[ ] Link antigo (sem novos campos) ainda abre sem crash
+
+
+==============================================================================
+DIA 2 — Link por visita + multi-visitante + autofill CRM
+==============================================================================
+Status do dia: [ ] nao iniciado  [ ] em andamento  [ ] concluido
+
+Cole no Cursor (Agent mode):
+
+---
+
+Voce esta no Promover Experience (repo 468-novo).
+Leia guide/crm-visitantes-3-dias.txt. DIA 1 concluido (forms VIP/Comunidade + PT/EN + LGPD).
+Implemente SOMENTE o DIA 2. Nao faca e-mail/SMS nem relatorios (DIA 3).
+
+Estado atual:
+- visitGuestLinks: 1 link por visitante (visitorId obrigatorio hoje).
+- Portal edita um visitorDraft por link.
+- Operador aplica draft no Visitor existente.
+- Forms VIP/Comunidade do DIA 1 no CRM e portal.
+- Busca de visitante por nome existe no CRM ao vincular, nao no portal.
+
+Objetivo do dia:
+1. Link de pre-cadastro POR VISITA (alem do link por visitante):
+   - Permitir criar visitGuestLinks com visitorId opcional / ausente quando
+     o objetivo e "cliente interno ou visitante preenche e ja entra no CRM
+     ligado a visita".
+   - Denormalizar no snapshot: visitTitle, dates, city, arrivalInstructions,
+     agenda, orgName/orgLogoUrl, eventKind/formVariant.
+   - Na VisitDetailPage: botao "Gerar link de cadastro da visita" (canWrite),
+     copiar URL, validade, revogar — separado da lista de links por visitante.
+   - Rules: get publico do documento do link; update publico so em campos de
+     draft/confirmacao; NUNCA list publico; NUNCA abrir visits/visitors.
+
+2. Cadastro de multiplos visitantes numa unica solicitacao:
+   - No portal (link de visita ou fluxo de cadastro): pergunta
+     "Deseja cadastrar mais um visitante?" / "Would you like to register
+     another visitor?"
+   - Se Sim, abrir novo conjunto de campos (array de drafts) sem novo token.
+   - Permitir N visitantes no mesmo submit.
+   - Estrutura sugerida no link:
+     visitorDrafts?: GuestVisitorDraft[]  (e manter visitorDraft como
+     primeiro item / compatibilidade com links antigos de 1 visitante)
+   - No detalhe da visita autenticado: "Aplicar cadastros do portal" que:
+     a) para cada draft: cria Visitor (se novo) ou atualiza se ja houver
+        visitorId / match seguro;
+     b) linkVisitorToVisit para cada um;
+     c) marca lastAppliedAt.
+   - Nao exigir que o anonimo escreva em visitors.
+
+3. Autofill na confirmacao a partir do CRM:
+   - Fluxo desejado (PDF): visitante informa nome completo e o sistema puxa
+     dados do CRM; ele so confirma (sem re-preencher tudo).
+   - Como o portal e anonimo e NAO deve listar visitors:
+     Opcao preferida (implementar esta):
+     a) Callable HTTPS autenticada por token do link (Cloud Function):
+        guestLookupVisitorByName({ token, fullName }) → retorna subset
+        seguro dos campos do Visitor da mesma org/owner da visita do link
+        (match por nome normalizado). Rate-limit + exige link valido
+        nao revogado/expirado.
+     b) Preenche o form/draft no portal; usuario confirma/edita e envia.
+     Alternativa aceitavel se Functions demorar demais no dia:
+     no link POR VISITANTE (ja tem visitorId), preencher o form com o
+     snapshot/draft ja denormalizado e destacar "Confirme seus dados"
+     (menos campos obrigatorios se ja vierem preenchidos). Ainda assim
+     entregue o callable de lookup para o link de visita.
+   - Se nao achar match: formulario completo normal.
+
+4. UX portal:
+   - Ordem sugerida: idioma → mensagem inicial → (opcional) busca por nome →
+     form(s) → "mais um visitante?" → LGPD → enviar/confirmar.
+   - Links por visitante antigos continuam funcionando (1 draft).
+
+5. npm run build (frontend) deve passar. Se criar callable, compile functions
+   tambem (npm run build em functions/).
+
+Fora de escopo do DIA 2:
+- E-mail de confirmacao e SMS/WhatsApp
+- Relatorios / export novos
+- Branding Vale
+
+Restricoes:
+- Anonimo nao escreve em visitors/visits/activities.
+- Nao vazar lista completa de visitantes da org (lookup so por nome + token).
+- Compatibilidade com visitGuestLinks antigos (visitorId + visitorDraft unico).
+- Cliente (role client) nao gera link.
+
+Entregaveis:
+- Link de cadastro por visita
+- Multi-draft no portal + aplicar N no CRM
+- Lookup/autofill por nome (callable ou fallback documentado)
+- Rules atualizadas com cuidado
+- Build verde
+
+---
+
+Checklist de tarefas (DIA 2) — marque [x] ao concluir:
+[ ] visitorId opcional em VisitGuestLink + createVisitIntakeLink (nome livre)
+[ ] Snapshot com eventKind/formVariant
+[ ] UI VisitDetailPage: gerar/copiar/revogar link da visita
+[ ] visitorDrafts[] no portal + pergunta "mais um visitante?"
+[ ] Aplicar N drafts → create/update visitors + visitVisitors
+[ ] Compatibilidade visitorDraft unico (links antigos)
+[ ] Callable guestLookupVisitorByName (ou fallback explicito)
+[ ] Rate-limit / validacao de token no lookup
+[ ] firestore.rules (+ indexes se preciso)
+[ ] npm run build (app) e functions se aplicavel
+
+Checklist manual (DIA 2):
+[ ] Gerar link de cadastro da visita e abrir sem login
+[ ] Cadastrar 2+ visitantes numa solicitacao e aplicar no CRM
+[ ] Visitantes aparecem vinculados a visita
+[ ] Digitar nome existente no CRM e ver autofill (ou confirmar dados do snapshot)
+[ ] Nome inexistente abre form completo
+[ ] Link por visitante antigo ainda confirma e aplica 1 draft
+[ ] Token expirado/revogado bloqueia update e lookup
+
+
+==============================================================================
+DIA 3 — Notificacoes (Functions) + relatorios
+==============================================================================
+Status do dia: [ ] nao iniciado  [ ] em andamento  [ ] concluido
+
+Cole no Cursor (Agent mode):
+
+---
+
+Voce esta no Promover Experience (repo 468-novo).
+Leia guide/crm-visitantes-3-dias.txt. DIAS 1 e 2 concluidos.
+Implemente SOMENTE o DIA 3: notificacoes automaticas + relatorios de visitantes.
+
+Estado atual:
+- E-mail: colecao mail + Trigger Email (src/services/email.ts),
+  VITE_EMAIL_MODE=firestore|mailto; emailLogs.
+- Notificacoes in-app: guest_confirmed via reminder scan (operador).
+- Functions: functions/src/index.ts (OAuth Google Calendar, AI, etc.).
+- ReportsPage: VIP, recorrentes, CSV/PDF; Dashboard com contagens.
+- Portal grava drafts; operador aplica; lookup DIA 2.
+
+Objetivo do dia:
+1. Confirmacao automatica por E-MAIL (fluxo VIP):
+   - Quando um cadastro VIP for enviado/confirmado no portal (ou ao aplicar
+     drafts, escolha um unico ponto confiavel e documente):
+     enfileirar e-mail para o email do visitante com mensagem de confirmacao
+     do cadastro (PT ou EN conforme idioma do draft).
+   - Preferir colecao mail (mesmo padrao de sendVisitSummaryEmail) OU callable
+     Function que escreve em mail — reutilize a infraestrutura Trigger Email.
+   - Registrar emailLog kind novo, ex.: 'visitor_registration_confirm'.
+   - Se nao houver e-mail no draft: pular com log, sem falhar o fluxo.
+   - Portal anonimo NAO deve precisar de auth para "enviar e-mail":
+     preferir Cloud Function onDocumentWritten em visitGuestLinks
+     (quando confirmationStatus/drafts mudarem) OU callable publica validando
+     o token do link. Nao abrir write publico na colecao mail.
+
+2. Notificacao por CELULAR (fluxo Comunidade):
+   - Apos cadastro/confirmacao Comunidade: enviar SMS ou WhatsApp para o
+     telefone/celular do visitante.
+   - Implementar em Cloud Functions (ex.: sendVisitorSmsConfirm).
+   - Provedor: use variaveis em functions/.env (ex. TWILIO_* ou equivalente).
+     Se credenciais ausentes: stub que loga e grava status 'skipped_no_provider'
+     sem quebrar o fluxo; documente em functions/.env.example.
+   - Nao commitar secrets.
+
+3. Notificar responsaveis (gestao):
+   - Reforcar in-app para owner/equipe quando houver novo cadastro multi
+     ou confirmacao (campo unseen / reminder scan ja usado — estender se
+     preciso para visitorDrafts[]).
+   - Opcional: e-mail para o owner via mail (se configurado), sem spam:
+     um resumo por submit, nao por visitante.
+
+4. Relatorios de visitantes (CRM):
+   - Em ReportsPage (ou secao dedicada):
+     - Filtro por periodo (reutilizar ciclo/datas ja usados)
+     - Filtro por visitante (select/busca)
+     - Lista/historico de visitas do visitante (via visitVisitors)
+     - Exportacao Excel (xlsx via padrao existente em src/lib/export.ts —
+       se so houver CSV, CSV + label Excel OK se exportTable ja cobrir;
+       preferir xlsx se a lib ja permitir)
+     - Exportacao PDF (jspdf como nos outros relatorios)
+   - Dashboard: quantidade de visitantes cadastrados no periodo +
+     destaque de novos via portal se facil de medir (opcional).
+   - Nao reinventar a pagina inteira — estender o que existe.
+
+5. Docs / env:
+   - functions/.env.example com placeholders de SMS/WhatsApp (sem valores reais).
+   - Comentario curto no service de notificacao com passos de setup.
+
+6. Checklist de regressao dos 3 dias (corrigir bugs bloqueantes; sem polish):
+   - Forms VIP/Comunidade PT/EN + LGPD
+   - Link visita + multi-visitante + apply
+   - Autofill / confirmacao
+   - E-mail VIP (ou fila mail) e SMS Comunidade (ou stub)
+   - Relatorio filtro + export
+   - npm run build (frontend + functions)
+
+Fora de escopo do DIA 3:
+- Identidade visual Vale
+- Redesign
+- Provedor SMS pago obrigatorio em producao (stub OK se sem credenciais)
+- Mudar fluxo de Google Calendar
+
+Restricoes:
+- Nao write publico em mail/visitors.
+- Nao commitar .env real.
+- Nao quebrar Trigger Email / resumo de visita existentes.
+- Role client sem acesso a relatorios sensiveis se ja for a regra atual.
+
+Entregaveis:
+- E-mail confirmacao VIP enfileirado
+- SMS/WhatsApp Comunidade (real ou stub)
+- Notificacao responsaveis
+- Relatorios filtro + Excel/PDF + metricas
+- .env.example
+- Build verde + regressao
+
+---
+
+Checklist de tarefas (DIA 3) — marque [x] ao concluir:
+[ ] Trigger/callable: e-mail confirmacao VIP → colecao mail + emailLog
+[ ] Function: SMS/WhatsApp Comunidade + stub sem credenciais
+[ ] functions/.env.example atualizado
+[ ] Notificacao in-app (e opcional e-mail) para responsaveis
+[ ] ReportsPage: filtro periodo + visitante
+[ ] Export Excel/CSV + PDF do relatorio de visitantes
+[ ] Historico de visitas no relatorio / metricas dashboard
+[ ] npm run build (app) e functions/
+
+Checklist manual (DIA 3):
+[ ] Cadastro VIP no portal gera e-mail (ou documento em mail) para o visitante
+[ ] Cadastro Comunidade tenta SMS/WhatsApp ou registra skipped_no_provider
+[ ] Responsavel ve notificacao/pendencia do novo cadastro
+[ ] Filtrar relatorio por periodo e por visitante
+[ ] Exportar Excel/CSV e PDF
+[ ] Dashboard mostra contagem coerente
+[ ] Resumo de visita por e-mail antigo ainda funciona
+[ ] npm run build passa (app + functions)
+
+
+==============================================================================
+CHECKLIST FINAL DE REGRESSAO (apos DIA 3)
+==============================================================================
+[ ] Criar visita VIP e gerar link de cadastro da visita
+[ ] Preencher 2 visitantes VIP em PT, com voo e LGPD
+[ ] Aplicar no CRM — campos e vinculos corretos
+[ ] Criar visita Comunidade e cadastrar via portal em EN
+[ ] Autofill por nome (ou confirmacao com dados do CRM)
+[ ] E-mail de confirmacao VIP / SMS Comunidade (ou stub)
+[ ] Relatorio filtrado + export
+[ ] Links antigos por visitante ainda funcionam
+[ ] Role client sem escrita operacional / sem gerar links
+[ ] npm run build (frontend + functions) passa
+
+
+Notas ao longo do desenvolvimento
+---------------------------------
+(Use este espaco para anotar desvios, nomes de arquivos novos, IDs de PRs, etc.)
+
+DIA 1:
+- Forms compartilhados em src/features/visitors/ (VisitorProfileFields, visitorFormConfig, visitorProfileModel)
+- Snapshot do portal inclui eventKind/formVariant
+- createVisitor agora persiste whatsapp/LGPD/email e campos VIP/Comunidade
+
+DIA 2:
+-
+
+DIA 3:
+-
