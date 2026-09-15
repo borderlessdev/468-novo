@@ -418,23 +418,29 @@ service cloud.firestore {
         && canWriteVisit(request.resource.data.visitId)
         && request.resource.data.token is string
         && request.resource.data.visitId is string
+        // visitorId string (pode ser '' no link de pré-cadastro da visita)
         && request.resource.data.visitorId is string
         && request.resource.data.expiresAtTs is timestamp
         && request.resource.data.revoked == false
         && request.resource.data.confirmationStatus == 'pending';
 
       allow update: if
-        // Rota pública (sem login): apenas confirmação e rascunho do visitante.
+        // Rota pública (sem login): apenas confirmação e rascunho(s) do visitante.
         (
           resource.data.revoked != true
           && 'expiresAtTs' in resource.data
           && request.time < resource.data.expiresAtTs
           && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['confirmationStatus', 'visitorDraft', 'updatedAt'])
+              .hasOnly(['confirmationStatus', 'visitorDraft', 'visitorDrafts', 'updatedAt'])
           && request.resource.data.confirmationStatus in ['pending', 'confirmed', 'declined']
           && (
             request.resource.data.visitorDraft == null
             || request.resource.data.visitorDraft is map
+          )
+          && (
+            !('visitorDrafts' in request.resource.data)
+            || request.resource.data.visitorDrafts == null
+            || request.resource.data.visitorDrafts is list
           )
         )
         // Operador: revogar, atualizar snapshot, marcar rascunho como aplicado.

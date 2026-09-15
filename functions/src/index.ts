@@ -562,3 +562,5 @@ export {
   getAiStatus,
   mapProgrammingImport,
 } from './ai/callables'
+
+export { guestLookupVisitorByName } from './guestLookup'

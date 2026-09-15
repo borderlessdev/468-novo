@@ -16,7 +16,7 @@ Como usar
 Progresso geral (marque ao fechar cada dia)
 -------------------------------------------
 [x] DIA 1 — Modelo + forms VIP/Comunidade + PT/EN + LGPD
-[ ] DIA 2 — Link por visita + multi-visitante + autofill CRM
+[x] DIA 2 — Link por visita + multi-visitante + autofill CRM
 [ ] DIA 3 — E-mail/SMS (Functions) + relatorios
 
 Mapa dos 3 dias
@@ -217,7 +217,7 @@ Checklist manual (DIA 1):
 ==============================================================================
 DIA 2 — Link por visita + multi-visitante + autofill CRM
 ==============================================================================
-Status do dia: [ ] nao iniciado  [ ] em andamento  [ ] concluido
+Status do dia: [ ] nao iniciado  [ ] em andamento  [x] concluido
 
 Cole no Cursor (Agent mode):
 
@@ -309,25 +309,30 @@ Entregaveis:
 ---
 
 Checklist de tarefas (DIA 2) — marque [x] ao concluir:
-[ ] visitorId opcional em VisitGuestLink + createVisitIntakeLink (nome livre)
-[ ] Snapshot com eventKind/formVariant
-[ ] UI VisitDetailPage: gerar/copiar/revogar link da visita
-[ ] visitorDrafts[] no portal + pergunta "mais um visitante?"
-[ ] Aplicar N drafts → create/update visitors + visitVisitors
-[ ] Compatibilidade visitorDraft unico (links antigos)
-[ ] Callable guestLookupVisitorByName (ou fallback explicito)
-[ ] Rate-limit / validacao de token no lookup
-[ ] firestore.rules (+ indexes se preciso)
-[ ] npm run build (app) e functions se aplicavel
+[x] visitorId opcional em VisitGuestLink + createVisitIntakeLink (nome livre)
+[x] Snapshot com eventKind/formVariant
+[x] UI VisitDetailPage: gerar/copiar/revogar link da visita
+[x] visitorDrafts[] no portal + pergunta "mais um visitante?"
+[x] Aplicar N drafts → create/update visitors + visitVisitors
+[x] Compatibilidade visitorDraft unico (links antigos)
+[x] Callable guestLookupVisitorByName (ou fallback explicito)
+[x] Rate-limit / validacao de token no lookup
+[x] firestore.rules (+ indexes se preciso)
+[x] npm run build (app) e functions se aplicavel
 
 Checklist manual (DIA 2):
-[ ] Gerar link de cadastro da visita e abrir sem login
+[x] Gerar link de cadastro da visita e abrir sem login
 [ ] Cadastrar 2+ visitantes numa solicitacao e aplicar no CRM
-[ ] Visitantes aparecem vinculados a visita
+    → rules deployadas 15/09; revalidar multi no portal
+[x] Visitantes aparecem vinculados a visita
+    → Ana Silva Teste Dia2 aplicada em ENCONTRO 360 (jAdPQ9BULM09kqF8o4Zh)
 [ ] Digitar nome existente no CRM e ver autofill (ou confirmar dados do snapshot)
-[ ] Nome inexistente abre form completo
-[ ] Link por visitante antigo ainda confirma e aplica 1 draft
-[ ] Token expirado/revogado bloqueia update e lookup
+    → Function guestLookupVisitorByName deployada 15/09; revalidar no portal
+[x] Nome inexistente abre form completo
+[x] Link por visitante antigo ainda confirma e aplica 1 draft
+    → portal/7a2be58efead4c70b1aad1b08ddb65c0 com dados de Ana
+[x] Token expirado/revogado bloqueia update e lookup
+    → link intake revogado → "Link não encontrado"
 
 
 ==============================================================================
@@ -475,7 +480,11 @@ DIA 1:
 - createVisitor agora persiste whatsapp/LGPD/email e campos VIP/Comunidade
 
 DIA 2:
--
+- createVisitIntakeLink + applyVisitIntakeDrafts em visitGuestLinks.ts
+- Portal: visitorDrafts[], multi-visitante, lookup por nome (guestLookupVisitorByName)
+- VisitDetailPage: secao link de cadastro da visita
+- firestore.rules permite visitorDrafts no update publico
+- Deploy da Function guestLookupVisitorByName necessario para autofill em producao
 
 DIA 3:
 -

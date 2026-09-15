@@ -12,7 +12,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { resolveVisitorFormVariant } from '@/features/visitors/visitorFormConfig'
-import { updateVisitor } from '@/services/visitors'
+import { createVisitor, updateVisitor } from '@/services/visitors'
+import { linkVisitorToVisit } from '@/services/visitVisitors'
 import type {
   Activity,
   GuestAgendaItem,
@@ -109,7 +110,7 @@ function mapGuestLink(id: string, data: Record<string, unknown>): VisitGuestLink
     id,
     token: String(data.token ?? id),
     visitId: String(data.visitId ?? ''),
-    visitorId: String(data.visitorId ?? ''),
+    visitorId: data.visitorId ? String(data.visitorId) : undefined,
     ownerId: String(data.ownerId ?? ''),
     createdBy: String(data.createdBy ?? ''),
     expiresAt: String(data.expiresAt ?? ''),
@@ -139,6 +140,11 @@ function mapGuestLink(id: string, data: Record<string, unknown>): VisitGuestLink
     orgLogoUrl: data.orgLogoUrl ? String(data.orgLogoUrl) : undefined,
     confirmationStatus: CONFIRMATION_STATUSES.includes(status) ? status : 'pending',
     visitorDraft: draftRaw ? mapDraft(draftRaw) : undefined,
+    visitorDrafts: Array.isArray(data.visitorDrafts)
+      ? data.visitorDrafts
+          .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+          .map((entry) => mapDraft(entry))
+      : undefined,
     lastAppliedAt: data.lastAppliedAt ? String(data.lastAppliedAt) : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
@@ -267,9 +273,31 @@ export function getGuestLinkAvailability(link: VisitGuestLink): GuestLinkAvailab
   return 'ok'
 }
 
+/** Link de pré-cadastro da visita (sem visitante pré-vinculado). */
+export function isVisitIntakeLink(link: VisitGuestLink): boolean {
+  return !link.visitorId
+}
+
+/** Rascunhos pendentes: array (intake) ou rascunho único (compat). */
+export function getGuestDrafts(link: VisitGuestLink): GuestVisitorDraft[] {
+  if (link.visitorDrafts && link.visitorDrafts.length > 0) {
+    return link.visitorDrafts
+  }
+  if (link.visitorDraft) return [link.visitorDraft]
+  return []
+}
+
+function latestDraftUpdatedAt(link: VisitGuestLink): string | undefined {
+  const stamps = getGuestDrafts(link)
+    .map((draft) => draft.updatedAt)
+    .filter((value): value is string => Boolean(value))
+  if (stamps.length === 0) return undefined
+  return stamps.sort().at(-1)
+}
+
 /** O visitante enviou dados que o operador ainda não aplicou no CRM. */
 export function hasPendingGuestDraft(link: VisitGuestLink): boolean {
-  const draftUpdatedAt = link.visitorDraft?.updatedAt
+  const draftUpdatedAt = latestDraftUpdatedAt(link)
   if (!draftUpdatedAt) return false
   if (!link.lastAppliedAt) return true
   return draftUpdatedAt > link.lastAppliedAt
@@ -298,6 +326,12 @@ export interface GuestLinkSnapshot {
 export interface CreateGuestLinkInput extends GuestLinkSnapshot {
   visitId: string
   visitorId: string
+  createdBy: string
+  ownerId: string
+}
+
+export interface CreateVisitIntakeLinkInput extends GuestLinkSnapshot {
+  visitId: string
   createdBy: string
   ownerId: string
 }
@@ -378,6 +412,61 @@ export async function createGuestLink(
   }
 }
 
+/** Link público de pré-cadastro ligado à visita (sem visitorId). */
+export async function createVisitIntakeLink(
+  input: CreateVisitIntakeLinkInput,
+): Promise<VisitGuestLink> {
+  const token = crypto.randomUUID().replace(/-/g, '')
+  const expires = new Date()
+  expires.setDate(expires.getDate() + LINK_VALIDITY_DAYS)
+  const expiresAt = expires.toISOString()
+  const formVariant =
+    input.formVariant ??
+    (input.eventKind ? resolveVisitorFormVariant(input.eventKind) : undefined)
+  const visitorName = input.visitorName?.trim() || 'Pré-cadastro da visita'
+
+  await setDoc(doc(col, token), {
+    token,
+    visitId: input.visitId,
+    visitorId: '',
+    ownerId: input.ownerId,
+    createdBy: input.createdBy,
+    expiresAt,
+    expiresAtTs: Timestamp.fromDate(expires),
+    revoked: false,
+    ...snapshotPayload({ ...input, visitorName }),
+    confirmationStatus: 'pending',
+    visitorDraft: null,
+    visitorDrafts: [],
+    lastAppliedAt: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+
+  return {
+    id: token,
+    token,
+    visitId: input.visitId,
+    ownerId: input.ownerId,
+    createdBy: input.createdBy,
+    expiresAt,
+    revoked: false,
+    visitTitle: input.visitTitle,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    visitorName,
+    company: input.company,
+    city: input.city,
+    arrivalInstructions: input.arrivalInstructions,
+    agenda: input.agenda ?? [],
+    eventKind: input.eventKind,
+    formVariant,
+    orgName: input.orgName,
+    orgLogoUrl: input.orgLogoUrl,
+    confirmationStatus: 'pending',
+  }
+}
+
 export async function getGuestLinkByToken(
   token: string,
 ): Promise<VisitGuestLink | null> {
@@ -421,24 +510,41 @@ export async function revokeLink(id: string): Promise<void> {
   })
 }
 
-/** Atualização feita pela rota pública: só confirmação e rascunho. */
+/** Atualização feita pela rota pública: só confirmação e rascunho(s). */
 export async function updateGuestPortal(
   tokenOrId: string,
   input: {
     confirmationStatus?: GuestConfirmationStatus
     visitorDraft?: GuestVisitorDraft
+    visitorDrafts?: GuestVisitorDraft[]
   },
 ): Promise<void> {
   const payload: Record<string, unknown> = { updatedAt: serverTimestamp() }
   if (input.confirmationStatus) {
     payload.confirmationStatus = input.confirmationStatus
   }
-  if (input.visitorDraft) {
+
+  const now = new Date().toISOString()
+  if (input.visitorDrafts && input.visitorDrafts.length > 1) {
+    const cleaned = input.visitorDrafts.map((draft) => ({
+      ...cleanDraft(draft),
+      updatedAt: now,
+    }))
+    payload.visitorDrafts = cleaned
+    payload.visitorDraft = cleaned[0]
+  } else if (input.visitorDrafts && input.visitorDrafts.length === 1) {
+    // 1 draft: só visitorDraft (compatível com rules antigas sem visitorDrafts)
+    payload.visitorDraft = {
+      ...cleanDraft(input.visitorDrafts[0]),
+      updatedAt: now,
+    }
+  } else if (input.visitorDraft) {
     payload.visitorDraft = {
       ...cleanDraft(input.visitorDraft),
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     }
   }
+
   await updateDoc(doc(col, tokenOrId), payload)
 }
 
@@ -452,17 +558,9 @@ export async function refreshGuestLinkSnapshot(
   })
 }
 
-/** Copia o rascunho do portal para o cadastro do visitante e marca como aplicado. */
-export async function applyVisitorDraft(
-  linkId: string,
-  visitorId: string,
-): Promise<void> {
-  const link = await getGuestLinkByToken(linkId)
-  const draft = link?.visitorDraft
-  if (!link || !draft) {
-    throw new Error('Nenhum dado enviado pelo visitante para aplicar')
-  }
-
+function draftToVisitorUpdate(
+  draft: GuestVisitorDraft,
+): Partial<Omit<Visitor, 'id' | 'ownerId' | 'createdAt'>> {
   const payload: Partial<Omit<Visitor, 'id' | 'ownerId' | 'createdAt'>> = {}
   if (draft.name) payload.name = draft.name
   if (draft.document) payload.document = draft.document
@@ -504,7 +602,21 @@ export async function applyVisitorDraft(
     payload.lgpdConsentAt =
       draft.lgpdConsentAt?.trim() || new Date().toISOString()
   }
+  return payload
+}
 
+/** Copia o rascunho do portal para o cadastro do visitante e marca como aplicado. */
+export async function applyVisitorDraft(
+  linkId: string,
+  visitorId: string,
+): Promise<void> {
+  const link = await getGuestLinkByToken(linkId)
+  const draft = getGuestDrafts(link ?? ({} as VisitGuestLink))[0] ?? link?.visitorDraft
+  if (!link || !draft) {
+    throw new Error('Nenhum dado enviado pelo visitante para aplicar')
+  }
+
+  const payload = draftToVisitorUpdate(draft)
   if (Object.keys(payload).length > 0) {
     await updateVisitor(visitorId, payload)
   }
@@ -513,4 +625,64 @@ export async function applyVisitorDraft(
     lastAppliedAt: new Date().toISOString(),
     updatedAt: serverTimestamp(),
   })
+}
+
+/**
+ * Aplica N rascunhos do link de pré-cadastro da visita:
+ * cria/atualiza visitors, vincula à visita e marca lastAppliedAt.
+ */
+export async function applyVisitIntakeDrafts(input: {
+  linkId: string
+  ownerId: string
+  orgId: string
+  /** Se o link for por visitante único, atualiza este ID em vez de criar. */
+  existingVisitorId?: string
+}): Promise<{ visitorIds: string[] }> {
+  const link = await getGuestLinkByToken(input.linkId)
+  if (!link) throw new Error('Link do portal não encontrado')
+
+  const drafts = getGuestDrafts(link)
+  if (drafts.length === 0) {
+    throw new Error('Nenhum dado enviado pelo visitante para aplicar')
+  }
+
+  const visitorIds: string[] = []
+
+  for (let index = 0; index < drafts.length; index += 1) {
+    const draft = drafts[index]
+    const payload = draftToVisitorUpdate(draft)
+    const name = payload.name?.trim()
+    const document = payload.document?.trim()
+    if (!name || !document) {
+      throw new Error(
+        `Visitante ${index + 1}: informe nome e documento antes de aplicar`,
+      )
+    }
+
+    const targetVisitorId =
+      index === 0 && (input.existingVisitorId || link.visitorId)
+        ? (input.existingVisitorId || link.visitorId)!
+        : null
+
+    if (targetVisitorId) {
+      await updateVisitor(targetVisitorId, payload)
+      await linkVisitorToVisit(input.ownerId, link.visitId, targetVisitorId)
+      visitorIds.push(targetVisitorId)
+    } else {
+      const createdId = await createVisitor(input.ownerId, input.orgId, {
+        name,
+        document,
+        ...payload,
+      })
+      await linkVisitorToVisit(input.ownerId, link.visitId, createdId)
+      visitorIds.push(createdId)
+    }
+  }
+
+  await updateDoc(doc(col, link.id), {
+    lastAppliedAt: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+  })
+
+  return { visitorIds }
 }

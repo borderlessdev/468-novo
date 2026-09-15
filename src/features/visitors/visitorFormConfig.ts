@@ -177,6 +177,35 @@ export const visitorFormLabels = {
   profileVip: { pt: 'VIP', en: 'VIP' },
   profileComunidade: { pt: 'Comunidade', en: 'Community' },
   profileGeral: { pt: 'Geral (todos os campos)', en: 'General (all fields)' },
+  lookupTitle: {
+    pt: 'Já está no cadastro?',
+    en: 'Already registered?',
+  },
+  lookupHint: {
+    pt: 'Digite o nome completo para preencher automaticamente com dados do CRM.',
+    en: 'Enter the full name to autofill details from our CRM.',
+  },
+  lookupButton: { pt: 'Buscar meus dados', en: 'Look up my details' },
+  lookupSearching: { pt: 'Buscando...', en: 'Searching...' },
+  lookupFound: {
+    pt: 'Dados encontrados. Confirme ou ajuste abaixo.',
+    en: 'Details found. Confirm or adjust below.',
+  },
+  lookupNotFound: {
+    pt: 'Não encontramos este nome. Preencha o formulário.',
+    en: 'We could not find this name. Please fill in the form.',
+  },
+  addAnother: {
+    pt: 'Deseja cadastrar mais um visitante?',
+    en: 'Would you like to register another visitor?',
+  },
+  addVisitor: { pt: 'Sim, adicionar outro', en: 'Yes, add another' },
+  removeVisitor: { pt: 'Remover', en: 'Remove' },
+  visitorN: { pt: 'Visitante', en: 'Visitor' },
+  confirmYourData: {
+    pt: 'Confirme seus dados',
+    en: 'Confirm your details',
+  },
 } as const
 
 export function t(

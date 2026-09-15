@@ -29,15 +29,23 @@ import {
   draftToProfileForm,
   mergeProfilePatch,
   profileFormToDraft,
+  EMPTY_VISITOR_PROFILE,
   type VisitorProfileFormValues,
 } from '@/features/visitors/visitorProfileModel'
 import { formatDate } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
 import {
   buildGuestPortalUrl,
+  getGuestDrafts,
   getGuestLinkAvailability,
   getGuestLinkByToken,
+  isVisitIntakeLink,
   updateGuestPortal,
 } from '@/services/visitGuestLinks'
+import {
+  guestLookupVisitorByName,
+  lookupResultToProfileForm,
+} from '@/services/guestLookup'
 import { submitFeedback } from '@/services/visitFeedbacks'
 import type {
   GuestAgendaItem,
@@ -119,11 +127,22 @@ function groupAgendaByDate(
     }))
 }
 
-function draftFromLink(link: VisitGuestLink): VisitorProfileFormValues {
-  return draftToProfileForm(link.visitorDraft, {
-    name: link.visitorName,
-    company: link.company,
-  })
+function draftFromLink(link: VisitGuestLink): VisitorProfileFormValues[] {
+  const drafts = getGuestDrafts(link)
+  if (drafts.length > 0) {
+    return drafts.map((draft) =>
+      draftToProfileForm(draft, {
+        name: draft.name ?? link.visitorName,
+        company: draft.company ?? link.company,
+      }),
+    )
+  }
+  return [
+    draftToProfileForm(undefined, {
+      name: link.visitorName,
+      company: link.company,
+    }),
+  ]
 }
 
 function toDraftPayload(draft: VisitorProfileFormValues): GuestVisitorDraft {
@@ -131,11 +150,7 @@ function toDraftPayload(draft: VisitorProfileFormValues): GuestVisitorDraft {
 }
 
 function linkFormVariant(link: VisitGuestLink): VisitorFormVariant {
-  return (
-    link.formVariant ??
-    resolveVisitorFormVariant(link.eventKind) ??
-    'geral'
-  )
+  return link.formVariant ?? resolveVisitorFormVariant(link.eventKind)
 }
 
 function ConfirmationBadge({
@@ -178,10 +193,13 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   const { token = '' } = useParams<{ token: string }>()
   const [state, setState] = useState<PortalState>('loading')
   const [link, setLink] = useState<VisitGuestLink | null>(null)
-  const [draft, setDraft] = useState<VisitorProfileFormValues>(() =>
-    draftToProfileForm(undefined),
-  )
+  const [drafts, setDrafts] = useState<VisitorProfileFormValues[]>([
+    EMPTY_VISITOR_PROFILE,
+  ])
   const [locale, setLocale] = useState<PortalLocale>('pt')
+  const [lookupName, setLookupName] = useState('')
+  const [lookupIndex, setLookupIndex] = useState(0)
+  const [lookingUp, setLookingUp] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [rating, setRating] = useState(0)
@@ -192,6 +210,15 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   const portalUrl = useMemo(() => buildGuestPortalUrl(token), [token])
   const formVariant = link ? linkFormVariant(link) : 'geral'
   const intro = portalIntroCopy[formVariant]
+  const isIntake = link ? isVisitIntakeLink(link) : false
+  const primaryDraft = drafts[0] ?? EMPTY_VISITOR_PROFILE
+  const lgpdOk = drafts.every((item) => item.lgpdConsent)
+
+  const patchDraft = (index: number, patch: Partial<VisitorProfileFormValues>) => {
+    setDrafts((prev) =>
+      prev.map((item, i) => (i === index ? mergeProfilePatch(item, patch) : item)),
+    )
+  }
 
   const load = useCallback(async () => {
     if (!token) {
@@ -211,7 +238,9 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
       return
     }
     setLink(found)
-    setDraft(draftFromLink(found))
+    const loaded = draftFromLink(found)
+    setDrafts(loaded)
+    setLookupName(loaded[0]?.name ?? '')
     setFeedbackSent(readFeedbackSent(token))
     setState('ok')
   }, [token])
@@ -238,7 +267,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
   const handleConfirmation = async (status: GuestConfirmationStatus) => {
     if (!link) return
-    if (status === 'confirmed' && !draft.lgpdConsent) {
+    if (status === 'confirmed' && !lgpdOk) {
       toast.error(
         locale === 'en'
           ? 'To confirm, please accept the use of your data for this event (privacy consent).'
@@ -248,15 +277,21 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
     }
     setConfirming(true)
     try {
-      const payload: GuestVisitorDraft = toDraftPayload(draft)
+      const payloads = drafts.map((item) => toDraftPayload(item))
       await updateGuestPortal(link.id, {
         confirmationStatus: status,
-        visitorDraft: payload,
+        visitorDrafts: payloads,
+        visitorDraft: payloads[0],
       })
+      const stamped = payloads.map((item) => ({
+        ...item,
+        updatedAt: new Date().toISOString(),
+      }))
       setLink({
         ...link,
         confirmationStatus: status,
-        visitorDraft: { ...payload, updatedAt: new Date().toISOString() },
+        visitorDraft: stamped[0],
+        visitorDrafts: stamped,
       })
       toast.success(
         status === 'confirmed'
@@ -281,7 +316,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
   const handleSaveDraft = async () => {
     if (!link) return
-    if (!draft.lgpdConsent) {
+    if (!lgpdOk) {
       toast.error(
         locale === 'en'
           ? 'Please accept the privacy consent before sending your details.'
@@ -289,13 +324,31 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
       )
       return
     }
+    for (let i = 0; i < drafts.length; i += 1) {
+      if (!drafts[i].name.trim() || !drafts[i].document.trim()) {
+        toast.error(
+          locale === 'en'
+            ? `Visitor ${i + 1}: name and document are required.`
+            : `Visitante ${i + 1}: nome e documento são obrigatórios.`,
+        )
+        return
+      }
+    }
     setSavingDraft(true)
     try {
-      const payload = toDraftPayload(draft)
-      await updateGuestPortal(link.id, { visitorDraft: payload })
+      const payloads = drafts.map((item) => toDraftPayload(item))
+      await updateGuestPortal(link.id, {
+        visitorDrafts: payloads,
+        visitorDraft: payloads[0],
+      })
+      const stamped = payloads.map((item) => ({
+        ...item,
+        updatedAt: new Date().toISOString(),
+      }))
       setLink({
         ...link,
-        visitorDraft: { ...payload, updatedAt: new Date().toISOString() },
+        visitorDraft: stamped[0],
+        visitorDrafts: stamped,
       })
       toast.success(
         locale === 'en'
@@ -311,6 +364,42 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
       )
     } finally {
       setSavingDraft(false)
+    }
+  }
+
+  const handleLookup = async (index: number) => {
+    if (!link) return
+    const name = (index === 0 ? lookupName : drafts[index]?.name)?.trim()
+    if (!name || name.length < 3) {
+      toast.error(
+        locale === 'en'
+          ? 'Enter the full name to search.'
+          : 'Informe o nome completo para buscar.',
+      )
+      return
+    }
+    setLookingUp(true)
+    setLookupIndex(index)
+    try {
+      const result = await guestLookupVisitorByName(link.token, name)
+      const form = lookupResultToProfileForm(result, name)
+      if (!form) {
+        toast.message(t('lookupNotFound', locale))
+        return
+      }
+      patchDraft(index, { ...form, lgpdConsent: drafts[index]?.lgpdConsent === true })
+      toast.success(t('lookupFound', locale))
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : locale === 'en'
+            ? 'Lookup unavailable right now'
+            : 'Busca indisponível no momento',
+      )
+    } finally {
+      setLookingUp(false)
     }
   }
 
@@ -481,8 +570,12 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
         </div>
         <p className="text-sm text-foreground">
           {locale === 'en' ? 'Hello,' : 'Olá,'}{' '}
-          <span className="font-medium">{link.visitorName}</span>
-          {link.company ? ` · ${link.company}` : ''}
+          <span className="font-medium">
+            {primaryDraft.name || link.visitorName}
+          </span>
+          {primaryDraft.company || link.company
+            ? ` · ${primaryDraft.company || link.company}`
+            : ''}
         </p>
       </header>
 
@@ -583,20 +676,99 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
       <Card>
         <CardHeader>
-          <CardTitle>{t('yourData', locale)}</CardTitle>
+          <CardTitle>
+            {link.visitorId ? t('confirmYourData', locale) : t('yourData', locale)}
+          </CardTitle>
           <p className="text-sm text-muted-foreground">
             {t('yourDataHint', locale)}
           </p>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <VisitorProfileFields
-            values={draft}
-            onChange={(patch) => setDraft((prev) => mergeProfilePatch(prev, patch))}
-            variant={formVariant}
-            locale={locale}
-            showLgpd
-            showCountry={false}
-          />
+        <CardContent className="space-y-6">
+          <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            <p className="text-sm font-medium">{t('lookupTitle', locale)}</p>
+            <p className="text-xs text-muted-foreground">{t('lookupHint', locale)}</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={lookupName}
+                onChange={(e) => {
+                  setLookupName(e.target.value)
+                  patchDraft(0, { name: e.target.value })
+                }}
+                placeholder={t('fullName', locale)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={lookingUp}
+                onClick={() => void handleLookup(0)}
+              >
+                {lookingUp && lookupIndex === 0
+                  ? t('lookupSearching', locale)
+                  : t('lookupButton', locale)}
+              </Button>
+            </div>
+          </div>
+
+          {drafts.map((draft, index) => (
+            <div key={index} className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {t('visitorN', locale)} {index + 1}
+                </p>
+                {isIntake && drafts.length > 1 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setDrafts((prev) => prev.filter((_, i) => i !== index))
+                    }
+                  >
+                    {t('removeVisitor', locale)}
+                  </Button>
+                ) : null}
+              </div>
+              {index > 0 ? (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={lookingUp}
+                    onClick={() => void handleLookup(index)}
+                  >
+                    {lookingUp && lookupIndex === index
+                      ? t('lookupSearching', locale)
+                      : t('lookupButton', locale)}
+                  </Button>
+                </div>
+              ) : null}
+              <VisitorProfileFields
+                values={draft}
+                onChange={(patch) => patchDraft(index, patch)}
+                variant={formVariant}
+                locale={locale}
+                showLgpd
+                showCountry={false}
+              />
+            </div>
+          ))}
+
+          {isIntake ? (
+            <div className="space-y-2 rounded-lg border border-dashed p-3">
+              <p className="text-sm">{t('addAnother', locale)}</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setDrafts((prev) => [...prev, { ...EMPTY_VISITOR_PROFILE }])
+                }
+              >
+                {t('addVisitor', locale)}
+              </Button>
+            </div>
+          ) : null}
+
           <Button disabled={savingDraft} onClick={() => void handleSaveDraft()}>
             {savingDraft ? t('sending', locale) : t('sendData', locale)}
           </Button>

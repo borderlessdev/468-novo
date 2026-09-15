@@ -89,12 +89,16 @@ import { unmatchedPlaceholders } from '@/lib/operations'
 import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
 import { draftCommunication } from '@/services/ai'
 import {
+  applyVisitIntakeDrafts,
   applyVisitorDraft,
   buildGuestAgenda,
   buildGuestPortalUrl,
   createGuestLink,
+  createVisitIntakeLink,
+  getGuestDrafts,
   getGuestLinkAvailability,
   hasPendingGuestDraft,
+  isVisitIntakeLink,
   listLinksForVisit,
   refreshGuestLinkSnapshot,
   revokeLink,
@@ -471,13 +475,20 @@ export function VisitDetailPage() {
   const activeLinkByVisitorId = useMemo(() => {
     const map = new Map<string, VisitGuestLink>()
     guestLinks.forEach((link) => {
-      if (link.revoked) return
+      if (link.revoked || isVisitIntakeLink(link) || !link.visitorId) return
       const current = map.get(link.visitorId)
       if (!current || link.expiresAt > current.expiresAt) {
         map.set(link.visitorId, link)
       }
     })
     return map
+  }, [guestLinks])
+
+  const activeIntakeLink = useMemo(() => {
+    const intake = guestLinks
+      .filter((link) => isVisitIntakeLink(link) && !link.revoked)
+      .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
+    return intake[0] ?? null
   }, [guestLinks])
 
   const feedbackAverage = useMemo(() => averageRating(feedbacks), [feedbacks])
@@ -559,6 +570,98 @@ export function VisitDetailPage() {
     }
   }
 
+  const handleGenerateVisitIntakeLink = async () => {
+    if (!user || !id || !visit || !activeOrgId) return
+    setPortalBusyId('intake')
+    try {
+      const link = await createVisitIntakeLink({
+        visitId: id,
+        createdBy: user.uid,
+        ownerId: user.uid,
+        visitTitle: visit.title,
+        startDate: visit.startDate,
+        endDate: visit.endDate,
+        visitorName: 'Pré-cadastro da visita',
+        company: visit.company,
+        city: visit.city,
+        arrivalInstructions: visit.arrivalInstructions,
+        agenda: buildGuestAgenda(activities),
+        orgName: activeOrg?.name,
+        orgLogoUrl: activeOrg?.logoUrl,
+        eventKind: visit.eventKind,
+      })
+      setGuestLinks((prev) => [link, ...prev])
+      await copyPortalUrl(link.token)
+      toast.success('Link de cadastro da visita gerado')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível gerar o link de cadastro')
+    } finally {
+      setPortalBusyId(null)
+    }
+  }
+
+  const handleRefreshIntakeLink = async (link: VisitGuestLink) => {
+    if (!visit) return
+    setPortalBusyId(link.id)
+    try {
+      const snapshot: GuestLinkSnapshot = {
+        visitTitle: visit.title,
+        startDate: visit.startDate,
+        endDate: visit.endDate,
+        visitorName: link.visitorName || 'Pré-cadastro da visita',
+        company: visit.company,
+        city: visit.city,
+        arrivalInstructions: visit.arrivalInstructions,
+        agenda: buildGuestAgenda(activities),
+        orgName: activeOrg?.name,
+        orgLogoUrl: activeOrg?.logoUrl,
+        eventKind: visit.eventKind,
+      }
+      await refreshGuestLinkSnapshot(link.id, snapshot)
+      setGuestLinks((prev) =>
+        prev.map((item) => (item.id === link.id ? { ...item, ...snapshot } : item)),
+      )
+      toast.success('Dados do portal atualizados')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível atualizar o portal')
+    } finally {
+      setPortalBusyId(null)
+    }
+  }
+
+  const handleApplyIntakeDrafts = async (link: VisitGuestLink) => {
+    if (!user || !activeOrgId || !id) return
+    setPortalBusyId(link.id)
+    try {
+      const { visitorIds } = await applyVisitIntakeDrafts({
+        linkId: link.id,
+        ownerId: user.uid,
+        orgId: activeOrgId,
+        existingVisitorId: link.visitorId,
+      })
+      setGuestLinks((prev) =>
+        prev.map((item) =>
+          item.id === link.id
+            ? { ...item, lastAppliedAt: new Date().toISOString() }
+            : item,
+        ),
+      )
+      await load({ silent: true })
+      toast.success(
+        `${visitorIds.length} visitante(s) aplicados e vinculados à visita`,
+      )
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível aplicar os cadastros',
+      )
+    } finally {
+      setPortalBusyId(null)
+    }
+  }
+
   const handleRefreshGuestLink = async (link: VisitGuestLink, visitor: Visitor) => {
     const snapshot = buildSnapshot(visitor)
     if (!snapshot) return
@@ -594,6 +697,10 @@ export function VisitDetailPage() {
   }
 
   const handleApplyGuestDraft = async (link: VisitGuestLink) => {
+    if (!link.visitorId) {
+      await handleApplyIntakeDrafts(link)
+      return
+    }
     setPortalBusyId(link.id)
     try {
       await applyVisitorDraft(link.id, link.visitorId)
@@ -1540,11 +1647,97 @@ export function VisitDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Portal do visitante</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Gere um link público para cada visitante confirmar presença, revisar dados e
-              acessar a programação.
+              Gere um link de cadastro da visita (vários visitantes) ou um link por
+              visitante já vinculado para confirmar presença e revisar dados.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-3 rounded-lg border border-dashed px-3 py-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">Link de cadastro da visita</p>
+                  <p className="text-xs text-muted-foreground">
+                    Envie para o cliente interno ou visitantes pré-preencherem dados
+                    (pode incluir vários visitantes de uma vez).
+                  </p>
+                </div>
+                {!activeIntakeLink ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={portalBusyId === 'intake'}
+                    onClick={() => void handleGenerateVisitIntakeLink()}
+                  >
+                    <Link2 className="h-4 w-4" />
+                    {portalBusyId === 'intake' ? 'Gerando...' : 'Gerar link de cadastro'}
+                  </Button>
+                ) : null}
+              </div>
+              {activeIntakeLink ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <GuestStatusBadge link={activeIntakeLink} />
+                    {hasPendingGuestDraft(activeIntakeLink) ? (
+                      <Badge variant="warning">
+                        {getGuestDrafts(activeIntakeLink).length} cadastro(s) pendente(s)
+                      </Badge>
+                    ) : null}
+                    {getGuestLinkAvailability(activeIntakeLink) === 'expired' ? (
+                      <Badge variant="outline">Link expirado</Badge>
+                    ) : null}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={buildGuestPortalUrl(activeIntakeLink.token)}
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      aria-label="Copiar link"
+                      onClick={() => void copyPortalUrl(activeIntakeLink.token)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Válido até {formatDate(activeIntakeLink.expiresAt)}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {hasPendingGuestDraft(activeIntakeLink) ? (
+                      <Button
+                        size="sm"
+                        disabled={portalBusyId === activeIntakeLink.id}
+                        onClick={() => void handleApplyIntakeDrafts(activeIntakeLink)}
+                      >
+                        <DownloadCloud className="h-4 w-4" />
+                        Aplicar cadastros do portal
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={portalBusyId === activeIntakeLink.id}
+                      onClick={() => void handleRefreshIntakeLink(activeIntakeLink)}
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Atualizar dados
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={portalBusyId === activeIntakeLink.id}
+                      onClick={() => void handleRevokeGuestLink(activeIntakeLink)}
+                    >
+                      <Ban className="h-4 w-4" />
+                      Revogar
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             {linkedVisitors.length > 0 ? (
               <div className="rounded-lg border bg-muted/30 px-3 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1593,7 +1786,8 @@ export function VisitDetailPage() {
 
             {linkedVisitors.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Vincule visitantes à visita para gerar links do portal.
+                Links por visitante aparecem aqui após vincular alguém à visita.
+                O link de cadastro da visita (acima) funciona mesmo sem vínculos.
               </p>
             ) : (
               linkedVisitors.map((visitor) => {

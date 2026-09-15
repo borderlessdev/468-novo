@@ -518,7 +518,11 @@ export interface VisitGuestLink {
   id: string
   token: string
   visitId: string
-  visitorId: string
+  /**
+   * Presente nos links por visitante. Vazio/ausente = link de pré-cadastro da visita
+   * (intake), que pode cadastrar N visitantes.
+   */
+  visitorId?: string
   ownerId: string
   createdBy: string
   expiresAt: string
@@ -540,7 +544,10 @@ export interface VisitGuestLink {
   orgName?: string
   orgLogoUrl?: string
   confirmationStatus: GuestConfirmationStatus
+  /** Rascunho único (links antigos / primeiro visitante). */
   visitorDraft?: GuestVisitorDraft
+  /** Vários rascunhos no link de cadastro da visita (Dia 2). */
+  visitorDrafts?: GuestVisitorDraft[]
   lastAppliedAt?: string
   createdAt?: unknown
   updatedAt?: unknown
