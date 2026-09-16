@@ -143,8 +143,21 @@ service cloud.firestore {
     }
 
     match /organizationMembers/{memberId} {
-      allow get: if isSignedIn()
-        && (isPlatformAdmin() || resource.data.uid == request.auth.uid || canAccessOrg(resource.data.orgId));
+      // get de doc inexistente: resource é null — precisa permitir checagem do próprio vínculo.
+      allow get: if isSignedIn() && (
+        isPlatformAdmin()
+        || (
+          exists(/databases/$(database)/documents/organizationMembers/$(memberId))
+          && (
+            resource.data.uid == request.auth.uid
+            || canAccessOrg(resource.data.orgId)
+          )
+        )
+        || (
+          !exists(/databases/$(database)/documents/organizationMembers/$(memberId))
+          && memberId.matches('^.+_' + request.auth.uid + '$')
+        )
+      );
       allow list: if isSignedIn()
         && (
           isPlatformAdmin()
@@ -173,12 +186,17 @@ service cloud.firestore {
       allow list: if isAdmin();
 
       // Conta própria OU platform admin criando perfil do admin da empresa.
+      // orgId pode ser null no placeholder pós-Auth (antes do vínculo do convite).
       allow create: if isSignedIn()
         && request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.name is string
         && request.resource.data.role in ['user', 'team', 'client']
-        && (!('orgId' in request.resource.data) || request.resource.data.orgId is string)
+        && (
+          !('orgId' in request.resource.data)
+          || request.resource.data.orgId == null
+          || request.resource.data.orgId is string
+        )
         && (
           request.auth.uid == userId
           || (
@@ -192,7 +210,8 @@ service cloud.firestore {
           (
             request.auth.uid == userId
             && request.resource.data.uid == resource.data.uid
-            && request.resource.data.role == resource.data.role
+            && request.resource.data.role in ['user', 'team', 'client']
+            && resource.data.role in ['user', 'team', 'client']
           )
           || isAdmin()
           || isPlatformAdmin()

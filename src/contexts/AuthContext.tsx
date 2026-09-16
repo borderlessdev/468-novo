@@ -20,7 +20,7 @@ import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
 import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
-import { acceptInvite, getInviteById } from '@/services/invites'
+import { acceptInvite, getInviteById, joinOrganizationFromInvite } from '@/services/invites'
 import { addOrganizationMember } from '@/services/organizations'
 import { ACTIVE_ORG_STORAGE_KEY, inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import type { UserProfile, UserRole } from '@/types'
@@ -49,6 +49,8 @@ interface AuthContextValue {
       department?: string
     },
   ) => Promise<void>
+  /** Vincula a conta logada a uma empresa a partir do token do convite. */
+  acceptInviteLink: (token: string) => Promise<void>
   logout: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   refreshProfile: () => Promise<void>
@@ -200,8 +202,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadProfile(credential.user)
       } catch (error) {
         const code = (error as { code?: string }).code ?? ''
-        throw new Error(getAuthErrorMessage(code))
+        if (code === 'auth/email-already-in-use' && options?.inviteId) {
+          throw new Error(
+            'Este e-mail já tem conta. Entre com a senha e o mesmo link de convite para vincular à empresa.',
+          )
+        }
+        throw new Error(getAuthErrorMessage(code) || (error instanceof Error ? error.message : 'Falha no cadastro'))
       }
+    },
+    [loadProfile],
+  )
+
+  const acceptInviteLink = useCallback(
+    async (token: string) => {
+      const firebaseUser = auth.currentUser
+      if (!firebaseUser?.email) {
+        throw new Error('Faça login para aceitar o convite')
+      }
+      await joinOrganizationFromInvite({
+        token: token.trim(),
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: firebaseUser.displayName ?? undefined,
+      })
+      await loadProfile(firebaseUser)
     },
     [loadProfile],
   )
@@ -305,6 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canWrite,
       login,
       register,
+      acceptInviteLink,
       logout,
       resetPassword,
       refreshProfile,
@@ -324,6 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canWrite,
       login,
       register,
+      acceptInviteLink,
       logout,
       resetPassword,
       refreshProfile,

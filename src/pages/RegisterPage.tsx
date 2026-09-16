@@ -16,7 +16,7 @@ import { getInviteByToken } from '@/services/invites'
 import type { Invite } from '@/types'
 
 export function RegisterPage() {
-  const { register: registerUser } = useAuth()
+  const { register: registerUser, user, acceptInviteLink, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const inviteToken = searchParams.get('invite')
@@ -54,6 +54,39 @@ export function RegisterPage() {
       .finally(() => setInviteLoading(false))
   }, [inviteToken, form])
 
+  // Conta já logada sem empresa: aceita o convite sem criar Auth de novo.
+  useEffect(() => {
+    if (!user || !inviteToken || inviteLoading || inviteInvalid || !invite) return
+    let cancelled = false
+    setLoading(true)
+    void acceptInviteLink(inviteToken)
+      .then(async () => {
+        if (cancelled) return
+        await refreshProfile()
+        toast.success('Conta vinculada à empresa')
+        navigate('/')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        toast.error(error instanceof Error ? error.message : 'Não foi possível aceitar o convite')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    user,
+    inviteToken,
+    inviteLoading,
+    inviteInvalid,
+    invite,
+    acceptInviteLink,
+    refreshProfile,
+    navigate,
+  ])
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (inviteToken && (inviteInvalid || !invite)) {
       toast.error('Use um convite válido ou cadastre-se sem o parâmetro invite')
@@ -68,7 +101,11 @@ export function RegisterPage() {
       toast.success('Conta criada com sucesso')
       navigate('/')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha no cadastro')
+      const message = error instanceof Error ? error.message : 'Falha no cadastro'
+      toast.error(message)
+      if (inviteToken && /já tem conta|já está em uso/i.test(message)) {
+        navigate(`/login?invite=${encodeURIComponent(inviteToken)}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -94,18 +131,29 @@ export function RegisterPage() {
       >
         <div className="space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Peça um novo convite ao operador ou crie uma conta padrão.
+            Peça um novo convite ao operador. Se você já criou a conta, entre e use o
+            link novo para vincular à empresa.
           </p>
-          <Button asChild className="w-full">
-            <Link to="/cadastro">Criar conta sem convite</Link>
+          <Button asChild className="w-full" variant="outline">
+            <Link to={inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login'}>
+              Já tenho conta — Entrar
+            </Link>
           </Button>
           <p className="text-sm text-muted-foreground">
-            Já tem conta?{' '}
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Entrar
+            Sem convite?{' '}
+            <Link to="/cadastro" className="font-medium text-primary hover:underline">
+              Criar conta padrão
             </Link>
           </p>
         </div>
+      </AuthLayout>
+    )
+  }
+
+  if (user && inviteToken && invite) {
+    return (
+      <AuthLayout title="Vincular empresa" subtitle="Aceitando convite na sua conta...">
+        <Skeleton className="h-10 w-full" />
       </AuthLayout>
     )
   }
@@ -182,7 +230,10 @@ export function RegisterPage() {
       </form>
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Já tem conta?{' '}
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link
+          to={inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login'}
+          className="font-medium text-primary hover:underline"
+        >
           Entrar
         </Link>
       </p>

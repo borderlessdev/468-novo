@@ -1647,29 +1647,29 @@ export function VisitDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Portal do visitante</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Gere um link de cadastro da visita (vários visitantes) ou um link por
-              visitante já vinculado para confirmar presença e revisar dados.
+              Use o <strong>link único da visita</strong> para vários visitantes
+              preencherem o cadastro. Links individuais (abaixo) são só para quem já
+              está vinculado confirmar presença.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3 rounded-lg border border-dashed px-3 py-3">
+            <div className="space-y-3 rounded-lg border-2 border-primary/30 bg-primary/5 px-3 py-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium">Link de cadastro da visita</p>
+                  <p className="text-sm font-semibold">Link único de cadastro da visita</p>
                   <p className="text-xs text-muted-foreground">
-                    Envie para o cliente interno ou visitantes pré-preencherem dados
-                    (pode incluir vários visitantes de uma vez).
+                    Um só link para o cliente/visitantes — podem incluir várias pessoas
+                    na mesma solicitação.
                   </p>
                 </div>
                 {!activeIntakeLink ? (
                   <Button
                     size="sm"
-                    variant="outline"
                     disabled={portalBusyId === 'intake'}
                     onClick={() => void handleGenerateVisitIntakeLink()}
                   >
                     <Link2 className="h-4 w-4" />
-                    {portalBusyId === 'intake' ? 'Gerando...' : 'Gerar link de cadastro'}
+                    {portalBusyId === 'intake' ? 'Gerando...' : 'Gerar link único'}
                   </Button>
                 ) : null}
               </div>
@@ -1786,11 +1786,15 @@ export function VisitDetailPage() {
 
             {linkedVisitors.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Links por visitante aparecem aqui após vincular alguém à visita.
-                O link de cadastro da visita (acima) funciona mesmo sem vínculos.
+                Ainda não há visitantes vinculados. Gere o <strong>link único da visita</strong>{' '}
+                acima — não é necessário criar um link por pessoa.
               </p>
             ) : (
-              linkedVisitors.map((visitor) => {
+              <>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Links individuais (confirmação) — opcional
+                </p>
+              {linkedVisitors.map((visitor) => {
                 const link = activeLinkByVisitorId.get(visitor.id)
                 const availability = link ? getGuestLinkAvailability(link) : null
                 const busy = portalBusyId === visitor.id || portalBusyId === link?.id
@@ -1916,7 +1920,8 @@ export function VisitDetailPage() {
                     )}
                   </div>
                 )
-              })
+              })}
+              </>
             )}
           </CardContent>
         </Card>

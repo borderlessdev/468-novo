@@ -74,6 +74,15 @@
       ]
     },
     {
+      "collectionGroup": "invites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "email", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "visits",
       "queryScope": "COLLECTION",
       "fields": [

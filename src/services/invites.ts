@@ -11,9 +11,10 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { inviteRoleToOrgRole } from '@/lib/org'
+import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import {
   canAddOrganizationMember,
+  addOrganizationMember,
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import {
@@ -21,6 +22,7 @@ import {
   isFirestoreEmailEnabled,
 } from '@/services/email'
 import { createEmailLog } from '@/services/emailLogs'
+import { updateUserProfile } from '@/services/users'
 import type { Invite, InviteRole, InviteStatus, OrgRole } from '@/types'
 
 const col = collection(db, 'invites')
@@ -65,6 +67,20 @@ export async function createInvite(input: {
   visitId?: string
   createdByName?: string
 }): Promise<Invite & { link: string; mailtoOpened: boolean }> {
+  const email = input.email.trim().toLowerCase()
+
+  // Substitui convites pendentes do mesmo e-mail nesta empresa (evita link antigo
+  // "já utilizado" / vários tokens vivos para a mesma pessoa).
+  const previousPending = await getDocs(
+    query(
+      col,
+      where('orgId', '==', input.orgId),
+      where('email', '==', email),
+      where('status', '==', 'pending'),
+    ),
+  )
+  await Promise.all(previousPending.docs.map((d) => deleteDoc(d.ref)))
+
   const canAdd = await canAddOrganizationMember(input.orgId)
   if (!canAdd) {
     throw new Error('Limite de usuários da empresa atingido')
@@ -76,7 +92,7 @@ export async function createInvite(input: {
   const expiresAt = expires.toISOString()
 
   const ref = await addDoc(col, {
-    email: input.email.trim().toLowerCase(),
+    email,
     role: input.role,
     token,
     status: 'pending',
@@ -90,7 +106,7 @@ export async function createInvite(input: {
 
   const invite: Invite = {
     id: ref.id,
-    email: input.email.trim().toLowerCase(),
+    email,
     role: input.role,
     token,
     status: 'pending',
@@ -162,6 +178,51 @@ export async function getInviteByToken(token: string): Promise<Invite | null> {
   const invite = mapInvite(snap.docs[0].id, snap.docs[0].data())
   if (new Date(invite.expiresAt).getTime() < Date.now()) return null
   return invite
+}
+
+/**
+ * Vincula usuário Auth já existente à empresa do convite (corrige "e-mail em uso"
+ * + "conta sem empresa" quando o Auth foi criado sem membership).
+ */
+export async function joinOrganizationFromInvite(input: {
+  token: string
+  uid: string
+  email: string
+  name?: string
+}): Promise<{ orgId: string; inviteId: string }> {
+  const invite = await getInviteByToken(input.token)
+  if (!invite) {
+    throw new Error('Convite inválido, expirado ou já utilizado')
+  }
+
+  const email = input.email.trim().toLowerCase()
+  if (invite.email !== email) {
+    throw new Error(
+      `Este convite é para ${invite.email}. Entre com esse e-mail ou peça um novo convite.`,
+    )
+  }
+
+  const orgRole = inviteRoleToOrgRole(invite.role)
+  const role = inviteRoleToUserRole(invite.role)
+
+  // setDoc é idempotente — evita get em membership inexistente (rules negavam).
+  await addOrganizationMember({
+    orgId: invite.orgId,
+    uid: input.uid,
+    email,
+    name: input.name?.trim() || email,
+    orgRole,
+    department: invite.department,
+    invitedBy: invite.createdBy,
+  })
+
+  await updateUserProfile(input.uid, {
+    orgId: invite.orgId,
+    role,
+  })
+
+  await acceptInvite(invite.id, input.uid)
+  return { orgId: invite.orgId, inviteId: invite.id }
 }
 
 export async function acceptInvite(inviteId: string, uid: string): Promise<void> {

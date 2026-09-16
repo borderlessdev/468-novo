@@ -56,11 +56,10 @@ export async function createUserProfile(input: {
     updatedAt: serverTimestamp(),
   }
   // Só grava orgId quando informado — evita corrida do onAuthStateChanged
-  // apagar o vínculo criado pelo fluxo de convite.
+  // apagar o vínculo criado pelo fluxo de convite. Não força null em perfil novo
+  // (rules + merge preservam vínculo se o register gravar orgId em paralelo).
   if (input.orgId !== undefined) {
     payload.orgId = input.orgId || null
-  } else if (!existing.exists()) {
-    payload.orgId = null
   }
   if (!existing.exists()) {
     payload.modulePermissions = mergeModulePermissions(null)

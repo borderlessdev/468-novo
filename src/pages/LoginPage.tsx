@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -12,8 +12,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { loginSchema, type LoginInput } from '@/lib/validations'
 
 export function LoginPage() {
-  const { login } = useAuth()
+  const { login, acceptInviteLink } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite')
   const [loading, setLoading] = useState(false)
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -24,7 +26,20 @@ export function LoginPage() {
     setLoading(true)
     try {
       await login(values.email, values.password)
-      toast.success('Login realizado')
+      if (inviteToken) {
+        try {
+          await acceptInviteLink(inviteToken)
+          toast.success('Login realizado e empresa vinculada')
+        } catch (inviteError) {
+          toast.error(
+            inviteError instanceof Error
+              ? inviteError.message
+              : 'Login ok, mas o convite não pôde ser aceito',
+          )
+        }
+      } else {
+        toast.success('Login realizado')
+      }
       navigate('/')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha no login')
@@ -34,7 +49,14 @@ export function LoginPage() {
   })
 
   return (
-    <AuthLayout title="Entrar" subtitle="Acesse sua conta para gerenciar as operações.">
+    <AuthLayout
+      title="Entrar"
+      subtitle={
+        inviteToken
+          ? 'Entre com a conta deste e-mail para vincular o convite à empresa.'
+          : 'Acesse sua conta para gerenciar as operações.'
+      }
+    >
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
@@ -60,12 +82,15 @@ export function LoginPage() {
           ) : null}
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Entrando...' : 'Entrar'}
+          {loading ? 'Entrando...' : inviteToken ? 'Entrar e vincular empresa' : 'Entrar'}
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Não tem conta?{' '}
-        <Link to="/cadastro" className="font-medium text-primary hover:underline">
+        <Link
+          to={inviteToken ? `/cadastro?invite=${encodeURIComponent(inviteToken)}` : '/cadastro'}
+          className="font-medium text-primary hover:underline"
+        >
           Criar conta
         </Link>
       </p>
