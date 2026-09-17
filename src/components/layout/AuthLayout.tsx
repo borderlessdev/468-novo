@@ -13,12 +13,12 @@ export function AuthLayout({
     <div className="relative flex min-h-dvh overflow-hidden bg-background">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_10%_0%,_rgba(15,47,42,0.14),_transparent_55%),radial-gradient(ellipse_50%_40%_at_95%_85%,_rgba(212,160,23,0.14),_transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_10%_0%,_rgba(0,126,122,0.16),_transparent_55%),radial-gradient(ellipse_50%_40%_at_95%_85%,_rgba(236,177,31,0.16),_transparent_50%)]" />
         <div
           className="absolute inset-0 opacity-[0.035] dark:opacity-[0.05]"
           style={{
             backgroundImage:
-              'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%230f2f2a\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+              'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23007E7A\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
           }}
         />
       </div>
@@ -26,18 +26,18 @@ export function AuthLayout({
       {/* Brand panel — desktop */}
       <aside className="relative hidden w-[42%] flex-col justify-between overflow-hidden bg-primary px-10 py-10 text-primary-foreground lg:flex xl:w-[46%] xl:px-14 2xl:px-16">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand/20 blur-3xl" />
-          <div className="absolute right-0 bottom-0 h-80 w-80 rounded-full bg-brand/15 blur-3xl" />
-          <div className="absolute inset-0 bg-[linear-gradient(160deg,transparent_40%,rgba(212,160,23,0.08)_100%)]" />
+          <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand/25 blur-3xl" />
+          <div className="absolute right-0 bottom-0 h-80 w-80 rounded-full bg-brand/20 blur-3xl" />
+          <div className="absolute inset-0 bg-[linear-gradient(160deg,transparent_40%,rgba(236,177,31,0.12)_100%)]" />
         </div>
 
         <div className="relative">
           <img
-            src="/logo.png"
-            alt="Promover Experience"
-            className="h-12 w-auto max-w-[240px] object-contain object-left mix-blend-lighten"
+            src="/vale-logo.svg"
+            alt="Vale"
+            className="h-12 w-auto max-w-[200px] rounded bg-white/95 object-contain object-left px-2 py-1"
           />
-          <p className="mt-2 text-xs text-white/60">Operações de visitas corporativas</p>
+          <p className="mt-2 text-xs text-white/70">Operações de visitas corporativas</p>
         </div>
 
         <div className="relative max-w-md animate-fade-in-up">
@@ -53,7 +53,9 @@ export function AuthLayout({
           </p>
         </div>
 
-        <p className="relative text-xs text-white/40">© {new Date().getFullYear()} Promover Experience</p>
+        <p className="relative text-xs text-white/40">
+          © {new Date().getFullYear()} Vale · Operado com Promover Experience
+        </p>
       </aside>
 
       {/* Form panel */}
@@ -61,10 +63,10 @@ export function AuthLayout({
         <div className="w-full max-w-md animate-fade-in-up">
           {/* Mobile brand mark — top left */}
           <div className="mb-8 lg:hidden">
-            <div className="inline-flex rounded-xl bg-[#0a0a0a] px-3 py-2.5">
+            <div className="inline-flex rounded-xl border border-primary/15 bg-white px-3 py-2.5 shadow-sm">
               <img
-                src="/logo.png"
-                alt="Promover Experience"
+                src="/vale-logo.svg"
+                alt="Vale"
                 className="h-9 w-auto max-w-[180px] object-contain object-left"
               />
             </div>

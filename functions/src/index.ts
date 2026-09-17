@@ -564,3 +564,4 @@ export {
 } from './ai/callables'
 
 export { guestLookupVisitorByName } from './guestLookup'
+export { onVisitGuestLinkWritten } from './visitorNotifications'

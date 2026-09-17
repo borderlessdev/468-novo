@@ -257,6 +257,46 @@ export async function scanDueReminders(
           dedupeKey: `guest_confirmed:${link.id}:${link.confirmationStatus}`,
         })
       }
+
+      // Cadastro / multi-draft pendente de aplicar (backup do trigger nas Functions)
+      for (const link of links) {
+        const drafts =
+          link.visitorDrafts && link.visitorDrafts.length > 0
+            ? link.visitorDrafts
+            : link.visitorDraft
+              ? [link.visitorDraft]
+              : []
+        const withConsent = drafts.filter(
+          (d) => d.lgpdConsent === true && String(d.name ?? '').trim(),
+        )
+        if (withConsent.length === 0) continue
+        const latest =
+          withConsent
+            .map((d) => d.updatedAt)
+            .filter((v): v is string => Boolean(v))
+            .sort()
+            .at(-1) ?? 'unknown'
+        if (link.lastAppliedAt && latest !== 'unknown' && latest <= link.lastAppliedAt) {
+          continue
+        }
+        const names = withConsent
+          .map((d) => d.name?.trim())
+          .filter(Boolean)
+          .join(', ')
+        candidates.push({
+          recipientId: userId,
+          type: 'guest_registration',
+          title:
+            withConsent.length > 1
+              ? 'Novos cadastros pelo portal'
+              : 'Novo cadastro pelo portal',
+          body: `${names || link.visitorName} — ${visit.title}`,
+          visitId: visit.id,
+          entityId: link.id,
+          href: `/visitas/${visit.id}`,
+          dedupeKey: `guest_registration:${link.id}:${latest}`,
+        })
+      }
     }
 
     const pendingCreates = candidates.filter(

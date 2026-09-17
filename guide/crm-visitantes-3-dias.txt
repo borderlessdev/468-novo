@@ -17,7 +17,7 @@ Progresso geral (marque ao fechar cada dia)
 -------------------------------------------
 [x] DIA 1 — Modelo + forms VIP/Comunidade + PT/EN + LGPD
 [x] DIA 2 — Link por visita + multi-visitante + autofill CRM
-[ ] DIA 3 — E-mail/SMS (Functions) + relatorios
+[x] DIA 3 — E-mail/SMS (Functions) + relatorios
 
 Mapa dos 3 dias
 ---------------
@@ -64,12 +64,15 @@ Relatorios parciais
 
 Fora de escopo destes 3 dias
 ----------------------------
-- Identidade visual Vale no CRM/portal (PDF: esperar cliente fechar sistema;
-  white-label orgName/orgLogoUrl no portal ja basta)
-- Redesign visual geral
+- Redesign visual geral (fora da identidade Vale)
 - App nativo / login do visitante
 - Outlook Calendar
 - Nao commitar .env, tokens OAuth, service-account
+
+Identidade Vale (feita sob demanda):
+- Tema Verde/Amarelo Vale em src/index.css + src/lib/valeBrand.ts
+- Logo /vale-logo.svg no CRM (header direita), sidebar, login e portal
+- Portal: faixa verde + faixa amarela + logo canto superior direito
 
 Regras de ouro para o Agent
 ---------------------------
@@ -338,7 +341,7 @@ Checklist manual (DIA 2):
 ==============================================================================
 DIA 3 — Notificacoes (Functions) + relatorios
 ==============================================================================
-Status do dia: [ ] nao iniciado  [ ] em andamento  [ ] concluido
+Status do dia: [ ] nao iniciado  [ ] em andamento  [x] concluido
 
 Cole no Cursor (Agent mode):
 
@@ -435,14 +438,14 @@ Entregaveis:
 ---
 
 Checklist de tarefas (DIA 3) — marque [x] ao concluir:
-[ ] Trigger/callable: e-mail confirmacao VIP → colecao mail + emailLog
-[ ] Function: SMS/WhatsApp Comunidade + stub sem credenciais
-[ ] functions/.env.example atualizado
-[ ] Notificacao in-app (e opcional e-mail) para responsaveis
-[ ] ReportsPage: filtro periodo + visitante
-[ ] Export Excel/CSV + PDF do relatorio de visitantes
-[ ] Historico de visitas no relatorio / metricas dashboard
-[ ] npm run build (app) e functions/
+[x] Trigger/callable: e-mail confirmacao VIP → colecao mail + emailLog
+[x] Function: SMS/WhatsApp Comunidade + stub sem credenciais
+[x] functions/.env.example atualizado
+[x] Notificacao in-app (e opcional e-mail) para responsaveis
+[x] ReportsPage: filtro periodo + visitante
+[x] Export Excel/CSV + PDF do relatorio de visitantes
+[x] Historico de visitas no relatorio / metricas dashboard
+[x] npm run build (app) e functions/
 
 Checklist manual (DIA 3):
 [ ] Cadastro VIP no portal gera e-mail (ou documento em mail) para o visitante
@@ -487,4 +490,11 @@ DIA 2:
 - Deploy da Function guestLookupVisitorByName necessario para autofill em producao
 
 DIA 3:
--
+- Trigger onVisitGuestLinkWritten (functions/src/visitorNotifications.ts):
+  VIP → mail + emailLog visitor_registration_confirm; Comunidade → Twilio
+  SMS/WhatsApp ou skipped_no_provider; owner → notification + e-mail resumo
+- Preferencia guestRegistration; scan reminder guest_registration
+- ReportsPage: secao visitantes (ciclo + filtro + historico + export)
+- Dashboard KPI "Novos no CRM"
+- functions/.env.example: TWILIO_*
+- Deploy necessario: npm --prefix functions run deploy (onVisitGuestLinkWritten)

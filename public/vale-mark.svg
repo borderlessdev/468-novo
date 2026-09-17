@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Vale">
+  <defs>
+    <linearGradient id="valeVMark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ECB11F"/>
+      <stop offset="100%" stop-color="#FFCD00"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="8" fill="#007E7A"/>
+  <path
+    fill="url(#valeVMark)"
+    d="M24 8 L40 40 H33 L24 20 L15 40 H8 L24 8 Z"
+  />
+</svg>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { jsPDF } from 'jspdf'
 import { toast } from 'sonner'
 import {
@@ -48,8 +48,24 @@ import {
 import { listVisits } from '@/services/visits'
 import { listVisitors } from '@/services/visitors'
 import { listFinanceItemsByOwner } from '@/services/finance'
-import { listVisitVisitors } from '@/services/visitVisitors'
+import {
+  listVisitIdsForVisitor,
+  listVisitVisitors,
+} from '@/services/visitVisitors'
 import type { FinanceItem, Visit, Visitor } from '@/types'
+
+function visitorCreatedIso(visitor: Visitor): string | null {
+  const raw = visitor.createdAt
+  if (!raw) return null
+  if (typeof raw === 'object' && raw !== null && 'toDate' in raw) {
+    const date = (raw as { toDate: () => Date }).toDate()
+    if (Number.isNaN(date.getTime())) return null
+    return date.toISOString().slice(0, 10)
+  }
+  const date = new Date(String(raw))
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
+}
 
 export function ReportsPage() {
   const { user, isPlatformAdmin, role } = useAuth()
@@ -70,6 +86,10 @@ export function ReportsPage() {
   const [nfStart, setNfStart] = useState('')
   const [nfEnd, setNfEnd] = useState('')
   const [nfStatus, setNfStatus] = useState('todos')
+  const [visitorFilterId, setVisitorFilterId] = useState('todos')
+  const [visitorSearch, setVisitorSearch] = useState('')
+  const [visitorHistory, setVisitorHistory] = useState<Visit[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   const load = useCallback(async () => {
     if (!user || !activeOrgId) return
@@ -91,6 +111,145 @@ export function ReportsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const visitorsInCycle = useMemo(() => {
+    return visitors.filter((visitor) => {
+      const created = visitorCreatedIso(visitor)
+      if (!created) return true
+      return created >= range.startIso && created <= range.endIso
+    })
+  }, [visitors, range.endIso, range.startIso])
+
+  const filteredVisitorOptions = useMemo(() => {
+    const q = visitorSearch.trim().toLowerCase()
+    const base = visitorsInCycle.length > 0 ? visitorsInCycle : visitors
+    if (!q) return base.slice(0, 80)
+    return base
+      .filter(
+        (v) =>
+          v.name.toLowerCase().includes(q) ||
+          (v.document ?? '').toLowerCase().includes(q) ||
+          (v.company ?? '').toLowerCase().includes(q),
+      )
+      .slice(0, 80)
+  }, [visitors, visitorsInCycle, visitorSearch])
+
+  useEffect(() => {
+    if (!user || !activeOrgId || visitorFilterId === 'todos') {
+      setVisitorHistory([])
+      return
+    }
+    let cancelled = false
+    setLoadingHistory(true)
+    void (async () => {
+      try {
+        const visitIds = await listVisitIdsForVisitor(
+          visitorFilterId,
+          activeOrgId,
+          user.uid,
+          isPlatformAdmin,
+          role,
+        )
+        if (cancelled) return
+        const matched = visits
+          .filter((v) => visitIds.includes(v.id))
+          .filter((v) => v.startDate >= range.startIso && v.startDate <= range.endIso)
+          .sort((a, b) => b.startDate.localeCompare(a.startDate))
+        setVisitorHistory(matched)
+      } catch (error) {
+        console.error(error)
+        if (!cancelled) {
+          setVisitorHistory([])
+          toast.error('Erro ao carregar histórico do visitante')
+        }
+      } finally {
+        if (!cancelled) setLoadingHistory(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    visitorFilterId,
+    user,
+    activeOrgId,
+    isPlatformAdmin,
+    role,
+    visits,
+    range.startIso,
+    range.endIso,
+  ])
+
+  const getVisitorReportRows = () => {
+    if (visitorFilterId !== 'todos' && visitorHistory.length > 0) {
+      return {
+        headers: [
+          'Visitante',
+          'Documento',
+          'Visita',
+          'Tipo',
+          'Início',
+          'Fim',
+          'Cidade',
+          'Status',
+        ],
+        rows: visitorHistory.map((visit) => {
+          const visitor = visitors.find((v) => v.id === visitorFilterId)
+          return [
+            visitor?.name ?? '',
+            visitor?.document ?? visitor?.cpf ?? '',
+            visit.title,
+            visitEventLabel(visit),
+            formatDate(visit.startDate),
+            formatDate(visit.endDate),
+            visit.city ?? '',
+            visit.status,
+          ]
+        }),
+        title: `Histórico de visitas — ${
+          visitors.find((v) => v.id === visitorFilterId)?.name ?? 'visitante'
+        } (${cycleLabel})`,
+      }
+    }
+
+    const selected =
+      visitorFilterId === 'todos'
+        ? visitorsInCycle
+        : visitors.filter((v) => v.id === visitorFilterId)
+
+    return {
+      headers: [
+        'Nome',
+        'Documento',
+        'Empresa',
+        'E-mail',
+        'Telefone',
+        'Visitas no ciclo',
+        'Cadastrado em',
+      ],
+      rows: selected.map((visitor) => [
+        visitor.name,
+        visitor.document ?? visitor.cpf ?? '',
+        visitor.company ?? '',
+        visitor.email ?? '',
+        visitor.phone ?? visitor.whatsapp ?? '',
+        visitorFilterId === 'todos' ? '—' : String(visitorHistory.length),
+        visitorCreatedIso(visitor) ? formatDate(visitorCreatedIso(visitor)!) : '—',
+      ]),
+      title: `Visitantes cadastrados (${cycleLabel})`,
+    }
+  }
+
+  const exportVisitorReport = async (format: TableExportFormat) => {
+    const { headers, rows, title } = getVisitorReportRows()
+    await exportTable(format, {
+      filenameBase: 'relatorio-visitantes',
+      title,
+      headers,
+      rows,
+    })
+    toast.success(`${getExportFormatLabel(format)} exportado`)
+  }
 
   const getNfReportRows = () => {
     const items = financeItems.filter((item) => {
@@ -313,6 +472,139 @@ export function ReportsPage() {
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-start gap-3">
+            <Users className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>Relatório de visitantes</CardTitle>
+              <CardDescription>
+                Filtre pelo ciclo e por visitante. Veja o histórico de visitas e
+                exporte em CSV, PDF, Excel ou Word.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CyclePeriodFields
+            cycleStart={cycleStart}
+            cycleEnd={cycleEnd}
+            isDefaultCycle={isDefaultCycle}
+            onStartChange={setCycleStart}
+            onEndChange={setCycleEnd}
+            onReset={resetCycle}
+            idPrefix="reports-visitors-cycle"
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="space-y-1 sm:w-48">
+              <Label className="text-xs">Busca</Label>
+              <Input
+                placeholder="Nome, documento…"
+                value={visitorSearch}
+                onChange={(e) => setVisitorSearch(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1 flex-1">
+              <Label className="text-xs">Visitante</Label>
+              <Select value={visitorFilterId} onValueChange={setVisitorFilterId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">
+                    Todos ({visitorsInCycle.length} no ciclo)
+                  </SelectItem>
+                  {filteredVisitorOptions.map((visitor) => (
+                    <SelectItem key={visitor.id} value={visitor.id}>
+                      {visitor.name}
+                      {visitor.company ? ` · ${visitor.company}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="h-4 w-4" />
+                  Exportar
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => void exportVisitorReport('csv')}>
+                  CSV (.csv)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportVisitorReport('pdf')}>
+                  PDF (.pdf)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportVisitorReport('xlsx')}>
+                  Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportVisitorReport('docx')}>
+                  Word (.docx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="rounded-md border text-sm">
+            <div className="border-b bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {visitorFilterId === 'todos'
+                ? `${visitorsInCycle.length} visitante(s) com cadastro no ciclo ${cycleLabel}`
+                : loadingHistory
+                  ? 'Carregando histórico…'
+                  : `${visitorHistory.length} visita(s) no ciclo para o visitante selecionado`}
+            </div>
+            {visitorFilterId !== 'todos' && !loadingHistory && visitorHistory.length === 0 ? (
+              <p className="px-3 py-4 text-muted-foreground">
+                Nenhuma visita vinculada neste ciclo.
+              </p>
+            ) : null}
+            {visitorFilterId !== 'todos' && visitorHistory.length > 0 ? (
+              <ul className="max-h-56 divide-y overflow-auto">
+                {visitorHistory.map((visit) => (
+                  <li
+                    key={visit.id}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                  >
+                    <span className="font-medium">{visit.title}</span>
+                    <span className="text-muted-foreground">
+                      {formatDate(visit.startDate)} · {visitEventLabel(visit)} ·{' '}
+                      {visit.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {visitorFilterId === 'todos' && visitorsInCycle.length > 0 ? (
+              <ul className="max-h-56 divide-y overflow-auto">
+                {visitorsInCycle.slice(0, 30).map((visitor) => (
+                  <li
+                    key={visitor.id}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                  >
+                    <span className="font-medium">{visitor.name}</span>
+                    <span className="text-muted-foreground">
+                      {visitor.company ?? '—'}
+                      {visitorCreatedIso(visitor)
+                        ? ` · ${formatDate(visitorCreatedIso(visitor)!)}`
+                        : ''}
+                    </span>
+                  </li>
+                ))}
+                {visitorsInCycle.length > 30 ? (
+                  <li className="px-3 py-2 text-xs text-muted-foreground">
+                    +{visitorsInCycle.length - 30} outros — use Exportar para a lista
+                    completa
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-start gap-3">
             <FileText className="mt-0.5 h-5 w-5 text-primary" />
             <div>
               <CardTitle>Relatório de vencimento das NFs</CardTitle>
@@ -462,12 +754,12 @@ function ReportCard({
       <CardContent>
         {footer}
         <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={onCsv}>
-          CSV
-        </Button>
-        <Button variant="outline" size="sm" onClick={onPdf}>
-          PDF
-        </Button>
+          <Button variant="outline" size="sm" onClick={onCsv}>
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={onPdf}>
+            PDF
+          </Button>
         </div>
       </CardContent>
     </Card>

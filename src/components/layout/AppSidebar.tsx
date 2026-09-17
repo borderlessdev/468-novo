@@ -126,11 +126,11 @@ export function AppSidebar({
             title="Página inicial"
           >
             <img
-              src="/logo.png"
-              alt="Promover Experience"
+              src={collapsed ? '/vale-mark.svg' : '/vale-logo.svg'}
+              alt="Vale"
               className={cn(
-                'object-contain object-left mix-blend-lighten',
-                collapsed ? 'h-9 w-9 scale-[2.4] object-left' : 'h-10 w-auto max-w-[168px]',
+                'object-contain',
+                collapsed ? 'h-9 w-9' : 'h-9 w-auto max-w-[140px] object-left',
               )}
             />
           </Link>

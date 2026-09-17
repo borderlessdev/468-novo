@@ -114,6 +114,31 @@ Para envio automático:
 
 O app enfileira documentos em `mail/{id}`; a extensão envia e atualiza o status.
 
+## SMS / WhatsApp (Twilio) — confirmação Comunidade
+
+A Function `onVisitGuestLinkWritten` envia SMS/WhatsApp após cadastro no portal
+(fluxo Comunidade). Sem credenciais ela só registra `skipped_no_provider` (stub).
+
+1. Crie conta em https://www.twilio.com e um número SMS (ou WhatsApp sandbox).
+2. Em `functions/.env`:
+   ```
+   TWILIO_ACCOUNT_SID=ACxxxxxxxx
+   TWILIO_AUTH_TOKEN=xxxxxxxx
+   TWILIO_FROM=+5511...
+   # ou WhatsApp:
+   # TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   ```
+3. Deploy: `npm --prefix functions run deploy`
+4. Teste um cadastro Comunidade no portal e confira o campo `visitorNotify` no
+   documento `visitGuestLinks/{token}`.
+
+## Identidade visual Vale
+
+Cores Verde Vale (`#007E7A`) e Amarelo Vale (`#ECB11F`) no tema do app.
+Logo padrão em `/vale-logo.svg` (canto superior direito do CRM e portal).
+Substitua pelo arquivo oficial da marca quando o cliente fornecer e, se quiser,
+envie também em **Configurações → Marca da empresa**.
+
 ## Como testar
 
 1. Cadastre um usuário e confirme o documento em `users/{uid}`.

@@ -510,7 +510,12 @@ export async function revokeLink(id: string): Promise<void> {
   })
 }
 
-/** Atualização feita pela rota pública: só confirmação e rascunho(s). */
+/** Atualização feita pela rota pública: só confirmação e rascunho(s).
+ *
+ * Notificações ao visitante (e-mail VIP / SMS Comunidade) e ao responsável
+ * são disparadas pela Cloud Function `onVisitGuestLinkWritten` — o anônimo
+ * não escreve na coleção `mail`. Setup Twilio: ver functions/.env.example.
+ */
 export async function updateGuestPortal(
   tokenOrId: string,
   input: {

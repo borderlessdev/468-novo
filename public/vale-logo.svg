@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" role="img" aria-label="Vale">
+  <!-- Marca inspirada no monograma V (vale/paisagem). Substitua pelo asset oficial da Vale quando disponível. -->
+  <defs>
+    <linearGradient id="valeV" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007E7A"/>
+      <stop offset="100%" stop-color="#005F5B"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(4,4)">
+    <path
+      fill="url(#valeV)"
+      d="M24 4 L44 44 H36 L24 18 L12 44 H4 L24 4 Z"
+    />
+    <path
+      fill="#ECB11F"
+      d="M24 22 L32 40 H28 L24 30 L20 40 H16 L24 22 Z"
+    />
+  </g>
+  <text
+    x="58"
+    y="38"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="28"
+    font-weight="700"
+    letter-spacing="1"
+    fill="#007E7A"
+  >Vale</text>
+</svg>

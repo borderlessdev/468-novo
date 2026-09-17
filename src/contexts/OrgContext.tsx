@@ -35,6 +35,8 @@ const OrgContext = createContext<OrgContextValue | undefined>(undefined)
 export function OrgProvider({ children }: { children: ReactNode }) {
   const { user, profile, loading: authLoading, isPlatformAdmin } = useAuth()
   const [loading, setLoading] = useState(true)
+  /** UID para o qual refreshOrg já terminou — evita flash "sem empresa" no login. */
+  const [resolvedUid, setResolvedUid] = useState<string | null>(null)
   const [activeOrgId, setActiveOrgIdState] = useState<string | null>(null)
   const [activeOrg, setActiveOrg] = useState<Organization | null>(null)
   const [membership, setMembership] = useState<OrganizationMember | null>(null)
@@ -71,6 +73,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       setActiveOrg(null)
       setMembership(null)
       setActiveOrgIdState(null)
+      setResolvedUid(null)
       setLoading(false)
       return
     }
@@ -106,6 +109,14 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       // e membership existente mesmo se get por org falhar.
       if (!member) {
         member = await getMemberByUid(user.uid)
+      }
+      // Cadastro/login: membership pode atrasar 1 tick — tenta de novo antes de
+      // declarar "sem empresa".
+      if (!member && !profile?.orgId) {
+        for (let attempt = 0; attempt < 3 && !member; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 400))
+          member = await getMemberByUid(user.uid)
+        }
       }
 
       if (member) {
@@ -143,6 +154,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         console.error('Fallback de membership falhou', fallbackError)
       }
     } finally {
+      setResolvedUid(user.uid)
       setLoading(false)
     }
   }, [isPlatformAdmin, profile?.orgId, user])
@@ -160,9 +172,13 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     isPlatformAdmin || membership?.orgRole === 'org_admin',
   )
 
+  // Enquanto o usuário logado ainda não teve a empresa resolvida, continua em
+  // loading — impede um frame com activeOrgId=null → "Conta sem empresa".
+  const awaitingOrgForUser = Boolean(user) && resolvedUid !== user.uid
+
   const value = useMemo(
     () => ({
-      loading: authLoading || loading,
+      loading: authLoading || loading || awaitingOrgForUser,
       activeOrgId,
       activeOrg,
       membership,
@@ -175,6 +191,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     [
       authLoading,
       loading,
+      awaitingOrgForUser,
       activeOrgId,
       activeOrg,
       membership,

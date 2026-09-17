@@ -57,6 +57,7 @@ function NotificationIcon({ type }: { type: NotificationType }) {
     case 'team_updated':
       return <Users className={className} />
     case 'guest_confirmed':
+    case 'guest_registration':
       return <Users className={className} />
     default:
       return <Bell className={className} />
@@ -83,6 +84,7 @@ function iconBgClass(type: NotificationType): string {
       return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
     case 'team_updated':
     case 'guest_confirmed':
+    case 'guest_registration':
       return 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
     default:
       return 'bg-muted text-muted-foreground'

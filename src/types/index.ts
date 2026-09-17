@@ -77,6 +77,7 @@ export interface NotificationPreferences {
   documentPending: boolean
   financeNfOverdue: boolean
   guestConfirmed: boolean
+  guestRegistration: boolean
 }
 
 export type VisitStatus =
@@ -395,6 +396,7 @@ export type NotificationType =
   | 'activity_soon'
   | 'visit_soon'
   | 'guest_confirmed'
+  | 'guest_registration'
 
 export interface Notification {
   id: string
@@ -452,7 +454,11 @@ export interface Invite {
   acceptedBy?: string
 }
 
-export type EmailLogKind = 'visit_summary' | 'invite'
+export type EmailLogKind =
+  | 'visit_summary'
+  | 'invite'
+  | 'visitor_registration_confirm'
+  | 'visitor_registration_owner'
 export type EmailLogStatus = 'queued' | 'mailto'
 
 export interface EmailLog {

@@ -29,8 +29,22 @@ import { listVisits } from '@/services/visits'
 import { listPendingTasks } from '@/services/tasks'
 import { listFinanceItemsByOwner } from '@/services/finance'
 import { listVisitVisitors } from '@/services/visitVisitors'
-import type { FinanceItem, Task, Visit, VisitEventKind } from '@/types'
+import { listVisitors } from '@/services/visitors'
+import type { FinanceItem, Task, Visit, VisitEventKind, Visitor } from '@/types'
 import { Badge } from '@/components/ui/badge'
+
+function visitorCreatedIso(visitor: Visitor): string | null {
+  const raw = visitor.createdAt
+  if (!raw) return null
+  if (typeof raw === 'object' && raw !== null && 'toDate' in raw) {
+    const date = (raw as { toDate: () => Date }).toDate()
+    if (Number.isNaN(date.getTime())) return null
+    return date.toISOString().slice(0, 10)
+  }
+  const date = new Date(String(raw))
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
+}
 
 type KpiRecord = {
   id: string
@@ -83,6 +97,7 @@ export function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [financeItems, setFinanceItems] = useState<FinanceItem[]>([])
   const [visitorCount, setVisitorCount] = useState(0)
+  const [newVisitorsInCycle, setNewVisitorsInCycle] = useState(0)
   const [previewRecordIds, setPreviewRecordIds] = useState<string[] | null>(null)
 
   const load = useCallback(async () => {
@@ -90,20 +105,28 @@ export function DashboardPage() {
     setLoading(true)
     try {
       const visitsData = await listVisits(activeOrgId, user.uid, isPlatformAdmin, role)
-      const [tasksData, financeData] = await Promise.all([
+      const [tasksData, financeData, visitorsData] = await Promise.all([
         listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
         listFinanceItemsByOwner(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
+        listVisitors(activeOrgId),
       ])
       setVisits(visitsData)
       setTasks(tasksData.slice(0, 8))
       setFinanceItems(financeData)
+      setNewVisitorsInCycle(
+        visitorsData.filter((visitor) => {
+          const created = visitorCreatedIso(visitor)
+          if (!created) return false
+          return created >= range.startIso && created <= range.endIso
+        }).length,
+      )
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar o dashboard')
     } finally {
       setLoading(false)
     }
-  }, [user, activeOrgId, isPlatformAdmin, role])
+  }, [user, activeOrgId, isPlatformAdmin, role, range.startIso, range.endIso])
 
   useEffect(() => {
     void load()
@@ -225,8 +248,16 @@ export function DashboardPage() {
     {
       label: 'Total de visitantes',
       value: String(visitorCount),
+      hint: `Vinculados às visitas do ciclo ${cycleLabel}`,
       icon: Users,
       tone: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+    },
+    {
+      label: 'Novos no CRM',
+      value: String(newVisitorsInCycle),
+      hint: `Cadastrados no ciclo ${cycleLabel}`,
+      icon: Users,
+      tone: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400',
     },
     ...(!isClient
       ? [

@@ -16,6 +16,7 @@ export interface NotificationPreferences {
   documentPending: boolean
   financeNfOverdue: boolean
   guestConfirmed: boolean
+  guestRegistration: boolean
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -34,6 +35,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   documentPending: true,
   financeNfOverdue: true,
   guestConfirmed: true,
+  guestRegistration: true,
 }
 
 export const NOTIFICATION_PREFERENCE_ITEMS: {
@@ -80,6 +82,11 @@ export const NOTIFICATION_PREFERENCE_ITEMS: {
     key: 'guestConfirmed',
     label: 'Confirmação do portal',
     description: 'Quando o visitante confirma ou recusa pelo link do portal',
+  },
+  {
+    key: 'guestRegistration',
+    label: 'Cadastro pelo portal',
+    description: 'Quando um visitante envia dados pelo link de cadastro da visita',
   },
   {
     key: 'visitStatusChanged',
@@ -134,6 +141,7 @@ const TYPE_TO_PREFERENCE: Record<NotificationType, keyof NotificationPreferences
   team_updated: 'teamUpdated',
   activity_soon: 'activitySoon',
   guest_confirmed: 'guestConfirmed',
+  guest_registration: 'guestRegistration',
 }
 
 export function mergeNotificationPreferences(

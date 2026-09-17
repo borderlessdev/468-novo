@@ -183,8 +183,25 @@ function ConfirmationBadge({
 
 function PortalShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-muted/30 px-4 py-8 sm:py-12">
-      <div className="mx-auto w-full max-w-3xl space-y-6">{children}</div>
+    <div className="vale-portal-shell px-0 pb-10 sm:pb-14">
+      <div className="vale-portal-topbar px-4 py-3 sm:px-6">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold tracking-[0.2em] text-white/70 uppercase">
+              Portal do visitante
+            </p>
+            <p className="truncate text-sm font-medium text-white">
+              Experiência de visitas · Vale
+            </p>
+          </div>
+          <img
+            src="/vale-logo.svg"
+            alt="Vale"
+            className="h-9 w-auto max-w-[120px] shrink-0 rounded bg-white px-2 py-1 object-contain sm:h-10 sm:max-w-[140px]"
+          />
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 pt-6 sm:pt-8">{children}</div>
     </div>
   )
 }
@@ -457,7 +474,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   if (mode === 'badge') {
     return (
       <PortalShell>
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border-primary/20 shadow-md">
           <div className="bg-primary px-6 py-4 text-primary-foreground">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -466,14 +483,13 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
                 </p>
                 <p className="font-display text-lg font-semibold">{link.visitTitle}</p>
               </div>
-              {link.orgLogoUrl ? (
-                <img
-                  src={link.orgLogoUrl}
-                  alt=""
-                  className="h-10 w-auto max-w-[96px] rounded bg-white/95 object-contain p-1"
-                />
-              ) : null}
+              <img
+                src={link.orgLogoUrl || '/vale-logo.svg'}
+                alt={link.orgName ? `Logo ${link.orgName}` : 'Vale'}
+                className="h-10 w-auto max-w-[96px] rounded bg-white/95 object-contain p-1"
+              />
             </div>
+            <div className="mt-3 h-1 w-full rounded-full bg-brand" />
           </div>
           <CardContent className="space-y-6 pt-6">
             <div>
@@ -527,14 +543,13 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
             </h1>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            {link.orgLogoUrl ? (
-              <img
-                src={link.orgLogoUrl}
-                alt={link.orgName ? `Logo ${link.orgName}` : 'Logo da empresa'}
-                className="h-12 w-auto max-w-[140px] object-contain sm:h-14 sm:max-w-[180px]"
-              />
-            ) : null}
-            <div className="flex rounded-lg border bg-background p-0.5 text-xs">
+            {/* Logo Vale sempre à direita (PDF); org logo se houver sobrescreve */}
+            <img
+              src={link.orgLogoUrl || '/vale-logo.svg'}
+              alt={link.orgName ? `Logo ${link.orgName}` : 'Vale'}
+              className="h-12 w-auto max-w-[140px] object-contain sm:h-14 sm:max-w-[180px]"
+            />
+            <div className="flex rounded-lg border border-primary/20 bg-background p-0.5 text-xs shadow-sm">
               <Button
                 type="button"
                 size="sm"
@@ -844,7 +859,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
 
       <p className="pb-4 text-center text-xs text-muted-foreground">
         Link válido até {formatDate(link.expiresAt.slice(0, 10))}
-        {link.orgName ? ` · ${link.orgName}` : ' · Promover Experience'}
+        {link.orgName ? ` · ${link.orgName}` : ' · Vale'}
       </p>
     </PortalShell>
   )

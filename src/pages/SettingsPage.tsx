@@ -635,10 +635,11 @@ export function SettingsPage() {
               <ImagePlus className="h-5 w-5" />
               Marca da empresa
             </CardTitle>
-            <CardDescription>
-              A logo aparece no portal do visitante e nos links de confirmação desta pasta
-              {activeOrg?.name ? ` (${activeOrg.name})` : ''}.
-            </CardDescription>
+              <CardDescription>
+                A logo aparece no canto superior direito do CRM e no portal do visitante.
+                Sem logo da pasta, o sistema usa a identidade Vale padrão.
+                {activeOrg?.name ? ` Pasta atual: ${activeOrg.name}.` : ''}
+              </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 p-2">
