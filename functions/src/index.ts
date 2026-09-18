@@ -565,3 +565,4 @@ export {
 
 export { guestLookupVisitorByName } from './guestLookup'
 export { onVisitGuestLinkWritten } from './visitorNotifications'
+export { getTwilioStatus, sendTwilioTestMessage } from './twilioCallables'

@@ -14,6 +14,7 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { logger } from 'firebase-functions'
 import { FieldValue, getFirestore, type DocumentData } from 'firebase-admin/firestore'
+import { sendTwilioMessage, type TwilioSendResult } from './twilio'
 
 const db = getFirestore()
 
@@ -22,8 +23,25 @@ type Draft = Record<string, unknown>
 interface NotifyChannelResult {
   channel: 'email' | 'sms' | 'whatsapp'
   to?: string
-  status: 'queued' | 'sent' | 'skipped_no_email' | 'skipped_no_phone' | 'skipped_no_provider' | 'error'
+  status:
+    | 'queued'
+    | 'sent'
+    | 'skipped_no_email'
+    | 'skipped_no_phone'
+    | 'skipped_no_provider'
+    | 'error'
   detail?: string
+  sid?: string
+}
+
+function toNotifyResult(result: TwilioSendResult): NotifyChannelResult {
+  return {
+    channel: result.channel,
+    to: result.to,
+    status: result.status,
+    detail: result.detail,
+    sid: result.sid,
+  }
 }
 
 function asDrafts(data: DocumentData): Draft[] {
@@ -134,14 +152,6 @@ function buildOwnerEmail(
   }
 }
 
-function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '')
-  if (digits.length < 10) return null
-  if (digits.startsWith('55')) return `+${digits}`
-  if (digits.length === 10 || digits.length === 11) return `+55${digits}`
-  return `+${digits}`
-}
-
 async function queueMail(input: {
   to: string
   subject: string
@@ -168,82 +178,6 @@ async function queueMail(input: {
     createdBy: input.createdBy,
     createdAt: FieldValue.serverTimestamp(),
   })
-}
-
-async function sendSmsOrWhatsApp(
-  toRaw: string,
-  body: string,
-): Promise<NotifyChannelResult> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim()
-  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim()
-  const fromSms = process.env.TWILIO_FROM?.trim()
-  const fromWa = process.env.TWILIO_WHATSAPP_FROM?.trim()
-
-  const to = normalizePhone(toRaw)
-  if (!to) {
-    return { channel: 'sms', status: 'skipped_no_phone', detail: 'telefone inválido' }
-  }
-
-  if (!accountSid || !authToken || (!fromSms && !fromWa)) {
-    logger.info('visitorNotifications: SMS stub (sem Twilio)', { to })
-    return {
-      channel: fromWa ? 'whatsapp' : 'sms',
-      to,
-      status: 'skipped_no_provider',
-      detail: 'TWILIO_* ausente em functions/.env',
-    }
-  }
-
-  const useWhatsApp = Boolean(fromWa)
-  const from = useWhatsApp ? fromWa! : fromSms!
-  const toAddr = useWhatsApp ? `whatsapp:${to}` : to
-  const fromAddr = useWhatsApp
-    ? from.startsWith('whatsapp:')
-      ? from
-      : `whatsapp:${from}`
-    : from
-
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
-  const params = new URLSearchParams({
-    To: toAddr,
-    From: fromAddr,
-    Body: body,
-  })
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization:
-          'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    })
-    if (!response.ok) {
-      const text = await response.text()
-      logger.error('Twilio error', { status: response.status, text })
-      return {
-        channel: useWhatsApp ? 'whatsapp' : 'sms',
-        to,
-        status: 'error',
-        detail: `twilio ${response.status}`,
-      }
-    }
-    return {
-      channel: useWhatsApp ? 'whatsapp' : 'sms',
-      to,
-      status: 'sent',
-    }
-  } catch (error) {
-    logger.error('Twilio request failed', error)
-    return {
-      channel: useWhatsApp ? 'whatsapp' : 'sms',
-      to,
-      status: 'error',
-      detail: error instanceof Error ? error.message : 'fetch failed',
-    }
-  }
 }
 
 async function createOwnerNotification(input: {
@@ -369,7 +303,7 @@ export const onVisitGuestLinkWritten = onDocumentWritten(
             locale === 'en'
               ? `Hello ${name}, your registration for "${visitTitle}" was received. Thank you!`
               : `Olá ${name}, recebemos seu cadastro para "${visitTitle}". Obrigado!`
-          const smsResult = await sendSmsOrWhatsApp(phone, body)
+          const smsResult = toNotifyResult(await sendTwilioMessage(phone, body))
           results.push(smsResult)
         }
       }

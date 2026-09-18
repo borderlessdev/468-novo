@@ -128,9 +128,14 @@ A Function `onVisitGuestLinkWritten` envia SMS/WhatsApp após cadastro no portal
    # ou WhatsApp:
    # TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
    ```
-3. Deploy: `npm --prefix functions run deploy`
-4. Teste um cadastro Comunidade no portal e confira o campo `visitorNotify` no
-   documento `visitGuestLinks/{token}`.
+3. Deploy: `npm --prefix functions run deploy`  
+   (Firebase carrega `functions/.env` nas Functions 2ª geração)
+4. Callables de admin (opcional): `getTwilioStatus`, `sendTwilioTestMessage`  
+   — client: `src/services/twilioAdmin.ts`
+5. Teste um cadastro Comunidade no portal e confira `visitorNotify` em
+   `visitGuestLinks/{token}`.
+
+No trial Twilio, o destino precisa estar em **Verified Caller IDs**.
 
 ## Identidade visual Vale
 
