@@ -18,6 +18,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isNavAllowed } from '@/lib/access'
+import { SafeLogo } from '@/components/SafeLogo'
+import { useOrg } from '@/contexts/OrgContext'
+import { VALE_BRAND } from '@/lib/valeBrand'
 import { NAV_ITEMS } from '@/lib/constants'
 import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import type { ModulePermissions, UserRole } from '@/types'
@@ -56,9 +59,16 @@ export function AppSidebar({
   isAdmin,
   modulePermissions,
 }: AppSidebarProps) {
+  const { activeOrg } = useOrg()
   const [logoutOpen, setLogoutOpen] = useState(false)
   const sairButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Collapsed: mark Vale (quadrado). Expandido: logo da pasta (whitelabel) ou Vale.
+  const sidebarLogoSrc = collapsed
+    ? activeOrg?.logoUrl || '/vale-mark.svg'
+    : activeOrg?.logoUrl || VALE_BRAND.logoSrc
+  const sidebarFallback = collapsed ? '/vale-mark.svg' : VALE_BRAND.logoSrc
 
   useEffect(() => {
     if (!open) return
@@ -125,9 +135,14 @@ export function AppSidebar({
             aria-label="Ir para a página inicial"
             title="Página inicial"
           >
-            <img
-              src={collapsed ? '/vale-mark.svg' : '/vale-logo.svg'}
-              alt="Vale"
+            <SafeLogo
+              src={sidebarLogoSrc}
+              fallbackSrc={
+                activeOrg?.logoUrl && sidebarLogoSrc === activeOrg.logoUrl
+                  ? sidebarFallback
+                  : undefined
+              }
+              alt=""
               className={cn(
                 'object-contain',
                 collapsed ? 'h-9 w-9' : 'h-9 w-auto max-w-[140px] object-left',

@@ -7,6 +7,7 @@ import {
   Check,
   Copy,
   FolderOpen,
+  ImagePlus,
   KeyRound,
   LogIn,
   RefreshCw,
@@ -16,6 +17,7 @@ import {
   Users,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { SafeLogo } from '@/components/SafeLogo'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,6 +47,10 @@ import {
   listInvitesByOrg,
 } from '@/services/invites'
 import {
+  removeOrganizationLogo,
+  uploadOrganizationLogo,
+} from '@/services/orgLogo'
+import {
   countPendingInvites,
   getOrganization,
   listOrganizationMembers,
@@ -63,7 +69,7 @@ const ROLE_LABEL: Record<OrganizationMember['orgRole'], string> = {
 export function OrganizationDetailPage() {
   const { orgId = '' } = useParams()
   const { user, isPlatformAdmin } = useAuth()
-  const { setActiveOrgId } = useOrg()
+  const { setActiveOrgId, activeOrgId, refreshOrg } = useOrg()
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
@@ -87,6 +93,7 @@ export function OrganizationDetailPage() {
   const [createdCredentials, setCreatedCredentials] =
     useState<CreatedOrgAdminCredentials | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
   const removeDialog = useConfirmDelete<OrganizationMember>()
 
   const load = useCallback(async () => {
@@ -228,6 +235,46 @@ export function OrganizationDetailPage() {
     if (!orgId) return
     setActiveOrgId(orgId)
     navigate('/')
+  }
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!orgId || !file) return
+    setLogoBusy(true)
+    try {
+      const result = await uploadOrganizationLogo(orgId, file)
+      setOrg((prev) =>
+        prev
+          ? { ...prev, logoUrl: result.logoUrl, logoStoragePath: result.logoStoragePath }
+          : prev,
+      )
+      if (activeOrgId === orgId) await refreshOrg()
+      toast.success('Whitelabel atualizado — funcionários herdam esta logo')
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível enviar a logo',
+      )
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    if (!orgId) return
+    setLogoBusy(true)
+    try {
+      await removeOrganizationLogo(orgId)
+      setOrg((prev) =>
+        prev ? { ...prev, logoUrl: undefined, logoStoragePath: undefined } : prev,
+      )
+      if (activeOrgId === orgId) await refreshOrg()
+      toast.success('Logo removida — volta a identidade Vale')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível remover a logo')
+    } finally {
+      setLogoBusy(false)
+    }
   }
 
   const copyText = async (label: string, value: string) => {
@@ -505,6 +552,67 @@ export function OrganizationDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <ImagePlus className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Whitelabel</CardTitle>
+              <CardDescription>
+                Logo da pasta no CRM e no portal. Admin Master e Admin da empresa
+                definem; funcionários herdam automaticamente.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 p-2">
+            {org.logoUrl ? (
+              <SafeLogo
+                src={org.logoUrl}
+                alt=""
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <p className="text-center text-xs text-muted-foreground">Sem logo (Vale)</p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={logoBusy} asChild>
+              <label className="cursor-pointer">
+                <ImagePlus className="h-4 w-4" />
+                {logoBusy ? 'Enviando…' : 'Enviar logo'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  disabled={logoBusy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    event.target.value = ''
+                    void handleLogoUpload(file)
+                  }}
+                />
+              </label>
+            </Button>
+            {org.logoUrl ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                disabled={logoBusy}
+                onClick={() => void handleLogoRemove()}
+              >
+                <Trash2 className="h-4 w-4" />
+                Remover
+              </Button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

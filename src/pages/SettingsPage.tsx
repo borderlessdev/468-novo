@@ -14,6 +14,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { SafeLogo } from '@/components/SafeLogo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -28,7 +29,7 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { canManageOrgUsers } from '@/lib/access'
+import { canManageOrgUsers, canManageWhitelabel } from '@/lib/access'
 import { orgRoleLabel } from '@/lib/org'
 import { useTheme, type Theme } from '@/contexts/ThemeContext'
 import { mergeModulePermissions } from '@/lib/access'
@@ -628,25 +629,26 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {canManageOrgUsers(isAdmin, isOrgAdmin) && activeOrgId ? (
+      {canManageWhitelabel(isAdmin, isOrgAdmin) && activeOrgId ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ImagePlus className="h-5 w-5" />
-              Marca da empresa
+              Whitelabel da empresa
             </CardTitle>
               <CardDescription>
-                A logo aparece no canto superior direito do CRM e no portal do visitante.
-                Sem logo da pasta, o sistema usa a identidade Vale padrão.
+                Logo exibida no CRM (header e menu) e no portal do visitante.
+                Funcionários e equipe herdam automaticamente a marca definida aqui.
+                Sem logo, usa a identidade Vale padrão.
                 {activeOrg?.name ? ` Pasta atual: ${activeOrg.name}.` : ''}
               </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 p-2">
               {activeOrg?.logoUrl ? (
-                <img
+                <SafeLogo
                   src={activeOrg.logoUrl}
-                  alt={`Logo ${activeOrg.name}`}
+                  alt=""
                   className="max-h-full max-w-full object-contain"
                 />
               ) : (

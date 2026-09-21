@@ -173,6 +173,10 @@ export async function updateVisit(
     payload.eventScope =
       data.eventKind === 'evento' ? (data.eventScope ?? null) : null
   }
+  // Firestore rejects `undefined`; empty optional strings arrive as undefined from the form.
+  for (const key of Object.keys(payload)) {
+    if (payload[key] === undefined) payload[key] = null
+  }
   await updateDoc(doc(visitsCol, id), payload)
 }
 

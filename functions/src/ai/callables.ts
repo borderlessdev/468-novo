@@ -9,6 +9,10 @@ import {
 import { chatCompletion, isAiMockMode } from './provider'
 import { assertAiRateLimit } from './rateLimit'
 import { loadHelpCatalog } from './helpCatalog'
+import {
+  formatRolePromptBlock,
+  resolveAssistantUserContext,
+} from './userContext'
 
 interface AuthLike {
   uid: string
@@ -44,12 +48,38 @@ function truncate(text: string, max: number): string {
 const HELP_SYSTEM = `Você é o assistente de ajuda do Promover Experience (app de gestão de visitas institucionais).
 Responda SEMPRE em português do Brasil, de forma curta e objetiva (no máximo 8 linhas ou uma lista numerada).
 Explique o caminho de UX: menu → tela → botões/passos.
-Use APENAS o manual abaixo. Se a pergunta não estiver coberta, diga que não sabe e sugira onde olhar no app (ex.: Configurações).
+Use APENAS o manual abaixo e o bloco de papel do usuário. Se a pergunta não estiver coberta, diga que não sabe e sugira onde olhar no app (ex.: Configurações).
 Não invente botões, rotas ou recursos que não estejam no manual.
-Não execute ações; apenas oriente.`
+Não execute ações; apenas oriente.
+Respeite SEMPRE o papel do usuário atual: se a ação for só de Admin Master ou Admin da empresa, diga isso de forma clara e diga a quem pedir.`
 
-function mockHelpAnswer(message: string, route?: string): string {
+function mockHelpAnswer(
+  message: string,
+  route: string | undefined,
+  roleLabel: string,
+): string {
   const q = message.toLowerCase()
+  const isStaffLike =
+    roleLabel.includes('Equipe') ||
+    roleLabel.includes('funcionário') ||
+    roleLabel.includes('Cliente') ||
+    roleLabel.includes('Usuário operacional')
+
+  if (isStaffLike) {
+    if (q.includes('whitelabel') || q.includes('logo') || q.includes('marca')) {
+      return 'Só o **Admin da empresa** (Configurações → Whitelabel) ou o **Admin Master** (Pastas de clientes) pode alterar a logo. Peça a um deles — você herda a marca automaticamente.'
+    }
+    if (q.includes('convid') || q.includes('usuario') || q.includes('usuário')) {
+      return 'Convidar ou remover usuários é só do **Admin da empresa** em Configurações → Usuários da empresa (ou do Admin Master). Você não tem essa permissão.'
+    }
+    if (
+      (q.includes('pasta') || q.includes('empresa')) &&
+      (q.includes('criar') || q.includes('nova') || q.includes('gerenciar'))
+    ) {
+      return 'Criar ou gerenciar pastas de clientes é exclusivo do **Admin Master** em Pastas de clientes. Peça a um Admin Master.'
+    }
+  }
+
   if (q.includes('agenda') || q.includes('compromisso') || q.includes('programa')) {
     return [
       'Para registrar um compromisso na agenda:',
@@ -76,12 +106,13 @@ function mockHelpAnswer(message: string, route?: string): string {
     'Posso ajudar com o caminho no app (agenda, visitas, playbooks, portal, financeiro…).',
     'Ex.: “Como importo a programação?” ou “Como gero o link do portal?”',
     route ? `Você está em: ${route}` : '',
+    `Seu perfil: ${roleLabel}`,
   ]
     .filter(Boolean)
     .join('\n')
 }
 
-export const getAiStatus = onCall(async (request) => {
+export const getAiStatus = onCall({ timeoutSeconds: 60 }, async (request) => {
   requireUid(request.auth)
 
   const provider = readAiProvider()
@@ -97,7 +128,7 @@ export const getAiStatus = onCall(async (request) => {
   }
 })
 
-export const askHelpAssistant = onCall(async (request) => {
+export const askHelpAssistant = onCall({ timeoutSeconds: 60 }, async (request) => {
   const uid = requireUid(request.auth)
   enforceRateLimit(uid)
 
@@ -120,12 +151,24 @@ export const askHelpAssistant = onCall(async (request) => {
       return [{ role: role as 'user' | 'assistant', content: content.slice(0, 1500) }]
     })
 
+  let roleBlock = ''
+  let roleLabel = 'Usuário'
+  try {
+    const ctx = await resolveAssistantUserContext(uid)
+    roleBlock = formatRolePromptBlock(ctx)
+    roleLabel = ctx.label
+  } catch (error) {
+    logger.warn('askHelpAssistant: falha ao resolver papel', error)
+  }
+
   if (isAiMockMode()) {
-    return { reply: mockHelpAnswer(message, route), provider: 'mock' as const }
+    return { reply: mockHelpAnswer(message, route, roleLabel), provider: 'mock' as const }
   }
 
   const manual = loadHelpCatalog()
-  const system = `${HELP_SYSTEM}\n\n## Manual do produto\n\n${manual}`
+  const system = [HELP_SYSTEM, roleBlock, '## Manual do produto', manual]
+    .filter(Boolean)
+    .join('\n\n')
   const userPayload = [
     route ? `Rota atual do usuário: ${route}` : null,
     `Pergunta: ${message}`,
@@ -154,6 +197,18 @@ export const askHelpAssistant = onCall(async (request) => {
       throw new HttpsError(
         'failed-precondition',
         'Modelo Claude inválido no servidor. Atualize ANTHROPIC_MODEL e faça deploy das functions.',
+      )
+    }
+    if (detail.includes('authentication_error') || detail.includes('401')) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Chave da API Claude inválida ou revogada. Gere uma nova em console.anthropic.com, atualize ANTHROPIC_API_KEY em functions/.env e faça deploy das functions de IA.',
+      )
+    }
+    if (detail.includes('ANTHROPIC_API_KEY ausente')) {
+      throw new HttpsError(
+        'failed-precondition',
+        'API Claude não configurada no servidor. Defina ANTHROPIC_API_KEY em functions/.env e faça deploy.',
       )
     }
     throw new HttpsError('internal', 'Não foi possível obter resposta do assistente.')
@@ -399,7 +454,7 @@ Responda APENAS JSON: {"subject":"...","body":"..."} (subject opcional para gues
 Tom profissional e objetivo. Não invente dados que não estejam no contexto.
 Para guest_invite, inclua a URL do portal se fornecida. Não invente URLs.`
 
-export const draftCommunication = onCall(async (request) => {
+export const draftCommunication = onCall({ timeoutSeconds: 60 }, async (request) => {
   const uid = requireUid(request.auth)
   enforceRateLimit(uid)
 

@@ -24,7 +24,9 @@ export function readAiProvider(): AiProviderName {
   if (preferred === 'mock') return 'mock'
 
   const hasOpenAi = Boolean(process.env.OPENAI_API_KEY?.trim())
-  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim())
+  const hasAnthropic = Boolean(
+    process.env.ANTHROPIC_API_KEY?.trim().replace(/^["']|["']$/g, ''),
+  )
 
   if (preferred === 'openai' && hasOpenAi) return 'openai'
   if (preferred === 'anthropic' && hasAnthropic) return 'anthropic'

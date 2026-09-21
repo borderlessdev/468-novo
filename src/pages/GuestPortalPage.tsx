@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { SafeLogo } from '@/components/SafeLogo'
 import { EmptyState } from '@/components/shared/PageHeader'
 import { VisitorProfileFields } from '@/features/visitors/VisitorProfileFields'
 import {
@@ -194,9 +195,9 @@ function PortalShell({ children }: { children: React.ReactNode }) {
               Experiência de visitas · Vale
             </p>
           </div>
-          <img
+          <SafeLogo
             src="/vale-logo.svg"
-            alt="Vale"
+            alt=""
             className="h-9 w-auto max-w-[120px] shrink-0 rounded bg-white px-2 py-1 object-contain sm:h-10 sm:max-w-[140px]"
           />
         </div>
@@ -483,9 +484,10 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
                 </p>
                 <p className="font-display text-lg font-semibold">{link.visitTitle}</p>
               </div>
-              <img
-                src={link.orgLogoUrl || '/vale-logo.svg'}
-                alt={link.orgName ? `Logo ${link.orgName}` : 'Vale'}
+              <SafeLogo
+                src={link.orgLogoUrl}
+                fallbackSrc="/vale-logo.svg"
+                alt=""
                 className="h-10 w-auto max-w-[96px] rounded bg-white/95 object-contain p-1"
               />
             </div>
@@ -543,10 +545,11 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
             </h1>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            {/* Logo Vale sempre à direita (PDF); org logo se houver sobrescreve */}
-            <img
-              src={link.orgLogoUrl || '/vale-logo.svg'}
-              alt={link.orgName ? `Logo ${link.orgName}` : 'Vale'}
+            {/* Logo da pasta ou Vale; se falhar/ausente, não mostra ícone quebrado */}
+            <SafeLogo
+              src={link.orgLogoUrl}
+              fallbackSrc="/vale-logo.svg"
+              alt=""
               className="h-12 w-auto max-w-[140px] object-contain sm:h-14 sm:max-w-[180px]"
             />
             <div className="flex rounded-lg border border-primary/20 bg-background p-0.5 text-xs shadow-sm">

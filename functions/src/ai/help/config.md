@@ -4,6 +4,8 @@ Rota: `/configuracoes`
 
 ## Conta e equipe
 Convites, preferências de notificação e permissões de módulos (conforme papel).
+Whitelabel (logo): só Admin Master ou Admin da empresa — ver `roles.md`.
+Funcionários herdam a logo; não alteram.
 
 ## Conectar Google Calendar
 1. Abra **Configurações**.

@@ -174,7 +174,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   // Enquanto o usuário logado ainda não teve a empresa resolvida, continua em
   // loading — impede um frame com activeOrgId=null → "Conta sem empresa".
-  const awaitingOrgForUser = Boolean(user) && resolvedUid !== user.uid
+  const awaitingOrgForUser = user != null && resolvedUid !== user.uid
 
   const value = useMemo(
     () => ({

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { SafeLogo } from '@/components/SafeLogo'
 
 export function AuthLayout({
   title,
@@ -32,9 +33,9 @@ export function AuthLayout({
         </div>
 
         <div className="relative">
-          <img
+          <SafeLogo
             src="/vale-logo.svg"
-            alt="Vale"
+            alt=""
             className="h-12 w-auto max-w-[200px] rounded bg-white/95 object-contain object-left px-2 py-1"
           />
           <p className="mt-2 text-xs text-white/70">Operações de visitas corporativas</p>
@@ -64,9 +65,9 @@ export function AuthLayout({
           {/* Mobile brand mark — top left */}
           <div className="mb-8 lg:hidden">
             <div className="inline-flex rounded-xl border border-primary/15 bg-white px-3 py-2.5 shadow-sm">
-              <img
+              <SafeLogo
                 src="/vale-logo.svg"
-                alt="Vale"
+                alt=""
                 className="h-9 w-auto max-w-[180px] object-contain object-left"
               />
             </div>

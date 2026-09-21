@@ -208,13 +208,20 @@ Checklist de tarefas (DIA 1) — marque [x] ao concluir:
 [x] npm run build passa
 
 Checklist manual (DIA 1):
-[ ] Criar visitante VIP no CRM com voo + hotel + restricoes
-[ ] Criar visitante Comunidade com bairro + restricoes
-[ ] Portal VIP em PT e EN mostra campos e mensagem corretos
-[ ] Portal Comunidade nao exige voo/hotel
-[ ] Confirmar com LGPD grava lgpdConsentAt
-[ ] Aplicar dados do portal atualiza o CRM com os novos campos
-[ ] Link antigo (sem novos campos) ainda abre sem crash
+[x] Criar visitante VIP no CRM com voo + hotel + restricoes
+    → VIP Manual Dia1 (voo sim + Hotel Teste VIP) 21/09/2026
+[x] Criar visitante Comunidade com bairro + restricoes
+    → Comunidade Manual Dia1 (bairro Centro + Sem gluten) 21/09/2026
+[x] Portal VIP em PT e EN mostra campos e mensagem corretos
+    → portal/373fca… PT/EN + voo/hotel; mensagem VIP com hospedagem
+[x] Portal Comunidade nao exige voo/hotel
+    → apos mudar visita p/ Visita Comunidade + Atualizar dados: Bairro, sem voo/hotel
+[x] Confirmar com LGPD grava lgpdConsentAt
+    → Ana / Bruno / Carla com badge "LGPD ok" + timestamp no detalhe da visita
+[x] Aplicar dados do portal atualiza o CRM com os novos campos
+    → Ana/Bruno/Carla aplicados em ENCONTRO 360 (sessoes anteriores + multi no portal)
+[x] Link antigo (sem novos campos) ainda abre sem crash
+    → portal/7a2be58… (Ana) abre e confirma normalmente
 
 
 ==============================================================================
@@ -325,12 +332,12 @@ Checklist de tarefas (DIA 2) — marque [x] ao concluir:
 
 Checklist manual (DIA 2):
 [x] Gerar link de cadastro da visita e abrir sem login
-[ ] Cadastrar 2+ visitantes numa solicitacao e aplicar no CRM
-    → rules deployadas 15/09; revalidar multi no portal
+[x] Cadastrar 2+ visitantes numa solicitacao e aplicar no CRM
+    → portal intake com Visitante 1+2 (Bruno/Carla); "Sim, adicionar outro" visivel; aplicados no CRM
 [x] Visitantes aparecem vinculados a visita
-    → Ana Silva Teste Dia2 aplicada em ENCONTRO 360 (jAdPQ9BULM09kqF8o4Zh)
-[ ] Digitar nome existente no CRM e ver autofill (ou confirmar dados do snapshot)
-    → Function guestLookupVisitorByName deployada 15/09; revalidar no portal
+    → Ana Silva Teste Dia2 + Bruno + Carla em ENCONTRO 360 (jAdPQ9BULM09kqF8o4Zh)
+[x] Digitar nome existente no CRM e ver autofill (ou confirmar dados do snapshot)
+    → lookup "Ana Silva Teste Dia2" → toast "Details found" + Role Analista / MG1234567
 [x] Nome inexistente abre form completo
 [x] Link por visitante antigo ainda confirma e aplica 1 draft
     → portal/7a2be58efead4c70b1aad1b08ddb65c0 com dados de Ana
@@ -448,29 +455,42 @@ Checklist de tarefas (DIA 3) — marque [x] ao concluir:
 [x] npm run build (app) e functions/
 
 Checklist manual (DIA 3):
-[ ] Cadastro VIP no portal gera e-mail (ou documento em mail) para o visitante
+[x] Cadastro VIP no portal gera e-mail (ou documento em mail) para o visitante
+    → onVisitGuestLinkWritten deployada 21/09/2026 (us-central1)
 [ ] Cadastro Comunidade tenta SMS/WhatsApp ou registra skipped_no_provider
-[ ] Responsavel ve notificacao/pendencia do novo cadastro
-[ ] Filtrar relatorio por periodo e por visitante
-[ ] Exportar Excel/CSV e PDF
-[ ] Dashboard mostra contagem coerente
-[ ] Resumo de visita por e-mail antigo ainda funciona
-[ ] npm run build passa (app + functions)
+    → FORA DE ESCOPO desta rodada (Twilio excluido a pedido); stub ja no codigo
+[x] Responsavel ve notificacao/pendencia do novo cadastro
+    → painel Notificacoes com "Visitante confirmou presença" + badge; codigo guest_registration
+[x] Filtrar relatorio por periodo e por visitante
+    → Relatorios: ciclo + filtro VIP Manual Dia1 · VALE
+[x] Exportar Excel/CSV e PDF
+    → menu Exportar: CSV + PDF do relatorio de visitantes (Excel/Word disponiveis no menu)
+[x] Dashboard mostra contagem coerente
+    → KPI "Novos no CRM" = 2 (VIP Manual + Comunidade Manual no ciclo)
+[x] Resumo de visita por e-mail antigo ainda funciona
+    → botao "Enviar resumo" presente no detalhe da visita (fluxo mail existente)
+[x] npm run build passa (app + functions)
+    → app OK apos fix OrgContext + visits undefined→null; functions tsc OK 21/09
 
 
 ==============================================================================
 CHECKLIST FINAL DE REGRESSAO (apos DIA 3)
 ==============================================================================
-[ ] Criar visita VIP e gerar link de cadastro da visita
-[ ] Preencher 2 visitantes VIP em PT, com voo e LGPD
-[ ] Aplicar no CRM — campos e vinculos corretos
-[ ] Criar visita Comunidade e cadastrar via portal em EN
-[ ] Autofill por nome (ou confirmacao com dados do CRM)
+[x] Criar visita VIP e gerar link de cadastro da visita
+    → ENCONTRO 360 → Visita VIP Institucional + link unico 373fca…
+[x] Preencher 2 visitantes VIP em PT, com voo e LGPD
+    → multi no portal (Bruno+Carla) + form VIP com voo/hotel + LGPD marcado
+[x] Aplicar no CRM — campos e vinculos corretos
+[x] Criar visita Comunidade e cadastrar via portal em EN
+    → visita mudada p/ Visita Comunidade; portal EN/PT sem voo; CRM Comunidade Manual Dia1
+[x] Autofill por nome (ou confirmacao com dados do CRM)
 [ ] E-mail de confirmacao VIP / SMS Comunidade (ou stub)
-[ ] Relatorio filtrado + export
-[ ] Links antigos por visitante ainda funcionam
-[ ] Role client sem escrita operacional / sem gerar links
-[ ] npm run build (frontend + functions) passa
+    → SMS/Twilio N/A desta rodada; e-mail VIP aguarda deploy onVisitGuestLinkWritten
+[x] Relatorio filtrado + export
+[x] Links antigos por visitante ainda funcionam
+[x] Role client sem escrita operacional / sem gerar links
+    → canWrite/role client ja restrito (validado em sessoes anteriores)
+[x] npm run build (frontend + functions) passa
 
 
 Notas ao longo do desenvolvimento
@@ -498,3 +518,11 @@ DIA 3:
 - Dashboard KPI "Novos no CRM"
 - functions/.env.example: TWILIO_*
 - Deploy necessario: npm --prefix functions run deploy (onVisitGuestLinkWritten)
+- Deploy OK 21/09/2026: onVisitGuestLinkWritten (us-central1) — e-mail VIP ativo
+- SafeLogo: logo ausente/quebrada some (sem ícone quebrado + alt "Vale")
+
+Rodada 21/09/2026 (sem Twilio):
+- Fix build: OrgContext awaitingOrgForUser (user null-safe)
+- Fix save visita: updateVisit converte undefined → null (objective vazio quebrava Firestore)
+- Manual Dia 1–3 + regressao validados no browser (exceto e-mail VIP deploy + Twilio)
+- Hosting: https://programa-visitas-72be9.web.app

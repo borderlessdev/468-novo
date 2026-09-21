@@ -25,6 +25,14 @@ export function canManageOrgUsers(
   return isPlatformAdmin || isOrgAdmin
 }
 
+/** Whitelabel (logo da pasta): Admin Master e Admin da empresa. Funcionários só herdam. */
+export function canManageWhitelabel(
+  isPlatformAdmin: boolean,
+  isOrgAdmin: boolean,
+): boolean {
+  return canManageOrgUsers(isPlatformAdmin, isOrgAdmin)
+}
+
 export function canCreateOrganization(isPlatformAdmin: boolean): boolean {
   return isPlatformAdmin
 }

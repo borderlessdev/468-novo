@@ -35,7 +35,7 @@ export interface Organization {
   maxUsers: number
   status: OrganizationStatus
   createdBy: string
-  /** Logo white-label exibida no portal e nos convites. */
+  /** Whitelabel: logo da pasta. Definida por Master/Admin; funcionários herdam via activeOrg. */
   logoUrl?: string
   logoStoragePath?: string
   createdAt?: unknown

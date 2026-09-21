@@ -72,7 +72,7 @@ async function callOpenAi(input: ChatCompletionInput): Promise<string> {
 }
 
 async function callAnthropic(input: ChatCompletionInput): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY?.trim()
+  const key = process.env.ANTHROPIC_API_KEY?.trim().replace(/^["']|["']$/g, '')
   if (!key) throw new Error('ANTHROPIC_API_KEY ausente')
 
   const model = getAnthropicModel()

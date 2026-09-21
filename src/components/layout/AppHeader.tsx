@@ -2,6 +2,7 @@ import { Menu, ArrowLeftRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { SafeLogo } from '@/components/SafeLogo'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
@@ -35,8 +36,6 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
             : profile?.role === 'user'
               ? 'Usuário'
               : null
-
-  const headerLogo = activeOrg?.logoUrl || VALE_BRAND.logoSrc
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-card/85 backdrop-blur-md">
@@ -77,10 +76,11 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* PDF: logo Vale no canto superior direito do CRM */}
-          <img
-            src={headerLogo}
-            alt={activeOrg?.name ? `Logo ${activeOrg.name}` : VALE_BRAND.name}
+          {/* PDF: logo da pasta ou Vale; se falhar/ausente, não mostra ícone quebrado */}
+          <SafeLogo
+            src={activeOrg?.logoUrl}
+            fallbackSrc={VALE_BRAND.logoSrc}
+            alt=""
             className="h-7 w-auto max-w-[96px] object-contain sm:h-8 sm:max-w-[120px] md:h-9 md:max-w-[140px]"
           />
           <NotificationBell />
