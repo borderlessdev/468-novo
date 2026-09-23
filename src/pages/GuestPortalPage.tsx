@@ -182,6 +182,53 @@ function ConfirmationBadge({
   )
 }
 
+function ConfirmationCard({
+  locale,
+  status,
+  confirming,
+  onConfirm,
+  onDecline,
+}: {
+  locale: PortalLocale
+  status: GuestConfirmationStatus
+  confirming: boolean
+  onConfirm: () => void
+  onDecline: () => void
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>{t('confirmationTitle', locale)}</CardTitle>
+        <ConfirmationBadge status={status} locale={locale} />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {t('confirmationHint', locale)}
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            className="sm:w-auto"
+            disabled={confirming || status === 'confirmed'}
+            onClick={onConfirm}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            {t('confirmPresence', locale)}
+          </Button>
+          <Button
+            variant="outline"
+            className="sm:w-auto"
+            disabled={confirming || status === 'declined'}
+            onClick={onDecline}
+          >
+            <XCircle className="h-4 w-4" />
+            {t('declinePresence', locale)}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function PortalShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="vale-portal-shell px-0 pb-10 sm:pb-14">
@@ -229,6 +276,8 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   const formVariant = link ? linkFormVariant(link) : 'geral'
   const intro = portalIntroCopy[formVariant]
   const isIntake = link ? isVisitIntakeLink(link) : false
+  const isVipPortal = formVariant === 'vip'
+  const showConfirmationCard = !isVipPortal || Boolean(link?.visitorId)
   const primaryDraft = drafts[0] ?? EMPTY_VISITOR_PROFILE
   const lgpdOk = drafts.every((item) => item.lgpdConsent)
 
@@ -608,36 +657,15 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>{t('confirmationTitle', locale)}</CardTitle>
-          <ConfirmationBadge status={link.confirmationStatus} locale={locale} />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {t('confirmationHint', locale)}
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              className="sm:w-auto"
-              disabled={confirming || link.confirmationStatus === 'confirmed'}
-              onClick={() => void handleConfirmation('confirmed')}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              {t('confirmPresence', locale)}
-            </Button>
-            <Button
-              variant="outline"
-              className="sm:w-auto"
-              disabled={confirming || link.confirmationStatus === 'declined'}
-              onClick={() => void handleConfirmation('declined')}
-            >
-              <XCircle className="h-4 w-4" />
-              {t('declinePresence', locale)}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {showConfirmationCard && !isVipPortal ? (
+        <ConfirmationCard
+          locale={locale}
+          status={link.confirmationStatus}
+          confirming={confirming}
+          onConfirm={() => void handleConfirmation('confirmed')}
+          onDecline={() => void handleConfirmation('declined')}
+        />
+      ) : null}
 
       {link.arrivalInstructions ? (
         <Card>
@@ -792,6 +820,16 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
           </Button>
         </CardContent>
       </Card>
+
+      {showConfirmationCard && isVipPortal ? (
+        <ConfirmationCard
+          locale={locale}
+          status={link.confirmationStatus}
+          confirming={confirming}
+          onConfirm={() => void handleConfirmation('confirmed')}
+          onDecline={() => void handleConfirmation('declined')}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>

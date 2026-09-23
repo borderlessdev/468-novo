@@ -85,6 +85,172 @@ function isCommunity(data: DocumentData): boolean {
   )
 }
 
+function draftString(draft: Draft, key: string): string {
+  return String(draft[key] ?? '').trim()
+}
+
+function draftNumber(draft: Draft, key: string): number | null {
+  const raw = draft[key]
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string' && raw.trim()) {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function draftFlight(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object') return null
+  const data = raw as Record<string, unknown>
+  const info = {
+    origin: String(data.origin ?? '').trim(),
+    date: String(data.date ?? '').trim(),
+    airline: String(data.airline ?? '').trim(),
+    flightNumber: String(data.flightNumber ?? '').trim(),
+    time: String(data.time ?? '').trim(),
+  }
+  if (!info.origin && !info.date && !info.airline && !info.flightNumber && !info.time) {
+    return null
+  }
+  return info
+}
+
+function visitorPayloadFromDraft(draft: Draft): Record<string, unknown> {
+  const lgpd = draft.lgpdConsent === true
+  return {
+    name: draftString(draft, 'name'),
+    document: draftString(draft, 'document'),
+    cpf: draftString(draft, 'cpf') || null,
+    company: draftString(draft, 'company') || null,
+    role: draftString(draft, 'role') || null,
+    nationality: draftString(draft, 'nationality') || null,
+    sex: draftString(draft, 'sex') || null,
+    birthDate: draftString(draft, 'birthDate') || null,
+    phone: draftString(draft, 'phone') || null,
+    email: draftString(draft, 'email') || null,
+    emergencyPhone: draftString(draft, 'emergencyPhone') || null,
+    neighborhood: draftString(draft, 'neighborhood') || null,
+    whatsapp: draftString(draft, 'whatsapp') || null,
+    language: draftString(draft, 'language') || null,
+    notes: draftString(draft, 'notes') || null,
+    hotelName: draftString(draft, 'hotelName') || null,
+    shirtSize: draftString(draft, 'shirtSize') || null,
+    weightKg: draftNumber(draft, 'weightKg'),
+    shoeSize: draftNumber(draft, 'shoeSize'),
+    dietaryHasRestriction: draft.dietaryHasRestriction === true,
+    dietaryRestriction: draftString(draft, 'dietaryRestriction') || null,
+    mobilityReduced: draft.mobilityReduced === true,
+    mobilityNotes: draftString(draft, 'mobilityNotes') || null,
+    comorbidity: draft.comorbidity === true,
+    comorbidityNotes: draftString(draft, 'comorbidityNotes') || null,
+    specialAttention: draft.specialAttention === true,
+    specialAttentionNotes: draftString(draft, 'specialAttentionNotes') || null,
+    fliesByAir: draft.fliesByAir === true,
+    hasFlightData: draft.hasFlightData === true,
+    arrivalFlight: draftFlight(draft.arrivalFlight),
+    departureFlight: draftFlight(draft.departureFlight),
+    lgpdConsent: lgpd,
+    lgpdConsentAt: lgpd
+      ? draftString(draft, 'lgpdConsentAt') || new Date().toISOString()
+      : null,
+  }
+}
+
+async function findVisitorByDocument(
+  orgId: string,
+  document: string,
+): Promise<string | null> {
+  const snap = await db.collection('visitors').where('orgId', '==', orgId).get()
+  const match = snap.docs.find(
+    (item) =>
+      String(item.get('document') ?? '').trim() === document &&
+      item.get('isDeleted') !== true,
+  )
+  return match?.id ?? null
+}
+
+async function ensureVisitVisitorLink(input: {
+  visitId: string
+  visitorId: string
+  ownerId: string
+}): Promise<void> {
+  const existing = await db
+    .collection('visitVisitors')
+    .where('visitId', '==', input.visitId)
+    .get()
+  if (existing.docs.some((item) => item.get('visitorId') === input.visitorId)) {
+    return
+  }
+  await db.collection('visitVisitors').add({
+    visitId: input.visitId,
+    visitorId: input.visitorId,
+    ownerId: input.ownerId,
+    createdAt: FieldValue.serverTimestamp(),
+  })
+}
+
+/** Cria/atualiza visitantes VIP no CRM e vincula à visita. */
+async function applyVipDraftsToCrm(input: {
+  data: DocumentData
+  drafts: Draft[]
+}): Promise<string[]> {
+  const visitId = String(input.data.visitId ?? '')
+  const ownerId = String(input.data.ownerId ?? '')
+  if (!visitId || !ownerId) {
+    throw new Error('Link sem visita ou responsável para aplicar no CRM')
+  }
+
+  const visitSnap = await db.collection('visits').doc(visitId).get()
+  const orgId = String(visitSnap.get('orgId') ?? '')
+  if (!orgId) {
+    throw new Error('Visita sem empresa para aplicar no CRM')
+  }
+
+  const visitorIds: string[] = []
+  const existingVisitorId = String(input.data.visitorId ?? '').trim()
+
+  for (let index = 0; index < input.drafts.length; index += 1) {
+    const draft = input.drafts[index]
+    const name = draftString(draft, 'name')
+    const document = draftString(draft, 'document')
+    if (!name || !document || draft.lgpdConsent !== true) {
+      continue
+    }
+
+    const payload = visitorPayloadFromDraft(draft)
+    let visitorId =
+      index === 0 && existingVisitorId
+        ? existingVisitorId
+        : await findVisitorByDocument(orgId, document)
+
+    if (visitorId) {
+      await db.collection('visitors').doc(visitorId).set(
+        {
+          ...payload,
+          orgId,
+          ownerId,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+    } else {
+      const created = await db.collection('visitors').add({
+        ...payload,
+        orgId,
+        ownerId,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      visitorId = created.id
+    }
+
+    await ensureVisitVisitorLink({ visitId, visitorId, ownerId })
+    visitorIds.push(visitorId)
+  }
+
+  return visitorIds
+}
+
 function draftLocale(draft: Draft): 'pt' | 'en' {
   const lang = String(draft.language ?? '').toLowerCase()
   if (lang.startsWith('en') || lang === 'english' || lang === 'inglês' || lang === 'ingles') {
@@ -240,15 +406,32 @@ export const onVisitGuestLinkWritten = onDocumentWritten(
     if (!shouldNotify) return
 
     const fingerprint = draftFingerprint(afterData)
+    const previousApply = afterData.crmApply as { fingerprint?: string } | undefined
+    let crmApply: { fingerprint: string; visitorIds: string[] } | null = null
+
+    if (isVip(afterData) && previousApply?.fingerprint !== fingerprint) {
+      try {
+        const visitorIds = await applyVipDraftsToCrm({
+          data: afterData,
+          drafts,
+        })
+        if (visitorIds.length > 0) {
+          crmApply = { fingerprint, visitorIds }
+        }
+      } catch (error) {
+        logger.error('Falha ao aplicar cadastro VIP no CRM', error)
+      }
+    }
+
     const previous = afterData.visitorNotify as { dispatchFingerprint?: string } | undefined
-    if (previous?.dispatchFingerprint === fingerprint) {
+    if (previous?.dispatchFingerprint === fingerprint && !crmApply) {
       return
     }
 
     const before = event.data?.before
-    if (before?.exists) {
+    if (before?.exists && !crmApply) {
       const beforeFp = draftFingerprint(before.data()!)
-      if (beforeFp === fingerprint) return
+      if (beforeFp === fingerprint && previous?.dispatchFingerprint === fingerprint) return
     }
 
     const visitId = String(afterData.visitId ?? '')
@@ -369,6 +552,16 @@ export const onVisitGuestLinkWritten = onDocumentWritten(
           dispatchedAt: FieldValue.serverTimestamp(),
           results,
         },
+        ...(crmApply
+          ? {
+              lastAppliedAt: new Date().toISOString(),
+              crmApply: {
+                fingerprint: crmApply.fingerprint,
+                visitorIds: crmApply.visitorIds,
+                appliedAt: FieldValue.serverTimestamp(),
+              },
+            }
+          : {}),
       },
       { merge: true },
     )

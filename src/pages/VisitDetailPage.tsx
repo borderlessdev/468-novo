@@ -58,6 +58,7 @@ import { BRAZILIAN_STATES } from '@/lib/constants'
 import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
+import { usesConfirmationLink, usesCrmIntake } from '@/features/visitors/visitorFormConfig'
 import {
   calculateVisitProgress,
   formatCurrency,
@@ -73,7 +74,8 @@ import {
   listDocuments,
   uploadDocument,
 } from '@/services/documents'
-import { listVisitors, getVisitorsByIds } from '@/services/visitors'
+import { createVisitor, listVisitors, getVisitorsByIds } from '@/services/visitors'
+import { parseVisitorWorkbook } from '@/lib/visitorImport'
 import {
   linkVisitorToVisit,
   listVisitVisitors,
@@ -182,6 +184,8 @@ export function VisitDetailPage() {
   const [guestLinks, setGuestLinks] = useState<VisitGuestLink[]>([])
   const [feedbacks, setFeedbacks] = useState<VisitFeedback[]>([])
   const [portalBusyId, setPortalBusyId] = useState<string | null>(null)
+  const visitorImportRef = useRef<HTMLInputElement>(null)
+  const [importingVisitors, setImportingVisitors] = useState(false)
   const [cloning, setCloning] = useState(false)
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [playbookOpen, setPlaybookOpen] = useState(false)
@@ -453,6 +457,62 @@ export function VisitDetailPage() {
     } catch (error) {
       console.error(error)
       toast.error('Não foi possível vincular')
+    }
+  }
+
+  const handleImportVisitors = async (file: File) => {
+    if (!user || !id || !activeOrgId || !canWrite) return
+    setImportingVisitors(true)
+    try {
+      const rows = parseVisitorWorkbook(await file.arrayBuffer())
+      if (rows.length === 0) {
+        toast.error('Nenhum visitante válido encontrado na planilha')
+        return
+      }
+      const catalog = visitorsCatalogLoaded
+        ? [...allVisitors]
+        : await listVisitors(activeOrgId)
+      if (!visitorsCatalogLoaded) {
+        setAllVisitors(catalog)
+        setVisitorsCatalogLoaded(true)
+      }
+      const byDocument = new Map(
+        catalog.map((item) => [item.document.trim().toLowerCase(), item]),
+      )
+      let created = 0
+      let linked = 0
+      for (const row of rows) {
+        const key = row.document.trim().toLowerCase()
+        let visitor = byDocument.get(key)
+        if (!visitor) {
+          const visitorId = await createVisitor(user.uid, activeOrgId, row)
+          visitor = { ...row, id: visitorId, ownerId: user.uid, orgId: activeOrgId }
+          byDocument.set(key, visitor)
+          setAllVisitors((prev) => [...prev, visitor!])
+          created += 1
+        }
+        const linkId = await linkVisitorToVisit(user.uid, id, visitor.id)
+        setVisitVisitorLinks((prev) =>
+          prev.some((item) => item.visitorId === visitor.id)
+            ? prev
+            : [...prev, { id: linkId, visitorId: visitor.id }],
+        )
+        setLinkedVisitors((prev) =>
+          prev.some((item) => item.id === visitor.id) ? prev : [...prev, visitor],
+        )
+        linked += 1
+      }
+      toast.success(
+        `${linked} visitante(s) vinculados${created ? ` · ${created} novos no CRM` : ''}`,
+      )
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível importar a planilha',
+      )
+    } finally {
+      setImportingVisitors(false)
+      if (visitorImportRef.current) visitorImportRef.current.value = ''
     }
   }
 
@@ -1416,7 +1476,7 @@ export function VisitDetailPage() {
             </form>
             ) : (
               <dl className="space-y-2 text-sm">
-                <div><dt className="text-muted-foreground">Tipo de evento</dt><dd>{visitEventLabel(visit)}</dd></div>
+                <div><dt className="text-muted-foreground">Tipo de experiência</dt><dd>{visitEventLabel(visit)}</dd></div>
                 <div><dt className="text-muted-foreground">Empresa</dt><dd>{visit.company || '—'}</dd></div>
                 <div><dt className="text-muted-foreground">Local</dt><dd>{visit.city || '—'}{visit.state ? `, ${visit.state}` : ''}</dd></div>
                 <div><dt className="text-muted-foreground">Período</dt><dd>{formatDate(visit.startDate)} — {formatDate(visit.endDate)}</dd></div>
@@ -1436,6 +1496,28 @@ export function VisitDetailPage() {
             <CardContent className="space-y-3">
               {canWrite ? (
                 <div className="space-y-1">
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      ref={visitorImportRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        if (file) void handleImportVisitors(file)
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={importingVisitors}
+                      onClick={() => visitorImportRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4" />
+                      {importingVisitors ? 'Importando...' : 'Importar Excel'}
+                    </Button>
+                  </div>
                   <Input
                     placeholder="Buscar visitante para vincular"
                     value={visitorSearch}
@@ -1647,12 +1729,15 @@ export function VisitDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Portal do visitante</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Use o <strong>link único da visita</strong> para vários visitantes
-              preencherem o cadastro. Links individuais (abaixo) são só para quem já
-              está vinculado confirmar presença.
+              {usesCrmIntake(visit.eventKind)
+                ? 'Visita VIP: envie o link único de cadastro. Os dados entram no CRM ligados a esta experiência.'
+                : usesConfirmationLink(visit.eventKind)
+                  ? 'Comunidade e evento: envie o link de confirmação para cada visitante vinculado.'
+                  : 'Use o link único para cadastro ou os links individuais para confirmar presença.'}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
+            {usesConfirmationLink(visit.eventKind) ? null : (
             <div className="space-y-3 rounded-lg border-2 border-primary/30 bg-primary/5 px-3 py-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -1737,6 +1822,7 @@ export function VisitDetailPage() {
                 </div>
               ) : null}
             </div>
+            )}
 
             {linkedVisitors.length > 0 ? (
               <div className="rounded-lg border bg-muted/30 px-3 py-3">
@@ -1786,13 +1872,16 @@ export function VisitDetailPage() {
 
             {linkedVisitors.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Ainda não há visitantes vinculados. Gere o <strong>link único da visita</strong>{' '}
-                acima — não é necessário criar um link por pessoa.
+                {usesConfirmationLink(visit.eventKind)
+                  ? 'Vincule visitantes acima e gere o link de confirmação para cada um.'
+                  : 'Ainda não há visitantes vinculados. Gere o link único de cadastro — não é necessário criar um link por pessoa.'}
               </p>
             ) : (
               <>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Links individuais (confirmação) — opcional
+                  {usesConfirmationLink(visit.eventKind)
+                    ? 'Links de confirmação'
+                    : 'Links individuais (confirmação) — opcional'}
                 </p>
               {linkedVisitors.map((visitor) => {
                 const link = activeLinkByVisitorId.get(visitor.id)

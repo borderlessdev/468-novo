@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { Building2, Columns3, Gift, Globe2, LayoutGrid, List, Plus, Search, Utensils, Users } from 'lucide-react'
+import { Building2, Columns3, Gift, Globe2, LayoutGrid, List, Plus, Search, Upload, Utensils, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
@@ -37,6 +37,7 @@ import {
   visitorToProfileForm,
   type VisitorProfileFormValues,
 } from '@/features/visitors/visitorProfileModel'
+import { parseVisitorWorkbook } from '@/lib/visitorImport'
 import { visitorSchema, parseOptionalNumber } from '@/lib/validations'
 import { formatDateTime, formatWeightKgNumber } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
@@ -69,6 +70,8 @@ export function VisitorsPage() {
   const [formVariant, setFormVariant] = useState<VisitorFormVariant>('vip')
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'document', string>>>({})
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
+  const importInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
 
   const changeViewMode = (mode: ViewMode) => {
     setViewMode(mode)
@@ -139,6 +142,45 @@ export function VisitorsPage() {
       )
     })
   }, [visitors, search, visitVisitorIds])
+
+  const handleImportFile = async (file: File) => {
+    if (!user || !activeOrgId || !canWrite) return
+    setImporting(true)
+    try {
+      const rows = parseVisitorWorkbook(await file.arrayBuffer())
+      if (rows.length === 0) {
+        toast.error('Nenhum visitante válido encontrado na planilha')
+        return
+      }
+      const existingByDocument = new Map(
+        visitors.map((item) => [item.document.trim().toLowerCase(), item]),
+      )
+      let created = 0
+      let skipped = 0
+      for (const row of rows) {
+        const key = row.document.trim().toLowerCase()
+        if (existingByDocument.has(key)) {
+          skipped += 1
+          continue
+        }
+        const id = await createVisitor(user.uid, activeOrgId, row)
+        existingByDocument.set(key, { ...row, id, ownerId: user.uid, orgId: activeOrgId })
+        created += 1
+      }
+      await load()
+      toast.success(
+        `${created} visitante(s) importado(s)${skipped ? ` · ${skipped} já estavam no CRM` : ''}`,
+      )
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível importar a planilha',
+      )
+    } finally {
+      setImporting(false)
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
+  }
 
   const openCreate = () => {
     if (!canWrite) return
@@ -316,10 +358,31 @@ export function VisitorsPage() {
               </SelectContent>
             </Select>
             {canWrite ? (
-              <Button onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                Novo visitante
-              </Button>
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) void handleImportFile(file)
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={importing}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  {importing ? 'Importando...' : 'Importar Excel'}
+                </Button>
+                <Button onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  Novo visitante
+                </Button>
+              </>
             ) : null}
           </div>
         }

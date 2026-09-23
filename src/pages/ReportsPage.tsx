@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf'
 import { toast } from 'sonner'
 import {
   BarChart3,
+  CalendarDays,
   ChevronDown,
   DollarSign,
   Download,
@@ -38,7 +39,12 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
-import { visitEventLabel, visitVipSubtypeLabel } from '@/lib/visitEvent'
+import {
+  visitEventKindLabel,
+  visitEventLabel,
+  visitEventScopeLabel,
+  visitVipSubtypeLabel,
+} from '@/lib/visitEvent'
 import { downloadCsv, formatCurrency, formatDate } from '@/lib/utils'
 import {
   exportTable,
@@ -52,7 +58,7 @@ import {
   listVisitIdsForVisitor,
   listVisitVisitors,
 } from '@/services/visitVisitors'
-import type { FinanceItem, Visit, Visitor } from '@/types'
+import type { FinanceItem, Visit, VisitEventKind, Visitor } from '@/types'
 
 function visitorCreatedIso(visitor: Visitor): string | null {
   const raw = visitor.createdAt
@@ -304,7 +310,7 @@ export function ReportsPage() {
       doc.save('visitas-do-ciclo.pdf')
     } else {
       downloadCsv('visitas-do-ciclo.csv', [
-        ['Título', 'Tipo de evento', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
+        ['Título', 'Tipo de experiência', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
         ...rows.map((v) => [
           v.title,
           visitEventLabel(v),
@@ -319,18 +325,40 @@ export function ReportsPage() {
     toast.success(asPdf ? 'PDF exportado' : 'CSV exportado')
   }
 
-  const exportVipVisits = (onlyCommercial: boolean, asPdf = false) => {
+  const exportKindVisits = (
+    kind: VisitEventKind,
+    asPdf = false,
+    options?: { onlyCommercial?: boolean },
+  ) => {
+    const onlyCommercial = options?.onlyCommercial === true
     const rows = visits.filter(
       (v) =>
         v.startDate >= range.startIso &&
         v.startDate <= range.endIso &&
-        v.eventKind === 'visita_vip' &&
+        v.eventKind === kind &&
         (!onlyCommercial || v.vipSubtype === 'comercial'),
     )
-    const title = onlyCommercial
-      ? `Visitas VIP comerciais (${cycleLabel})`
-      : `Visitas VIP (${cycleLabel})`
-    const filenameBase = onlyCommercial ? 'visitas-vip-comerciais' : 'visitas-vip'
+    const kindLabel = onlyCommercial
+      ? 'Visitas VIP comerciais'
+      : visitEventKindLabel(kind)
+    const title = `${kindLabel} (${cycleLabel})`
+    const filenameBase = onlyCommercial
+      ? 'visitas-vip-comerciais'
+      : kind === 'visita_vip'
+        ? 'visitas-vip'
+        : kind === 'comunidade_prioritaria'
+          ? 'comunidade-prioritaria'
+          : kind === 'visita_comunidade'
+            ? 'visita-comunidade'
+            : 'eventos'
+    const extraHeader =
+      kind === 'visita_vip' ? 'Subtipo VIP' : kind === 'evento' ? 'Escopo' : 'Tipo'
+    const extraValue = (v: (typeof rows)[number]) =>
+      kind === 'visita_vip'
+        ? visitVipSubtypeLabel(v.vipSubtype)
+        : kind === 'evento'
+          ? visitEventScopeLabel(v.eventScope)
+          : visitEventKindLabel(v.eventKind)
 
     if (asPdf) {
       const doc = new jsPDF()
@@ -339,7 +367,7 @@ export function ReportsPage() {
       rows.forEach((visit, index) => {
         doc.setFontSize(10)
         doc.text(
-          `${visit.title} | ${visitVipSubtypeLabel(visit.vipSubtype)} | ${formatDate(visit.startDate)} | ${visit.city ?? '—'} | ${visit.status}`,
+          `${visit.title} | ${extraValue(visit)} | ${formatDate(visit.startDate)} | ${visit.city ?? '—'} | ${visit.status}`,
           14,
           32 + index * 8,
         )
@@ -347,10 +375,10 @@ export function ReportsPage() {
       doc.save(`${filenameBase}.pdf`)
     } else {
       downloadCsv(`${filenameBase}.csv`, [
-        ['Título', 'Subtipo VIP', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
+        ['Título', extraHeader, 'Início', 'Fim', 'Local', 'Estado', 'Status'],
         ...rows.map((v) => [
           v.title,
-          visitVipSubtypeLabel(v.vipSubtype),
+          extraValue(v),
           formatDate(v.startDate),
           formatDate(v.endDate),
           v.city ?? '',
@@ -361,8 +389,8 @@ export function ReportsPage() {
     }
     toast.success(
       asPdf
-        ? `PDF exportado (${rows.length} visita${rows.length === 1 ? '' : 's'})`
-        : `CSV exportado (${rows.length} visita${rows.length === 1 ? '' : 's'})`,
+        ? `PDF exportado (${rows.length} experiência${rows.length === 1 ? '' : 's'})`
+        : `CSV exportado (${rows.length} experiência${rows.length === 1 ? '' : 's'})`,
     )
   }
 
@@ -687,15 +715,36 @@ export function ReportsPage() {
           icon={Users}
           title="Visitas VIP do Mês"
           description={`Quantidade e lista de Visitas VIP no ciclo ${cycleLabel}.`}
-          onCsv={() => exportVipVisits(false, false)}
-          onPdf={() => exportVipVisits(false, true)}
+          onCsv={() => exportKindVisits('visita_vip', false)}
+          onPdf={() => exportKindVisits('visita_vip', true)}
         />
         <ReportCard
           icon={BarChart3}
           title="Visitas VIP Comerciais"
           description={`Visitas VIP do subtipo Comercial no ciclo ${cycleLabel}.`}
-          onCsv={() => exportVipVisits(true, false)}
-          onPdf={() => exportVipVisits(true, true)}
+          onCsv={() => exportKindVisits('visita_vip', false, { onlyCommercial: true })}
+          onPdf={() => exportKindVisits('visita_vip', true, { onlyCommercial: true })}
+        />
+        <ReportCard
+          icon={Users}
+          title="Comunidade Prioritária"
+          description={`Experiências de comunidade prioritária no ciclo ${cycleLabel}.`}
+          onCsv={() => exportKindVisits('comunidade_prioritaria', false)}
+          onPdf={() => exportKindVisits('comunidade_prioritaria', true)}
+        />
+        <ReportCard
+          icon={Users}
+          title="Visita Comunidade"
+          description={`Experiências de visita comunidade no ciclo ${cycleLabel}.`}
+          onCsv={() => exportKindVisits('visita_comunidade', false)}
+          onPdf={() => exportKindVisits('visita_comunidade', true)}
+        />
+        <ReportCard
+          icon={CalendarDays}
+          title="Eventos"
+          description={`Eventos internos e externos no ciclo ${cycleLabel}.`}
+          onCsv={() => exportKindVisits('evento', false)}
+          onPdf={() => exportKindVisits('evento', true)}
         />
         <ReportCard
           icon={Users}

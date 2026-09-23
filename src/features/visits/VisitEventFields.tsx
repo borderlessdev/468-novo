@@ -20,6 +20,7 @@ type VisitEventFieldsProps = {
   eventKind?: VisitEventKind
   vipSubtype?: VisitVipSubtype
   eventScope?: VisitEventScope
+  allowedKinds?: VisitEventKind[]
   onEventKindChange: (value: VisitEventKind) => void
   onVipSubtypeChange: (value: VisitVipSubtype | undefined) => void
   onEventScopeChange: (value: VisitEventScope | undefined) => void
@@ -34,15 +35,17 @@ export function VisitEventFields({
   eventKind,
   vipSubtype,
   eventScope,
+  allowedKinds = VISIT_EVENT_KINDS,
   onEventKindChange,
   onVipSubtypeChange,
   onEventScopeChange,
   errors,
 }: VisitEventFieldsProps) {
+  const kinds = allowedKinds.length > 0 ? allowedKinds : VISIT_EVENT_KINDS
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label>Tipo de evento *</Label>
+        <Label>Tipo de experiência *</Label>
         <Select
           value={eventKind ?? '_unset'}
           onValueChange={(value) => {
@@ -57,7 +60,7 @@ export function VisitEventFields({
             <SelectValue placeholder="Selecione o tipo" />
           </SelectTrigger>
           <SelectContent>
-            {VISIT_EVENT_KINDS.map((kind) => (
+            {kinds.map((kind) => (
               <SelectItem key={kind} value={kind}>
                 {visitEventKindLabel(kind)}
               </SelectItem>

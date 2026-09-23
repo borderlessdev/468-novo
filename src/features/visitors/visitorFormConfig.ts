@@ -3,10 +3,10 @@ import type { VisitEventKind, VisitorFormVariant } from '@/types'
 export type PortalLocale = 'pt' | 'en'
 
 /**
- * Mapeia o tipo da visita para o formulário de visitante.
- * - visita_vip → VIP
- * - comunidade_* → Comunidade
- * - evento / sem kind → geral (união dos campos; na prática = VIP + bairro)
+ * Mapeia o tipo da experiência para o formulário de visitante.
+ * - visita_vip → VIP (cadastro CRM detalhado)
+ * - comunidade_* e evento → Comunidade (confirmação)
+ * - sem kind → geral (união dos campos)
  */
 export function resolveVisitorFormVariant(
   eventKind?: VisitEventKind | null,
@@ -14,11 +14,26 @@ export function resolveVisitorFormVariant(
   if (eventKind === 'visita_vip') return 'vip'
   if (
     eventKind === 'comunidade_prioritaria' ||
-    eventKind === 'visita_comunidade'
+    eventKind === 'visita_comunidade' ||
+    eventKind === 'evento'
   ) {
     return 'comunidade'
   }
   return 'geral'
+}
+
+/** Link único de cadastro (CRM) é o canal principal da Visita VIP. */
+export function usesCrmIntake(eventKind?: VisitEventKind | null): boolean {
+  return eventKind === 'visita_vip'
+}
+
+/** Comunidade e evento usam confirmação de presença. */
+export function usesConfirmationLink(eventKind?: VisitEventKind | null): boolean {
+  return (
+    eventKind === 'comunidade_prioritaria' ||
+    eventKind === 'visita_comunidade' ||
+    eventKind === 'evento'
+  )
 }
 
 export function isVipLikeVariant(variant: VisitorFormVariant): boolean {

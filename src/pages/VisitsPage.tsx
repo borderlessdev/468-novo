@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays, Columns3, Filter, LayoutGrid, List, MapPin, Plus } from 'lucide-react'
+import { CalendarDays, CalendarRange, Columns3, Filter, LayoutGrid, List, MapPin, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/PageHeader'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
@@ -22,16 +22,22 @@ import { useOrg } from '@/contexts/OrgContext'
 import { useVisitDialog } from '@/contexts/VisitDialogContext'
 import { BRAZILIAN_STATES } from '@/lib/constants'
 import {
-  VISIT_EVENT_KINDS,
+  kindsForExperienceTab,
   visitEventKindLabel,
   visitEventLabel,
+  type ExperienceTab,
 } from '@/lib/visitEvent'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { listVisits } from '@/services/visits'
 import type { Visit, VisitEventKind, VisitStatus } from '@/types'
 import { Badge } from '@/components/ui/badge'
 
 type ViewMode = 'table' | 'cards' | 'status'
+
+const EXPERIENCE_TABS: Array<{ value: ExperienceTab; label: string; icon: typeof MapPin }> = [
+  { value: 'visitas', label: 'Visitas', icon: MapPin },
+  { value: 'eventos', label: 'Eventos', icon: CalendarRange },
+]
 
 const STATUS_COLUMNS: Array<{ value: VisitStatus; label: string }> = [
   { value: 'planejamento', label: 'Planejamento' },
@@ -49,9 +55,13 @@ function dateValue(value: string, endOfDay = false) {
 export function VisitsPage() {
   const { user, isPlatformAdmin, role, canWrite } = useAuth()
   const { activeOrgId } = useOrg()
-  const { setOpen } = useVisitDialog()
+  const { openNew } = useVisitDialog()
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
+  const [experienceTab, setExperienceTab] = useState<ExperienceTab>(() => {
+    const saved = localStorage.getItem('visits-experience-tab')
+    return saved === 'eventos' ? 'eventos' : 'visitas'
+  })
   const [statusFilter, setStatusFilter] = useState<string>('todos')
   const [eventKindFilter, setEventKindFilter] = useState<string>('todos')
   const [stateFilter, setStateFilter] = useState<string>('todos')
@@ -66,6 +76,15 @@ export function VisitsPage() {
     setViewMode(mode)
     localStorage.setItem('visits-view-mode', mode)
   }
+
+  const changeExperienceTab = (tab: ExperienceTab) => {
+    setExperienceTab(tab)
+    setEventKindFilter('todos')
+    localStorage.setItem('visits-experience-tab', tab)
+  }
+
+  const tabKinds = kindsForExperienceTab(experienceTab)
+  const openCreate = () => openNew(experienceTab === 'eventos' ? 'evento' : undefined)
 
   const load = useCallback(async () => {
     if (!user || !activeOrgId) return
@@ -88,6 +107,10 @@ export function VisitsPage() {
     const periodEnd = dateValue(endDateFilter, true)
 
     return visits.filter((visit) => {
+      const tabOk =
+        experienceTab === 'eventos'
+          ? visit.eventKind === 'evento'
+          : visit.eventKind !== 'evento'
       const statusOk =
         statusFilter === 'todos' || visit.status === (statusFilter as VisitStatus)
       const eventKindOk =
@@ -105,22 +128,44 @@ export function VisitsPage() {
 
       return statusOk && eventKindOk && stateOk && startsWithinPeriod && endsWithinPeriod
     })
-  }, [visits, statusFilter, eventKindFilter, stateFilter, startDateFilter, endDateFilter])
+  }, [visits, experienceTab, statusFilter, eventKindFilter, stateFilter, startDateFilter, endDateFilter])
 
   return (
     <div className="animate-fade-in space-y-5">
       <PageHeader
-        title="Visitas"
-        description={`${filtered.length} de ${visits.length} visita${visits.length === 1 ? '' : 's'}`}
+        title="Experiências"
+        description={`${filtered.length} de ${visits.length} experiência${visits.length === 1 ? '' : 's'}`}
         actions={
           canWrite ? (
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
-            Nova Visita
+            Nova experiência
           </Button>
           ) : undefined
         }
       />
+
+      <div
+        className="flex h-10 w-fit items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1"
+        role="tablist"
+        aria-label="Tipo de experiência"
+      >
+        {EXPERIENCE_TABS.map(({ value, label, icon: Icon }) => (
+          <Button
+            key={value}
+            type="button"
+            role="tab"
+            variant={experienceTab === value ? 'secondary' : 'ghost'}
+            size="sm"
+            className={cn('h-8 gap-2', experienceTab === value && 'shadow-sm')}
+            onClick={() => changeExperienceTab(value)}
+            aria-selected={experienceTab === value}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </Button>
+        ))}
+      </div>
 
       <Card>
         <CardHeader className="pb-3">
@@ -147,19 +192,21 @@ export function VisitsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tipo de evento</Label>
+              <Label className="text-xs text-muted-foreground">Tipo de experiência</Label>
               <Select value={eventKindFilter} onValueChange={setEventKindFilter}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os tipos</SelectItem>
-                  {VISIT_EVENT_KINDS.map((kind) => (
+                  {tabKinds.map((kind) => (
                     <SelectItem key={kind} value={kind}>
                       {visitEventKindLabel(kind)}
                     </SelectItem>
                   ))}
-                  <SelectItem value="_none">Não classificado</SelectItem>
+                  {experienceTab === 'visitas' ? (
+                    <SelectItem value="_none">Não classificado</SelectItem>
+                  ) : null}
                 </SelectContent>
               </Select>
             </div>
@@ -242,12 +289,12 @@ export function VisitsPage() {
             <div className="p-5">
               <EmptyState
                 icon={MapPin}
-                title="Nenhuma visita encontrada"
-                description="Ajuste os filtros ou crie uma nova visita."
+                title="Nenhuma experiência encontrada"
+                description="Ajuste os filtros ou crie uma nova experiência."
                 action={canWrite ? (
-                  <Button onClick={() => setOpen(true)}>
+                  <Button onClick={openCreate}>
                     <Plus className="h-4 w-4" />
-                    Nova Visita
+                    Nova experiência
                   </Button>
                 ) : undefined}
               />
@@ -293,7 +340,7 @@ export function VisitsPage() {
                     </header>
                     <div className="space-y-2.5">
                       {columnVisits.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-border/70 p-5 text-center text-xs text-muted-foreground">Nenhuma visita</div>
+                        <div className="rounded-lg border border-dashed border-border/70 p-5 text-center text-xs text-muted-foreground">Nenhuma experiência</div>
                       ) : columnVisits.map((visit) => (
                         <Link key={visit.id} to={`/visitas/${visit.id}`} className="block rounded-lg border border-border/70 bg-card p-3 transition-all hover:border-border hover:shadow-[0_2px_8px_rgba(15,47,42,0.05)]">
                           <p className="line-clamp-2 text-sm font-medium">{visit.title}</p>
@@ -353,8 +400,8 @@ export function VisitsPage() {
                   <tr>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Número da PV</th>
-                    <th className="px-4 py-3 font-medium">Título da visita</th>
-                    <th className="px-4 py-3 font-medium">Tipo de evento</th>
+                    <th className="px-4 py-3 font-medium">Título</th>
+                    <th className="px-4 py-3 font-medium">Tipo de experiência</th>
                     <th className="px-4 py-3 font-medium">Data início</th>
                     <th className="px-4 py-3 font-medium">Data fim</th>
                     <th className="px-4 py-3 font-medium">Local</th>

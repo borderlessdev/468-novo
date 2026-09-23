@@ -139,7 +139,7 @@ export interface Visit extends SoftDeletable {
   startDate: string
   endDate: string
   status: VisitStatus
-  /** Classificação operacional (tipo de evento). Visitas antigas podem não ter. */
+  /** Classificação operacional (tipo de experiência). Visitas antigas podem não ter. */
   eventKind?: VisitEventKind
   /** Obrigatório quando eventKind === 'visita_vip'. */
   vipSubtype?: VisitVipSubtype

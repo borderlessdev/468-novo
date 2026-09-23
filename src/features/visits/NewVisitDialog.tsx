@@ -41,13 +41,14 @@ import { notifyVisitStakeholders } from '@/services/notifications'
 import type { Playbook, Visit, Visitor } from '@/types'
 import { Search, UserPlus, X } from 'lucide-react'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
+import { kindsForExperienceTab } from '@/lib/visitEvent'
 
 interface NewVisitDialogProps {
   onCreated?: () => void
 }
 
 export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
-  const { open, setOpen } = useVisitDialog()
+  const { open, setOpen, defaultEventKind } = useVisitDialog()
   const { user, isAdmin, profile } = useAuth()
   const { activeOrgId } = useOrg()
   const [saving, setSaving] = useState(false)
@@ -91,6 +92,30 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     void listVisitTemplates(activeOrgId, user.uid, isAdmin).then(setTemplates)
     void listPlaybooks(activeOrgId).then(setPlaybooks)
   }, [open, user, activeOrgId, isAdmin])
+
+  useEffect(() => {
+    if (!open) return
+    form.reset({
+      title: '',
+      company: '',
+      state: '',
+      city: '',
+      startDate: '',
+      endDate: '',
+      status: 'planejamento',
+      eventKind: defaultEventKind,
+      vipSubtype: undefined,
+      eventScope: undefined,
+      objective: '',
+      language: '',
+      pvNumber: '',
+      templateId: '',
+      playbookId: '',
+      startWithChecklist: true,
+    })
+    // form.reset is stable from RHF; avoid listing `form` (new ref each render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultEventKind])
 
   const handleSearch = () => {
     const term = search.trim().toLowerCase()
@@ -249,9 +274,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle>Nova Visita</DialogTitle>
+          <DialogTitle>
+            {defaultEventKind === 'evento' ? 'Nova experiência de evento' : 'Nova experiência'}
+          </DialogTitle>
           <DialogDescription>
-            Preencha os dados da visita e associe visitantes.
+            Preencha os dados da experiência e associe visitantes.
           </DialogDescription>
         </DialogHeader>
 
@@ -330,6 +357,9 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
               eventKind={form.watch('eventKind')}
               vipSubtype={form.watch('vipSubtype')}
               eventScope={form.watch('eventScope')}
+              allowedKinds={kindsForExperienceTab(
+                defaultEventKind === 'evento' ? 'eventos' : 'visitas',
+              )}
               onEventKindChange={(value) =>
                 form.setValue('eventKind', value, { shouldValidate: true })
               }

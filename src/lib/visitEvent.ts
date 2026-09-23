@@ -18,6 +18,18 @@ export const VISIT_VIP_SUBTYPES: VisitVipSubtype[] = [
 
 export const VISIT_EVENT_SCOPES: VisitEventScope[] = ['interno', 'externo']
 
+export type ExperienceTab = 'visitas' | 'eventos'
+
+export const VISIT_EXPERIENCE_KINDS: VisitEventKind[] = [
+  'visita_vip',
+  'comunidade_prioritaria',
+  'visita_comunidade',
+]
+
+export function kindsForExperienceTab(tab: ExperienceTab): VisitEventKind[] {
+  return tab === 'eventos' ? ['evento'] : VISIT_EXPERIENCE_KINDS
+}
+
 export function visitEventKindLabel(kind?: VisitEventKind | null): string {
   switch (kind) {
     case 'visita_vip':

@@ -219,7 +219,7 @@ export function DashboardPage() {
       label: visitEventKindLabel(kind),
       value: String(eventKindCounts[kind].length),
       records: toKpiRecords(eventKindCounts[kind]),
-      hint: `Tipo de evento · ciclo ${cycleLabel}`,
+      hint: `Tipo de experiência · ciclo ${cycleLabel}`,
       icon: CalendarDays,
       tone: eventKindTone[kind],
     })),
@@ -354,7 +354,7 @@ export function DashboardPage() {
                 compact
                 icon={MapPin}
                 title="Nenhum evento no ciclo"
-                description="Ajuste o período do ciclo ou cadastre uma nova visita com tipo de evento."
+                description="Ajuste o período do ciclo ou cadastre uma nova experiência."
               />
             ) : (
               displayedVisits.map((visit) => (
