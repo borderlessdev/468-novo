@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import { toast } from 'sonner'
 import {
@@ -46,6 +46,7 @@ const CHART_COLORS = ['#0f2f2a', '#1a6b4a', '#d4a017', '#3d9b87', '#c47a0a', '#5
 export function OrganizationsPage() {
   const { user, isPlatformAdmin } = useAuth()
   const { setActiveOrgId, refreshOrg } = useOrg()
+  const location = useLocation()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<OrgRow[]>([])
@@ -78,6 +79,27 @@ export function OrganizationsPage() {
     if (!canCreateOrganization(isPlatformAdmin)) return
     void load()
   }, [isPlatformAdmin, load])
+
+  useEffect(() => {
+    if (location.hash === '#pastas') {
+      const scrollToPastas = () => {
+        document.getElementById('pastas')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
+      }
+      const frame = window.requestAnimationFrame(scrollToPastas)
+      const timeout = window.setTimeout(scrollToPastas, loading ? 80 : 0)
+      return () => {
+        window.cancelAnimationFrame(frame)
+        window.clearTimeout(timeout)
+      }
+    }
+    if (!location.hash) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    return undefined
+  }, [location.hash, location.key, loading])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

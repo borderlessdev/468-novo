@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { CalendarDays, CalendarRange, Columns3, Filter, LayoutGrid, List, MapPin, Plus } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { CalendarClock, CalendarDays, CalendarRange, Columns3, Filter, LayoutGrid, List, MapPin, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/PageHeader'
 import { VisitStatusBadge } from '@/components/shared/StatusBadge'
@@ -21,10 +21,12 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useVisitDialog } from '@/contexts/VisitDialogContext'
 import { BRAZILIAN_STATES } from '@/lib/constants'
+import { useCyclePeriod } from '@/hooks/useCyclePeriod'
 import {
   kindsForExperienceTab,
   visitEventKindLabel,
   visitEventLabel,
+  visitOverlapsPeriod,
   type ExperienceTab,
 } from '@/lib/visitEvent'
 import { cn, formatDate } from '@/lib/utils'
@@ -37,7 +39,12 @@ type ViewMode = 'table' | 'cards' | 'status'
 const EXPERIENCE_TABS: Array<{ value: ExperienceTab; label: string; icon: typeof MapPin }> = [
   { value: 'visitas', label: 'Visitas', icon: MapPin },
   { value: 'eventos', label: 'Eventos', icon: CalendarRange },
+  { value: 'periodo', label: 'Período', icon: CalendarClock },
 ]
+
+function isExperienceTab(value: string | null): value is ExperienceTab {
+  return value === 'visitas' || value === 'eventos' || value === 'periodo'
+}
 
 const STATUS_COLUMNS: Array<{ value: VisitStatus; label: string }> = [
   { value: 'planejamento', label: 'Planejamento' },
@@ -56,17 +63,39 @@ export function VisitsPage() {
   const { user, isPlatformAdmin, role, canWrite } = useAuth()
   const { activeOrgId } = useOrg()
   const { openNew } = useVisitDialog()
+  const [searchParams] = useSearchParams()
+  const { range } = useCyclePeriod()
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
   const [experienceTab, setExperienceTab] = useState<ExperienceTab>(() => {
+    const fromUrl = searchParams.get('tab')
+    if (isExperienceTab(fromUrl)) return fromUrl
     const saved = localStorage.getItem('visits-experience-tab')
-    return saved === 'eventos' ? 'eventos' : 'visitas'
+    return isExperienceTab(saved) ? saved : 'visitas'
   })
   const [statusFilter, setStatusFilter] = useState<string>('todos')
   const [eventKindFilter, setEventKindFilter] = useState<string>('todos')
   const [stateFilter, setStateFilter] = useState<string>('todos')
-  const [startDateFilter, setStartDateFilter] = useState('')
-  const [endDateFilter, setEndDateFilter] = useState('')
+  const [startDateFilter, setStartDateFilter] = useState(() => {
+    const fromUrl = searchParams.get('de')
+    if (fromUrl) return fromUrl
+    const tab = searchParams.get('tab')
+    const saved = localStorage.getItem('visits-experience-tab')
+    if (tab === 'periodo' || (!isExperienceTab(tab) && saved === 'periodo')) {
+      return range.startIso
+    }
+    return ''
+  })
+  const [endDateFilter, setEndDateFilter] = useState(() => {
+    const fromUrl = searchParams.get('ate')
+    if (fromUrl) return fromUrl
+    const tab = searchParams.get('tab')
+    const saved = localStorage.getItem('visits-experience-tab')
+    if (tab === 'periodo' || (!isExperienceTab(tab) && saved === 'periodo')) {
+      return range.endIso
+    }
+    return ''
+  })
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('visits-view-mode')
     return saved === 'table' || saved === 'cards' || saved === 'status' ? saved : 'table'
@@ -77,11 +106,37 @@ export function VisitsPage() {
     localStorage.setItem('visits-view-mode', mode)
   }
 
+  const applyPeriodRange = useCallback(
+    (startIso: string, endIso: string) => {
+      setStartDateFilter(startIso)
+      setEndDateFilter(endIso)
+    },
+    [],
+  )
+
   const changeExperienceTab = (tab: ExperienceTab) => {
     setExperienceTab(tab)
     setEventKindFilter('todos')
     localStorage.setItem('visits-experience-tab', tab)
+    if (tab === 'periodo' && (!startDateFilter || !endDateFilter)) {
+      applyPeriodRange(range.startIso, range.endIso)
+    }
   }
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('tab')
+    if (isExperienceTab(fromUrl)) {
+      setExperienceTab(fromUrl)
+      localStorage.setItem('visits-experience-tab', fromUrl)
+    }
+    const start = searchParams.get('de')
+    const end = searchParams.get('ate')
+    if (start) setStartDateFilter(start)
+    if (end) setEndDateFilter(end)
+    if (fromUrl === 'periodo' && !start && !end) {
+      applyPeriodRange(range.startIso, range.endIso)
+    }
+  }, [applyPeriodRange, range.endIso, range.startIso, searchParams])
 
   const tabKinds = kindsForExperienceTab(experienceTab)
   const openCreate = () => openNew(experienceTab === 'eventos' ? 'evento' : undefined)
@@ -108,9 +163,11 @@ export function VisitsPage() {
 
     return visits.filter((visit) => {
       const tabOk =
-        experienceTab === 'eventos'
-          ? visit.eventKind === 'evento'
-          : visit.eventKind !== 'evento'
+        experienceTab === 'periodo'
+          ? true
+          : experienceTab === 'eventos'
+            ? visit.eventKind === 'evento'
+            : visit.eventKind !== 'evento'
       const statusOk =
         statusFilter === 'todos' || visit.status === (statusFilter as VisitStatus)
       const eventKindOk =
@@ -121,12 +178,15 @@ export function VisitsPage() {
       const stateOk = stateFilter === 'todos' || visit.state === stateFilter
       const visitStart = dateValue(visit.startDate)
       const visitEnd = dateValue(visit.endDate, true)
-      const startsWithinPeriod =
-        periodStart === null || (visitStart !== null && visitStart >= periodStart)
-      const endsWithinPeriod =
-        periodEnd === null || (visitEnd !== null && visitEnd <= periodEnd)
+      const periodOk =
+        experienceTab === 'periodo'
+          ? !startDateFilter || !endDateFilter
+            ? true
+            : visitOverlapsPeriod(visit, startDateFilter, endDateFilter)
+          : (periodStart === null || (visitStart !== null && visitStart >= periodStart)) &&
+            (periodEnd === null || (visitEnd !== null && visitEnd <= periodEnd))
 
-      return statusOk && eventKindOk && stateOk && startsWithinPeriod && endsWithinPeriod
+      return tabOk && statusOk && eventKindOk && stateOk && periodOk
     })
   }, [visits, experienceTab, statusFilter, eventKindFilter, stateFilter, startDateFilter, endDateFilter])
 
@@ -134,7 +194,11 @@ export function VisitsPage() {
     <div className="animate-fade-in space-y-5">
       <PageHeader
         title="Experiências"
-        description={`${filtered.length} de ${visits.length} experiência${visits.length === 1 ? '' : 's'}`}
+        description={
+          experienceTab === 'periodo'
+            ? `${filtered.length} experiência${filtered.length === 1 ? '' : 's'} no período${startDateFilter && endDateFilter ? ` · ${formatDate(startDateFilter)} a ${formatDate(endDateFilter)}` : ''}`
+            : `${filtered.length} de ${visits.length} experiência${visits.length === 1 ? '' : 's'}`
+        }
         actions={
           canWrite ? (
           <Button onClick={openCreate}>
@@ -148,7 +212,7 @@ export function VisitsPage() {
       <div
         className="flex h-10 w-fit items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1"
         role="tablist"
-        aria-label="Tipo de experiência"
+        aria-label="Visualização de experiências"
       >
         {EXPERIENCE_TABS.map(({ value, label, icon: Icon }) => (
           <Button
@@ -175,7 +239,12 @@ export function VisitsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 pt-0 lg:flex-row lg:items-end lg:gap-3">
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div
+            className={cn(
+              'grid flex-1 gap-3 sm:grid-cols-2',
+              experienceTab === 'periodo' ? 'xl:grid-cols-6' : 'xl:grid-cols-5',
+            )}
+          >
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Status</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -204,7 +273,7 @@ export function VisitsPage() {
                       {visitEventKindLabel(kind)}
                     </SelectItem>
                   ))}
-                  {experienceTab === 'visitas' ? (
+                  {experienceTab !== 'eventos' ? (
                     <SelectItem value="_none">Não classificado</SelectItem>
                   ) : null}
                 </SelectContent>
@@ -228,7 +297,7 @@ export function VisitsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="visits-start-date" className="text-xs text-muted-foreground">
-                Data de início
+                {experienceTab === 'periodo' ? 'Período de' : 'Data de início'}
               </Label>
               <Input
                 id="visits-start-date"
@@ -240,7 +309,7 @@ export function VisitsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="visits-end-date" className="text-xs text-muted-foreground">
-                Data final
+                {experienceTab === 'periodo' ? 'Período até' : 'Data final'}
               </Label>
               <Input
                 id="visits-end-date"
@@ -250,6 +319,18 @@ export function VisitsPage() {
                 onChange={(event) => setEndDateFilter(event.target.value)}
               />
             </div>
+            {experienceTab === 'periodo' ? (
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full"
+                  onClick={() => applyPeriodRange(range.startIso, range.endIso)}
+                >
+                  Ciclo atual
+                </Button>
+              </div>
+            ) : null}
           </div>
           <div
             className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1 lg:ml-auto"
@@ -289,8 +370,16 @@ export function VisitsPage() {
             <div className="p-5">
               <EmptyState
                 icon={MapPin}
-                title="Nenhuma experiência encontrada"
-                description="Ajuste os filtros ou crie uma nova experiência."
+                title={
+                  experienceTab === 'periodo'
+                    ? 'Nenhuma experiência no período'
+                    : 'Nenhuma experiência encontrada'
+                }
+                description={
+                  experienceTab === 'periodo'
+                    ? 'Ajuste as datas do período ou crie uma nova experiência.'
+                    : 'Ajuste os filtros ou crie uma nova experiência.'
+                }
                 action={canWrite ? (
                   <Button onClick={openCreate}>
                     <Plus className="h-4 w-4" />

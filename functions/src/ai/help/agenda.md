@@ -18,7 +18,7 @@ A Programação mostra a agenda detalhada de **uma visita** (lista ou semana). S
 2. Confira o preview das atividades extraídas.
 3. Se o parser local falhar ou o layout for incomum, use **Interpretar com IA**.
 4. Revise avisos (conflitos, linhas ignoradas) e clique em **Salvar programação**.
-O arquivo não fica armazenado no sistema.
+Ao confirmar, as atividades vão para a agenda e o arquivo original fica nos documentos da visita (categoria Programação).
 
 ## Google Calendar
 Em **Configurações**, conecte a conta Google. Depois sincronize atividades individuais ou a visita inteira na Programação.

@@ -24,6 +24,60 @@ const ALLOWED_TYPES = [
   'image/webp',
 ]
 
+const SPREADSHEET_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-excel.sheet.macroEnabled.12',
+  'text/csv',
+  'application/csv',
+  'text/plain',
+  'application/vnd.oasis.opendocument.spreadsheet',
+]
+
+function inferContentType(file: File): string {
+  if (file.type) return file.type
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.xlsx')) return SPREADSHEET_TYPES[0]
+  if (name.endsWith('.xlsm')) return 'application/vnd.ms-excel.sheet.macroEnabled.12'
+  if (name.endsWith('.xls')) return 'application/vnd.ms-excel'
+  if (name.endsWith('.csv')) return 'text/csv'
+  if (name.endsWith('.ods')) return 'application/vnd.oasis.opendocument.spreadsheet'
+  return file.type
+}
+
+function isSpreadsheetFile(file: File): boolean {
+  const type = inferContentType(file)
+  const name = file.name.toLowerCase()
+  return (
+    SPREADSHEET_TYPES.includes(type) ||
+    /\.(xlsx|xlsm|xls|csv|ods)$/.test(name)
+  )
+}
+
+async function persistVisitFile(
+  ownerId: string,
+  visitId: string,
+  file: File,
+  category: DocumentCategory,
+): Promise<string> {
+  const docRef = doc(col)
+  const storagePath = `visits/${visitId}/${docRef.id}/${file.name}`
+  const contentType = inferContentType(file)
+  await uploadBytes(ref(storage, storagePath), file, { contentType })
+  await setDoc(docRef, {
+    visitId,
+    name: file.name,
+    category,
+    storagePath,
+    contentType,
+    size: file.size,
+    ownerId,
+    isDeleted: false,
+    createdAt: serverTimestamp(),
+  })
+  return docRef.id
+}
+
 function mapDocument(id: string, data: Record<string, unknown>): VisitDocument {
   return {
     id,
@@ -78,25 +132,23 @@ export async function uploadDocument(
     throw new Error('Arquivo muito grande. Máximo 10 MB.')
   }
 
-  const docRef = doc(col)
-  const storagePath = `visits/${visitId}/${docRef.id}/${file.name}`
-  const storageRef = ref(storage, storagePath)
+  return persistVisitFile(ownerId, visitId, file, category)
+}
 
-  await uploadBytes(storageRef, file, { contentType: file.type })
+/** Arquivo-fonte da importação de programação (Excel/CSV). */
+export async function uploadProgrammingSource(
+  ownerId: string,
+  visitId: string,
+  file: File,
+): Promise<string> {
+  if (!isSpreadsheetFile(file)) {
+    throw new Error('Tipo de arquivo não permitido. Use XLSX, XLS ou CSV.')
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('Arquivo muito grande. Máximo 10 MB.')
+  }
 
-  await setDoc(docRef, {
-    visitId,
-    name: file.name,
-    category,
-    storagePath,
-    contentType: file.type,
-    size: file.size,
-    ownerId,
-    isDeleted: false,
-    createdAt: serverTimestamp(),
-  })
-
-  return docRef.id
+  return persistVisitFile(ownerId, visitId, file, 'programacao')
 }
 
 export async function getDocumentDownloadUrl(storagePath: string): Promise<string> {

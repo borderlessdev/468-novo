@@ -127,8 +127,13 @@ const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
   { value: 'boarding', label: 'Boarding pass' },
   { value: 'briefing', label: 'Briefing' },
   { value: 'comprovante', label: 'Comprovante' },
+  { value: 'programacao', label: 'Programação' },
   { value: 'outro', label: 'Outro' },
 ]
+
+function documentCategoryLabel(category: DocumentCategory) {
+  return DOCUMENT_CATEGORIES.find((item) => item.value === category)?.label ?? category
+}
 
 function GuestStatusBadge({ link }: { link: VisitGuestLink }) {
   if (link.confirmationStatus === 'confirmed') {
@@ -1663,7 +1668,9 @@ export function VisitDetailPage() {
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">
                           <p className="truncate font-medium">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">{doc.category}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {documentCategoryLabel(doc.category)}
+                          </p>
                         </div>
                       </div>
                       <div className="flex gap-1">

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   FolderKanban,
   LayoutDashboard,
@@ -16,12 +16,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 
 const MASTER_NAV = [
-  { to: '/empresas', label: 'Visão geral', icon: LayoutDashboard, end: true },
-  { to: '/empresas#pastas', label: 'Pastas de clientes', icon: FolderKanban, end: false },
+  { to: '/empresas', label: 'Visão geral', icon: LayoutDashboard },
+  { to: '/empresas#pastas', label: 'Pastas de clientes', icon: FolderKanban },
 ] as const
 
 export function MasterShell() {
   const { profile } = useAuth()
+  const location = useLocation()
+  const onEmpresasRoot =
+    location.pathname === '/empresas' || location.pathname === '/empresas/'
+  const pastasSelected = onEmpresasRoot && location.hash === '#pastas'
+  const overviewSelected = onEmpresasRoot && location.hash !== '#pastas'
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
@@ -137,33 +142,44 @@ export function MasterShell() {
           {MASTER_NAV.map((item) => {
             const Icon = item.icon
             return (
-              <NavLink
+              <Link
                 key={item.label}
-                to={item.to}
-                end={item.end}
+                to={
+                  item.to.includes('#pastas')
+                    ? { pathname: '/empresas', hash: 'pastas' }
+                    : { pathname: '/empresas', hash: '' }
+                }
+                aria-current={
+                  (item.to.includes('#pastas') ? pastasSelected : overviewSelected)
+                    ? 'page'
+                    : undefined
+                }
                 onClick={() => {
                   if (collapsed) setCollapsed(false)
                   setMobileOpen(false)
+                  window.requestAnimationFrame(() => {
+                    if (item.to.includes('#pastas')) {
+                      document.getElementById('pastas')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      })
+                      return
+                    }
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  })
                 }}
-                className={({ isActive }) => {
-                  const onPastasHash =
-                    item.to.includes('#pastas') &&
-                    typeof window !== 'undefined' &&
-                    window.location.hash === '#pastas'
-                  const active = item.end ? isActive : onPastasHash || (isActive && !item.end)
-                  return cn(
-                    'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                    collapsed && 'justify-center px-2',
-                    active
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
-                  )
-                }}
+                className={cn(
+                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                  collapsed && 'justify-center px-2',
+                  (item.to.includes('#pastas') ? pastasSelected : overviewSelected)
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                )}
                 title={item.label}
               >
                 <Icon className="h-4 w-4 shrink-0 text-inherit" />
                 {!collapsed ? <span className="truncate">{item.label}</span> : null}
-              </NavLink>
+              </Link>
             )
           })}
         </nav>

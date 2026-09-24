@@ -34,6 +34,7 @@ import { activitySchema, type ActivityInput } from '@/lib/validations'
 import { activitiesOverlap, formatDate } from '@/lib/utils'
 import { parseProgrammingWorkbook, workbookToCsvForAi, type ImportedActivity } from '@/lib/programmingImport'
 import { mapProgrammingImportWithAi } from '@/services/ai'
+import { uploadProgrammingSource } from '@/services/documents'
 import { listVisits } from '@/services/visits'
 import {
   createActivity,
@@ -73,6 +74,7 @@ export function AgendaPage() {
   const [importWarnings, setImportWarnings] = useState<string[]>([])
   const [importAiBusy, setImportAiBusy] = useState(false)
   const [lastImportWorkbook, setLastImportWorkbook] = useState<XLSX.WorkBook | null>(null)
+  const [lastImportFile, setLastImportFile] = useState<File | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const deleteDialog = useConfirmDelete<{ id: string; name: string }>()
   const [googleConnected, setGoogleConnected] = useState(false)
@@ -385,6 +387,7 @@ export function AgendaPage() {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
       setLastImportWorkbook(workbook)
+      setLastImportFile(file)
       setImportFileName(file.name)
       setImportWarnings([])
       const fallbackYear = Number(selectedVisit?.startDate.slice(0, 4)) || new Date().getFullYear()
@@ -415,12 +418,31 @@ export function AgendaPage() {
         user.uid,
         importPreview.map((activity) => ({ visitId, ...activity })),
       )
-      toast.success(`${importPreview.length} atividade(s) salva(s)`)
+      let storedFile = false
+      if (lastImportFile) {
+        try {
+          await uploadProgrammingSource(user.uid, visitId, lastImportFile)
+          storedFile = true
+        } catch (error) {
+          console.error(error)
+          toast.warning(
+            error instanceof Error
+              ? `${importPreview.length} atividade(s) salva(s), mas o arquivo não foi armazenado: ${error.message}`
+              : `${importPreview.length} atividade(s) salva(s), mas o arquivo não foi armazenado.`,
+          )
+        }
+      }
+      if (storedFile) {
+        toast.success(`${importPreview.length} atividade(s) salva(s) e arquivo armazenado`)
+      } else if (!lastImportFile) {
+        toast.success(`${importPreview.length} atividade(s) salva(s)`)
+      }
       setImportOpen(false)
       setImportPreview([])
       setImportWarnings([])
       setImportFileName('')
       setLastImportWorkbook(null)
+      setLastImportFile(null)
       await loadActivities()
       // A criação em lote não devolve os ids: reenviamos a programação inteira da visita.
       if (googleConnected) await handleSyncVisitToGoogle()
@@ -718,7 +740,8 @@ export function AgendaPage() {
             <div className="rounded-lg bg-muted/60 px-4 py-3 text-sm">
               <p className="font-medium">{importFileName}</p>
               <p className="text-muted-foreground">
-                {importPreview.length} atividade(s) encontrada(s). O arquivo não será armazenado.
+                {importPreview.length} atividade(s) encontrada(s). Ao confirmar, o arquivo
+                original fica salvo nos documentos da visita.
               </p>
             </div>
 

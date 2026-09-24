@@ -18,7 +18,7 @@ export const VISIT_VIP_SUBTYPES: VisitVipSubtype[] = [
 
 export const VISIT_EVENT_SCOPES: VisitEventScope[] = ['interno', 'externo']
 
-export type ExperienceTab = 'visitas' | 'eventos'
+export type ExperienceTab = 'visitas' | 'eventos' | 'periodo'
 
 export const VISIT_EXPERIENCE_KINDS: VisitEventKind[] = [
   'visita_vip',
@@ -27,7 +27,28 @@ export const VISIT_EXPERIENCE_KINDS: VisitEventKind[] = [
 ]
 
 export function kindsForExperienceTab(tab: ExperienceTab): VisitEventKind[] {
-  return tab === 'eventos' ? ['evento'] : VISIT_EXPERIENCE_KINDS
+  if (tab === 'eventos') return ['evento']
+  if (tab === 'periodo') return VISIT_EVENT_KINDS
+  return VISIT_EXPERIENCE_KINDS
+}
+
+/** Experiência cruza o intervalo (início/fim inclusivos, ISO yyyy-MM-dd). */
+export function visitOverlapsPeriod(
+  visit: Pick<Visit, 'startDate' | 'endDate'>,
+  startIso: string,
+  endIso: string,
+) {
+  const visitEnd = visit.endDate || visit.startDate
+  return Boolean(visit.startDate && visitEnd >= startIso && visit.startDate <= endIso)
+}
+
+export function visitsPeriodHref(startIso: string, endIso: string) {
+  const params = new URLSearchParams({
+    tab: 'periodo',
+    de: startIso,
+    ate: endIso,
+  })
+  return `/visitas?${params.toString()}`
 }
 
 export function visitEventKindLabel(kind?: VisitEventKind | null): string {

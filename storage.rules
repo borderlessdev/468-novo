@@ -55,7 +55,9 @@ service firebase.storage {
       allow write: if isSignedIn()
         && canWriteVisit(visitId)
         && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('application/pdf|image/.*');
+        && request.resource.contentType.matches(
+          'application/pdf|image/.*|text/csv|application/csv|text/plain|application/vnd\\.ms-excel.*|application/vnd\\.openxmlformats-officedocument\\.spreadsheetml\\.sheet|application/vnd\\.oasis\\.opendocument\\.spreadsheet'
+        );
 
       allow delete: if isSignedIn() && canWriteVisit(visitId);
     }

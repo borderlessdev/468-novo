@@ -222,7 +222,7 @@ export const playbookItemSchema = z.object({
   ),
   location: z.string().optional(),
   documentCategory: z
-    .enum(['contrato', 'boarding', 'briefing', 'comprovante', 'outro'])
+    .enum(['contrato', 'boarding', 'briefing', 'comprovante', 'programacao', 'outro'])
     .optional(),
   assigneeName: z.string().optional(),
   order: z.coerce.number().int(),

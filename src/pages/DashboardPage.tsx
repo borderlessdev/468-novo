@@ -24,6 +24,8 @@ import {
   VISIT_EVENT_KINDS,
   visitEventKindLabel,
   visitEventLabel,
+  visitOverlapsPeriod,
+  visitsPeriodHref,
 } from '@/lib/visitEvent'
 import { listVisits } from '@/services/visits'
 import { listPendingTasks } from '@/services/tasks'
@@ -68,7 +70,7 @@ function KpiValue({
   return (
     <button
       type="button"
-      aria-label={`${value}. Exibir visitas no painel Próximas visitas`}
+      aria-label={`${value}. Exibir experiências no painel do ciclo`}
       onMouseEnter={() => onPreview?.(records)}
       onFocus={() => onPreview?.(records)}
       onClick={() => onPreview?.(records)}
@@ -133,9 +135,7 @@ export function DashboardPage() {
   }, [load])
 
   const cycleVisits = useMemo(() => {
-    return visits.filter(
-      (v) => v.startDate >= range.startIso && v.startDate <= range.endIso,
-    )
+    return visits.filter((v) => visitOverlapsPeriod(v, range.startIso, range.endIso))
   }, [visits, range.endIso, range.startIso])
 
   const cycleSpend = useMemo(() => {
@@ -195,9 +195,8 @@ export function DashboardPage() {
         name: visit.title,
         href: `/visitas/${visit.id}`,
       }))
-  const upcoming = [...cycleVisits]
-    .sort((a, b) => a.startDate.localeCompare(b.startDate))
-    .slice(0, 5)
+  const upcoming = [...cycleVisits].sort((a, b) => a.startDate.localeCompare(b.startDate))
+  const periodHref = visitsPeriodHref(range.startIso, range.endIso)
 
   const visitById = useMemo(() => new Map(visits.map((v) => [v.id, v])), [visits])
   const displayedVisits = previewRecordIds
@@ -215,6 +214,14 @@ export function DashboardPage() {
   }
 
   const kpis = [
+    {
+      label: 'Experiências do ciclo',
+      value: String(cycleVisits.length),
+      records: toKpiRecords(cycleVisits),
+      hint: `Todas as experiências · ciclo ${cycleLabel}`,
+      icon: CalendarDays,
+      tone: 'bg-brand/15 text-brand-foreground dark:text-brand',
+    },
     ...VISIT_EVENT_KINDS.map((kind) => ({
       label: visitEventKindLabel(kind),
       value: String(eventKindCounts[kind].length),
@@ -292,7 +299,7 @@ export function DashboardPage() {
 
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: isClient ? 8 : 9 }).map((_, i) => (
+          {Array.from({ length: isClient ? 9 : 10 }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
         </div>
@@ -332,12 +339,12 @@ export function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <SectionCardHeader
-            title={previewRecordIds ? 'Eventos selecionados' : 'Próximos eventos'}
+            title={previewRecordIds ? 'Eventos selecionados' : 'Experiências do ciclo'}
             icon={MapPin}
             count={loading ? undefined : displayedVisits.length}
             action={
               <Link
-                to="/visitas"
+                to={periodHref}
                 className="text-xs font-medium text-primary underline-offset-4 hover:underline"
               >
                 Ver todos

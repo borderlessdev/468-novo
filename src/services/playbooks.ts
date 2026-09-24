@@ -28,6 +28,7 @@ const DOCUMENT_CATEGORIES: DocumentCategory[] = [
   'boarding',
   'briefing',
   'comprovante',
+  'programacao',
   'outro',
 ]
 

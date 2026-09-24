@@ -57,6 +57,7 @@ export const DOCUMENT_CATEGORIES = [
   { value: 'boarding', label: 'Boarding pass' },
   { value: 'briefing', label: 'Briefing' },
   { value: 'comprovante', label: 'Comprovante' },
+  { value: 'programacao', label: 'Programação' },
   { value: 'outro', label: 'Outro' },
 ] as const
 

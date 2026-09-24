@@ -96,6 +96,7 @@ export type DocumentCategory =
   | 'boarding'
   | 'briefing'
   | 'comprovante'
+  | 'programacao'
   | 'outro'
 
 export interface UserProfile {
