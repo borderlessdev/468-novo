@@ -45,13 +45,13 @@ function truncate(text: string, max: number): string {
 
 // --- Help assistant ---------------------------------------------------------
 
-const HELP_SYSTEM = `Você é o assistente de ajuda do Promover Experience (app de gestão de visitas institucionais).
-Responda SEMPRE em português do Brasil, de forma curta e objetiva (no máximo 8 linhas ou uma lista numerada).
-Explique o caminho de UX: menu → tela → botões/passos.
-Use APENAS o manual abaixo e o bloco de papel do usuário. Se a pergunta não estiver coberta, diga que não sabe e sugira onde olhar no app (ex.: Configurações).
-Não invente botões, rotas ou recursos que não estejam no manual.
-Não execute ações; apenas oriente.
-Respeite SEMPRE o papel do usuário atual: se a ação for só de Admin Master ou Admin da empresa, diga isso de forma clara e diga a quem pedir.`
+const HELP_SYSTEM = `Você é o assistente de ajuda do Promover Experience (gestão de experiências: visitas VIP, comunidades e eventos).
+Sua função é ENSINAR a usar o sistema: quem pode fazer, menu → tela → botão, e o que acontece depois.
+Responda SEMPRE em português do Brasil. Seja claro (até ~12 linhas ou lista numerada). Comece pelo caminho na interface.
+Use APENAS o manual abaixo e o bloco de papel do usuário. Se não estiver no manual, diga que não sabe e indique Configurações, Experiências ou o Admin da empresa.
+Não invente botões, rotas ou recursos. Não execute ações; só oriente.
+Respeite SEMPRE o papel do usuário: se a ação for só de Admin Master ou Admin da empresa, diga isso e a quem pedir.
+Perguntas típicas (responda com o passo a passo do manual): logo/whitelabel, convites, aba Período, importar programação, portal do visitante, playbooks, ciclo do dashboard.`
 
 function mockHelpAnswer(
   message: string,
@@ -65,10 +65,19 @@ function mockHelpAnswer(
     roleLabel.includes('Cliente') ||
     roleLabel.includes('Usuário operacional')
 
-  if (isStaffLike) {
-    if (q.includes('whitelabel') || q.includes('logo') || q.includes('marca')) {
-      return 'Só o **Admin da empresa** (Configurações → Whitelabel) ou o **Admin Master** (Pastas de clientes) pode alterar a logo. Peça a um deles — você herda a marca automaticamente.'
+  if (q.includes('whitelabel') || q.includes('logo') || q.includes('marca')) {
+    if (isStaffLike) {
+      return 'Só o **Admin da empresa** (Configurações → Whitelabel da empresa → Enviar logo) ou o **Admin Master** (Pastas de clientes → abrir a pasta → Whitelabel) pode alterar a logo. Peça a um deles — você herda a marca no menu, no header e no portal.'
     }
+    return [
+      'Para alterar a logo white-label da empresa:',
+      '1. **Admin da empresa:** menu **Configurações** → card **Whitelabel da empresa** → **Enviar logo** (JPG, PNG, WebP ou GIF).',
+      '2. **Admin Master:** **Pastas de clientes** → **Abrir pasta** do cliente → **Whitelabel** → **Enviar logo**.',
+      'A logo aparece no menu, no header e no portal do visitante. **Remover** volta à marca Vale padrão.',
+    ].join('\n')
+  }
+
+  if (isStaffLike) {
     if (q.includes('convid') || q.includes('usuario') || q.includes('usuário')) {
       return 'Convidar ou remover usuários é só do **Admin da empresa** em Configurações → Usuários da empresa (ou do Admin Master). Você não tem essa permissão.'
     }
@@ -101,6 +110,14 @@ function mockHelpAnswer(
   }
   if (q.includes('calendar') || q.includes('google')) {
     return 'Em **Configurações**, conecte o Google Calendar. Depois sincronize na **Programação**.'
+  }
+  if (q.includes('período') || q.includes('periodo') || q.includes('ciclo')) {
+    return [
+      'Para ver todas as experiências de um intervalo:',
+      '1. Menu **Experiências** → aba **Período**.',
+      '2. Ajuste as datas ou clique em **Ciclo atual** (dia 20–19).',
+      'No Dashboard, **Ver todos** abre essa aba; clicar num KPI filtra o painel.',
+    ].join('\n')
   }
   return [
     'Posso ajudar com o caminho no app (agenda, visitas, playbooks, portal, financeiro…).',

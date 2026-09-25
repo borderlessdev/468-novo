@@ -10,11 +10,12 @@ import {
 export type { StoredHelpMessage }
 
 export const HELP_SUGGESTIONS = [
+  'Como altero a logo whitelabel da empresa?',
   'Como registro um compromisso na agenda?',
   'Como importo a programação de um arquivo?',
   'Como gero o link do portal do visitante?',
+  'Como vejo todas as experiências de um período?',
   'Como conecto o Google Calendar?',
-  'Onde crio e aplico um playbook?',
 ] as const
 
 function createId() {

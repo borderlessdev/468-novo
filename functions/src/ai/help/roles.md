@@ -29,6 +29,9 @@ Use este guia para saber o que cada tipo de usuário pode fazer no app.
 - Sem escrita operacional (não cria visitas, não gera link do portal, não edita financeiro).
 - Se perguntar como cadastrar visita/portal/logo: explicar que é papel da equipe Promover / Admin da empresa.
 
-## Whitelabel
-- Só **Admin Master** (pasta em `/empresas/:id`) ou **Admin da empresa** (Configurações → Whitelabel).
+## Whitelabel (logo da empresa)
+- **Admin da empresa:** Configurações → **Whitelabel da empresa** → **Enviar logo**.
+- **Admin Master:** Pastas de clientes → **Abrir pasta** → **Whitelabel** → **Enviar logo**.
+- Formatos: JPG, PNG, WebP ou GIF. **Remover** volta à marca Vale.
+- A logo aparece no menu, no header e no portal do visitante.
 - Funcionários e clientes **herdam** a logo; não há tela para eles alterarem.
