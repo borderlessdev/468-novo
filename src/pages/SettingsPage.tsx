@@ -17,22 +17,12 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { SafeLogo } from '@/components/SafeLogo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canManageOrgUsers, canManageWhitelabel } from '@/lib/access'
-import { orgRoleLabel } from '@/lib/org'
 import { useTheme, type Theme } from '@/contexts/ThemeContext'
-import { mergeModulePermissions } from '@/lib/access'
 import {
   mergeNotificationPreferences,
   NOTIFICATION_PREFERENCE_ITEMS,
@@ -46,32 +36,12 @@ import {
   startGoogleOAuth,
   type CalendarStatuses,
 } from '@/services/calendar'
-import { createInvite, cancelInvite, listPendingInvitesByOrg } from '@/services/invites'
-import {
-  countOrganizationSeats,
-  countPendingInvites,
-  listOrganizationMembers,
-  removeOrganizationMember,
-} from '@/services/organizations'
 import { listEmailLogs } from '@/services/emailLogs'
 import {
   removeOrganizationLogo,
   uploadOrganizationLogo,
 } from '@/services/orgLogo'
-import {
-  listUsers,
-  updateUserModulePermissions,
-} from '@/services/users'
-import type {
-  EmailLog,
-  Invite,
-  InviteRole,
-  ModulePermissions,
-  OrganizationMember,
-  UserProfile,
-} from '@/types'
-import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
-import { Badge } from '@/components/ui/badge'
+import type { EmailLog } from '@/types'
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Claro', icon: Sun },
@@ -133,21 +103,11 @@ export function SettingsPage() {
     resetPassword,
     isClient,
     isAdmin,
-    isPlatformAdmin,
     user,
   } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin, refreshOrg } = useOrg()
   const { theme, setTheme } = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<InviteRole>('team')
-  const [inviteDepartment, setInviteDepartment] = useState('')
-  const [orgMembers, setOrgMembers] = useState<OrganizationMember[]>([])
-  const [pendingInvites, setPendingInvites] = useState<Invite[]>([])
-  const [seatUsage, setSeatUsage] = useState({ members: 0, pending: 0 })
-  const [inviting, setInviting] = useState(false)
-  const [lastInviteLink, setLastInviteLink] = useState('')
-  const [users, setUsers] = useState<UserProfile[]>([])
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([])
   const [sendingReset, setSendingReset] = useState(false)
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(
@@ -158,7 +118,6 @@ export function SettingsPage() {
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [calendarBusy, setCalendarBusy] = useState(false)
   const [logoBusy, setLogoBusy] = useState(false)
-  const removeMemberDialog = useConfirmDelete<OrganizationMember>()
 
   // profile editing moved to Profile page
 
@@ -168,28 +127,8 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (!user) return
-    if (isAdmin) {
-      void listUsers(true).then(setUsers).catch(console.error)
-    }
     void listEmailLogs(user.uid, isAdmin).then(setEmailLogs).catch(console.error)
   }, [user, isAdmin])
-
-  const reloadOrgUsers = useCallback(async () => {
-    if (!user || !activeOrgId || !canManageOrgUsers(isAdmin, isOrgAdmin)) return
-    const [members, membersCount, pendingCount, invites] = await Promise.all([
-      listOrganizationMembers(activeOrgId),
-      countOrganizationSeats(activeOrgId),
-      countPendingInvites(activeOrgId),
-      listPendingInvitesByOrg(activeOrgId),
-    ])
-    setOrgMembers(members)
-    setSeatUsage({ members: membersCount, pending: pendingCount })
-    setPendingInvites(invites)
-  }, [user, activeOrgId, isAdmin, isOrgAdmin])
-
-  useEffect(() => {
-    void reloadOrgUsers().catch(console.error)
-  }, [reloadOrgUsers, lastInviteLink])
 
   // As credenciais GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET moram em functions/.env
   // (ou no Secret Manager). Sem elas as callables respondem erro tratado e o card
@@ -251,48 +190,6 @@ export function SettingsPage() {
     }
   }
 
-  const handleInvite = async () => {
-    if (!user || !activeOrgId || !inviteEmail.trim()) return
-    setInviting(true)
-    try {
-      const created = await createInvite({
-        email: inviteEmail,
-        role: inviteRole,
-        createdBy: user.uid,
-        orgId: activeOrgId,
-        department: inviteDepartment.trim() || undefined,
-      })
-      setLastInviteLink(created.link)
-      toast.success(
-        created.mailtoOpened
-          ? 'Convite criado — cliente de e-mail aberto'
-          : 'Convite criado — copie o link abaixo',
-      )
-      setInviteEmail('')
-      setInviteDepartment('')
-      setEmailLogs(await listEmailLogs(user.uid, isAdmin))
-      await reloadOrgUsers()
-    } catch (error) {
-      console.error(error)
-      toast.error(
-        error instanceof Error ? error.message : 'Não foi possível convidar',
-      )
-    } finally {
-      setInviting(false)
-    }
-  }
-
-  const handleCancelInvite = async (inviteId: string) => {
-    try {
-      await cancelInvite(inviteId)
-      toast.success('Convite cancelado — vaga liberada')
-      await reloadOrgUsers()
-    } catch (error) {
-      console.error(error)
-      toast.error('Não foi possível cancelar o convite')
-    }
-  }
-
   const handleLogoUpload = async (file: File | null) => {
     if (!activeOrgId || !file) return
     setLogoBusy(true)
@@ -322,45 +219,6 @@ export function SettingsPage() {
       toast.error('Não foi possível remover a logo')
     } finally {
       setLogoBusy(false)
-    }
-  }
-
-  const handleRemoveMember = () => {
-    void removeMemberDialog.confirm(async (member) => {
-      try {
-        await removeOrganizationMember(member.orgId, member.uid)
-        toast.success('Usuário removido da empresa')
-        await reloadOrgUsers()
-      } catch (error) {
-        console.error(error)
-        toast.error(
-          error instanceof Error ? error.message : 'Não foi possível remover o usuário',
-        )
-        throw error
-      }
-    })
-  }
-
-  const handleModuleToggle = async (
-    uid: string,
-    key: keyof ModulePermissions,
-    checked: boolean,
-  ) => {
-    const target = users.find((u) => u.uid === uid)
-    if (!target) return
-    const next = {
-      ...mergeModulePermissions(target.modulePermissions),
-      [key]: checked,
-    }
-    try {
-      await updateUserModulePermissions(uid, next)
-      setUsers((prev) =>
-        prev.map((u) => (u.uid === uid ? { ...u, modulePermissions: next } : u)),
-      )
-      toast.success('Permissões atualizadas')
-    } catch (error) {
-      console.error(error)
-      toast.error('Falha ao atualizar permissões')
     }
   }
 
@@ -698,221 +556,14 @@ export function SettingsPage() {
               Usuários da empresa
             </CardTitle>
             <CardDescription>
-              {activeOrg
-                ? `${seatUsage.members + seatUsage.pending}/${activeOrg.maxUsers} acessos utilizados (${seatUsage.members} ativos, ${seatUsage.pending} convites pendentes). Convide funcionários, cancele convites não usados ou remova acessos.`
-                : 'Gerencie convites e membros da empresa.'}
+              Convites de funcionários e permissões de módulos ficam no menu{' '}
+              <strong>Usuários</strong> da barra lateral.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {orgMembers.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Membros ativos</p>
-                {orgMembers.map((member) => {
-                  const isSelf = user?.uid === member.uid
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{member.name}</p>
-                        <p className="text-xs text-muted-foreground">{member.email}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          {orgRoleLabel(member.orgRole)}
-                          {member.department ? ` · ${member.department}` : ''}
-                        </span>
-                        {!isSelf ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => removeMemberDialog.requestDelete(member)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Remover
-                          </Button>
-                        ) : (
-                          <Badge variant="secondary">Você</Badge>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nenhum membro cadastrado ainda.</p>
-            )}
-
-            {pendingInvites.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Convites pendentes (ocupam vaga até a pessoa criar a conta ou você cancelar)
-                </p>
-                {pendingInvites.map((invite) => (
-                  <div
-                    key={invite.id}
-                    className="flex flex-col gap-2 rounded-lg border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{invite.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {invite.role === 'org_admin'
-                          ? 'Admin da empresa'
-                          : invite.role === 'team'
-                            ? 'Equipe'
-                            : invite.role === 'client'
-                              ? 'Cliente'
-                              : 'Usuário'}
-                        {' · '}
-                        aguardando cadastro
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => void handleCancelInvite(invite.id)}
-                    >
-                      Cancelar convite
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <form
-              className="space-y-3 border-t pt-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void handleInvite()
-              }}
-            >
-            <div className="space-y-2">
-              <Label htmlFor="invite-email">E-mail</Label>
-              <Input
-                id="invite-email"
-                type="email"
-                required
-                autoComplete="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="pessoa@empresa.com"
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="invite-role">Perfil</Label>
-                <Select
-                  value={inviteRole}
-                  onValueChange={(v) => setInviteRole(v as InviteRole)}
-                >
-                  <SelectTrigger id="invite-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {isPlatformAdmin ? (
-                      <SelectItem value="org_admin">Admin da empresa</SelectItem>
-                    ) : null}
-                    <SelectItem value="user">Usuário</SelectItem>
-                    <SelectItem value="team">Equipe</SelectItem>
-                    <SelectItem value="client">Cliente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-department">Setor (opcional)</Label>
-                <Input
-                  id="invite-department"
-                  value={inviteDepartment}
-                  onChange={(e) => setInviteDepartment(e.target.value)}
-                  placeholder="Comercial, Eventos..."
-                />
-              </div>
-            </div>
-            <Button
-              type="submit"
-              disabled={
-                inviting ||
-                !inviteEmail.trim() ||
-                (activeOrg
-                  ? seatUsage.members + seatUsage.pending >= activeOrg.maxUsers
-                  : false)
-              }
-            >
-              {inviting ? 'Enviando...' : 'Convidar'}
+          <CardContent>
+            <Button asChild>
+              <Link to="/usuarios">Abrir Usuários</Link>
             </Button>
-            {lastInviteLink ? (
-              <div className="space-y-2 rounded-lg border bg-muted/40 p-3" role="status">
-                <Label htmlFor="invite-link">Link do convite</Label>
-                <Input id="invite-link" readOnly value={lastInviteLink} className="font-mono text-xs" />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(lastInviteLink)
-                    toast.success('Link copiado')
-                  }}
-                >
-                  Copiar link
-                </Button>
-              </div>
-            ) : null}
-            </form>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {isAdmin ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Permissões por módulo</CardTitle>
-            <CardDescription>
-              Controle o acesso de usuários da equipe aos módulos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {users.filter((u) => u.role === 'team' || u.role === 'user').length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum usuário listado.</p>
-            ) : (
-              users
-                .filter((u) => u.role === 'team' || u.role === 'user')
-                .map((u) => {
-                  const perms = mergeModulePermissions(u.modulePermissions)
-                  return (
-                    <div key={u.uid} className="rounded-lg border p-3">
-                      <p className="mb-2 text-sm font-medium">
-                        {u.name} <span className="text-muted-foreground">({u.email})</span>
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {(
-                          [
-                            ['visitors', 'Visitantes'],
-                            ['planning', 'Planejamento'],
-                            ['finance', 'Financeiro'],
-                            ['reports', 'Relatórios'],
-                          ] as const
-                        ).map(([key, label]) => (
-                          <label key={key} className="flex items-center justify-between text-sm">
-                            <span>{label}</span>
-                            <Switch
-                              aria-label={`${label} para ${u.name}`}
-                              checked={perms[key]}
-                              onCheckedChange={(checked) =>
-                                void handleModuleToggle(u.uid, key, checked)
-                              }
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })
-            )}
           </CardContent>
         </Card>
       ) : null}
@@ -941,21 +592,6 @@ export function SettingsPage() {
           </CardContent>
         </Card>
       ) : null}
-
-      <ConfirmDeleteDialog
-        open={removeMemberDialog.open}
-        onOpenChange={removeMemberDialog.handleOpenChange}
-        title="Remover usuário da empresa?"
-        description={
-          removeMemberDialog.target
-            ? `"${removeMemberDialog.target.name}" (${removeMemberDialog.target.email}) perderá o acesso a esta empresa. A conta de login continua existindo.`
-            : undefined
-        }
-        itemName={removeMemberDialog.target?.name}
-        confirmLabel="Remover"
-        loading={removeMemberDialog.loading}
-        onConfirm={handleRemoveMember}
-      />
     </div>
   )
 }

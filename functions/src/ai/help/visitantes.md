@@ -1,6 +1,10 @@
-# Visitantes
+# Visitantes (CRM)
 
 Rota: `/visitantes`
+
+**Atenção:** Visitante ≠ funcionário.
+- **Visitante** = convidado da visita / cadastro CRM.
+- **Funcionário** = usuário da empresa (menu **Usuários** / convite por e-mail).
 
 ## Cadastro
 1. Abra **Visitantes** no menu.

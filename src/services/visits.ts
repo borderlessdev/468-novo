@@ -50,6 +50,7 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
       ? (data.clientUserIds as string[])
       : [],
     isTemplate: data.isTemplate === true,
+    hasTicketSales: data.hasTicketSales === true,
     ownerId: String(data.ownerId ?? ''),
     orgId: String(data.orgId ?? ''),
     isDeleted: data.isDeleted === true,
@@ -150,6 +151,7 @@ export async function createVisit(
     teamMemberIds: data.teamMemberIds ?? [],
     clientUserIds: data.clientUserIds ?? [],
     isTemplate: data.isTemplate === true,
+    hasTicketSales: data.hasTicketSales === true,
     ownerId,
     orgId,
     isDeleted: false,

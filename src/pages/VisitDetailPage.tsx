@@ -23,6 +23,7 @@ import {
   Upload,
   UserPlus,
   Users,
+  Wallet,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -231,6 +232,7 @@ export function VisitDetailPage() {
         objective: visitData.objective ?? '',
         language: visitData.language ?? '',
         arrivalInstructions: visitData.arrivalInstructions ?? '',
+        hasTicketSales: visitData.hasTicketSales === true,
       })
 
       const ownerIdForQuery = visitData.ownerId
@@ -367,6 +369,7 @@ export function VisitDetailPage() {
         objective: values.objective || undefined,
         language: values.language || undefined,
         arrivalInstructions: values.arrivalInstructions || undefined,
+        hasTicketSales: values.hasTicketSales === true,
       }
       if (canManageVisitAccess(role, isAdmin, visit, user!.uid)) {
         payload.teamMemberIds = parseUidList(teamIdsInput)
@@ -1243,6 +1246,14 @@ export function VisitDetailPage() {
             </Link>
           </Button>
         ) : null}
+        {isNavAllowed('/receitas', role, isAdmin, profile?.modulePermissions) ? (
+          <Button variant="outline" className="justify-start" asChild>
+            <Link to={`/receitas?visita=${visit.id}`}>
+              <Wallet className="h-4 w-4" />
+              Receitas
+            </Link>
+          </Button>
+        ) : null}
         <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
           <Users className="h-4 w-4 shrink-0" />
           {linkedVisitors.length} visitante(s) · {pendingTasks} tarefa(s)
@@ -1455,6 +1466,15 @@ export function VisitDetailPage() {
                   Exibido no portal do visitante.
                 </p>
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={form.watch('hasTicketSales') === true}
+                  onCheckedChange={(checked) =>
+                    form.setValue('hasTicketSales', checked === true)
+                  }
+                />
+                Esta experiência tem venda de ingressos (Gestão de Receitas)
+              </label>
               {showAccessFields ? (
                 <>
                   <div className="space-y-2">

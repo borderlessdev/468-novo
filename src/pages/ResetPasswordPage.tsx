@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { MailCheck } from 'lucide-react'
@@ -17,12 +17,21 @@ type ResetInput = z.infer<typeof resetPasswordSchema>
 export function ResetPasswordPage() {
   const { resetPassword } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite')
+  const emailFromQuery = searchParams.get('email')?.trim().toLowerCase() ?? ''
   const [loading, setLoading] = useState(false)
   const [sentEmail, setSentEmail] = useState<string | null>(null)
   const form = useForm<ResetInput>({
     resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { email: '' },
+    defaultValues: { email: emailFromQuery },
   })
+
+  const loginHref = inviteToken
+    ? `/login?invite=${encodeURIComponent(inviteToken)}${
+        emailFromQuery ? `&email=${encodeURIComponent(emailFromQuery)}` : ''
+      }`
+    : '/login'
 
   const onSubmit = form.handleSubmit(async (values) => {
     setLoading(true)
@@ -52,9 +61,16 @@ export function ResetPasswordPage() {
               Enviamos o link para{' '}
               <span className="font-medium text-foreground">{sentEmail}</span>.
               Confira a caixa de entrada e o spam.
+              {inviteToken
+                ? ' Depois de definir a nova senha, volte pelo mesmo link de convite para vincular à empresa.'
+                : null}
             </p>
           </div>
-          <Button type="button" className="w-full cursor-pointer" onClick={() => navigate('/login')}>
+          <Button
+            type="button"
+            className="w-full cursor-pointer"
+            onClick={() => navigate(loginHref)}
+          >
             OK
           </Button>
         </div>
@@ -80,7 +96,7 @@ export function ResetPasswordPage() {
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-muted-foreground">
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link to={loginHref} className="font-medium text-primary hover:underline">
           Voltar ao login
         </Link>
       </p>

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 
 export function AppShell() {
   const { user, role, isPlatformAdmin, profile } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, isOrgAdmin } = useOrg()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -39,6 +39,7 @@ export function AppShell() {
           onExpand={() => setCollapsed(false)}
           role={role}
           isAdmin={isPlatformAdmin}
+          isOrgAdmin={isOrgAdmin}
           modulePermissions={profile?.modulePermissions}
         />
         <div

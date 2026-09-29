@@ -80,6 +80,7 @@ export const NAV_ITEMS = [
   { to: '/visitantes', label: 'Visitantes', icon: 'Users' },
   { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
   { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },
+  { to: '/receitas', label: 'Receitas', icon: 'Wallet' },
   { to: '/relatorios', label: 'Relatórios', icon: 'BarChart3' },
   { to: '/assistente', label: 'Assistente', icon: 'CircleHelp' },
   { to: '/configuracoes', label: 'Configurações', icon: 'Settings' },

@@ -36,7 +36,7 @@ export function ProtectedRoute() {
     acceptInviteLink,
     refreshProfile,
   } = useAuth()
-  const { activeOrgId, loading: orgLoading, refreshOrg } = useOrg()
+  const { activeOrgId, loading: orgLoading, refreshOrg, isOrgAdmin } = useOrg()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const deniedPath = useRef<string | null>(null)
@@ -51,7 +51,13 @@ export function ProtectedRoute() {
     !user ||
     loading ||
     orgLoading ||
-    isNavAllowed(location.pathname, role, isPlatformAdmin, profile?.modulePermissions)
+    isNavAllowed(
+      location.pathname,
+      role,
+      isPlatformAdmin,
+      profile?.modulePermissions,
+      isOrgAdmin,
+    )
 
   useEffect(() => {
     if (loading || orgLoading || !user || allowed) return

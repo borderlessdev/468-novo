@@ -69,7 +69,8 @@ import {
   uploadFinanceFile,
 } from '@/services/finance'
 import { notifyVisitStakeholders } from '@/services/notifications'
-import type { FinanceApprovalStatus, FinanceAttachment, FinanceItem, FinanceServiceType, Visit } from '@/types'
+import type { FinanceApprovalStatus, FinanceAttachment, FinanceCostCategory, FinanceItem, FinanceServiceType, Visit } from '@/types'
+import { ALL_COST_CATEGORIES, FINANCE_COST_CATEGORY_LABEL } from '@/lib/revenueLabels'
 
 type ViewMode = 'table' | 'cards' | 'invoice'
 type ApprovalFilter = 'all' | FinanceApprovalStatus
@@ -444,6 +445,7 @@ export function FinancePage() {
     resolver: zodResolver(financeItemSchema),
     defaultValues: {
       serviceType: 'terceiro',
+      costCategory: 'servicos_terceiros',
       serviceName: '',
       budget1: '',
       budget2: '',
@@ -526,6 +528,7 @@ export function FinancePage() {
     resetNfAttachmentState()
     form.reset({
       serviceType: 'terceiro',
+      costCategory: 'servicos_terceiros',
       serviceName: '',
       budget1: '',
       budget2: '',
@@ -544,6 +547,7 @@ export function FinancePage() {
     resetNfAttachmentState()
     form.reset({
       serviceType: resolveServiceType(item),
+      costCategory: item.costCategory ?? (resolveServiceType(item) === 'despesa_tributavel' ? 'despesas_tributaveis' : 'servicos_terceiros'),
       serviceName: item.serviceName,
       budget1: item.budget1 != null ? formatCurrencyNumber(item.budget1) : '',
       budget2: item.budget2 != null ? formatCurrencyNumber(item.budget2) : '',
@@ -700,6 +704,7 @@ export function FinancePage() {
     const taxable = values.serviceType === 'despesa_tributavel'
     const payload = {
       serviceType: values.serviceType,
+      costCategory: values.costCategory,
       serviceName: values.serviceName,
       budget1: taxable ? undefined : parseCurrencyInput(values.budget1),
       budget2: taxable ? undefined : parseCurrencyInput(values.budget2),
@@ -1228,6 +1233,9 @@ export function FinancePage() {
                     form.setValue('budget1', '')
                     form.setValue('budget2', '')
                     form.setValue('budget3', '')
+                    form.setValue('costCategory', 'despesas_tributaveis')
+                  } else if (form.watch('costCategory') === 'despesas_tributaveis') {
+                    form.setValue('costCategory', 'servicos_terceiros')
                   }
                 }}
               >
@@ -1247,6 +1255,28 @@ export function FinancePage() {
                   direto.
                 </p>
               ) : null}
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Categoria (relatórios de receita)</Label>
+              <Select
+                value={form.watch('costCategory') ?? 'servicos_terceiros'}
+                onValueChange={(value) =>
+                  form.setValue('costCategory', value as FinanceCostCategory, {
+                    shouldDirty: true,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_COST_CATEGORIES.map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {FINANCE_COST_CATEGORY_LABEL[key]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Serviço *</Label>

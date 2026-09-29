@@ -6,6 +6,7 @@ import {
   LogOut,
   PanelLeft,
   Shield,
+  Users,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -16,8 +17,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 
 const MASTER_NAV = [
-  { to: '/empresas', label: 'Visão geral', icon: LayoutDashboard },
-  { to: '/empresas#pastas', label: 'Pastas de clientes', icon: FolderKanban },
+  { to: '/empresas', label: 'Visão geral', icon: LayoutDashboard, kind: 'overview' },
+  { to: '/empresas#pastas', label: 'Pastas de clientes', icon: FolderKanban, kind: 'pastas' },
+  { to: '/empresas/usuarios', label: 'Usuários', icon: Users, kind: 'usuarios' },
 ] as const
 
 export function MasterShell() {
@@ -25,8 +27,10 @@ export function MasterShell() {
   const location = useLocation()
   const onEmpresasRoot =
     location.pathname === '/empresas' || location.pathname === '/empresas/'
+  const onUsuarios = location.pathname === '/empresas/usuarios'
   const pastasSelected = onEmpresasRoot && location.hash === '#pastas'
-  const overviewSelected = onEmpresasRoot && location.hash !== '#pastas'
+  const overviewSelected = onEmpresasRoot && location.hash !== '#pastas' && !onUsuarios
+  const usuariosSelected = onUsuarios
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
@@ -141,24 +145,28 @@ export function MasterShell() {
         <nav className="scrollbar-thin min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 py-4">
           {MASTER_NAV.map((item) => {
             const Icon = item.icon
+            const selected =
+              item.kind === 'pastas'
+                ? pastasSelected
+                : item.kind === 'usuarios'
+                  ? usuariosSelected
+                  : overviewSelected
             return (
               <Link
                 key={item.label}
                 to={
-                  item.to.includes('#pastas')
+                  item.kind === 'pastas'
                     ? { pathname: '/empresas', hash: 'pastas' }
-                    : { pathname: '/empresas', hash: '' }
+                    : item.kind === 'usuarios'
+                      ? { pathname: '/empresas/usuarios' }
+                      : { pathname: '/empresas', hash: '' }
                 }
-                aria-current={
-                  (item.to.includes('#pastas') ? pastasSelected : overviewSelected)
-                    ? 'page'
-                    : undefined
-                }
+                aria-current={selected ? 'page' : undefined}
                 onClick={() => {
                   if (collapsed) setCollapsed(false)
                   setMobileOpen(false)
                   window.requestAnimationFrame(() => {
-                    if (item.to.includes('#pastas')) {
+                    if (item.kind === 'pastas') {
                       document.getElementById('pastas')?.scrollIntoView({
                         behavior: 'smooth',
                         block: 'start',
@@ -171,7 +179,7 @@ export function MasterShell() {
                 className={cn(
                   'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
                   collapsed && 'justify-center px-2',
-                  (item.to.includes('#pastas') ? pastasSelected : overviewSelected)
+                  selected
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
                     : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
                 )}

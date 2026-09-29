@@ -5,6 +5,7 @@ export const DEFAULT_MODULE_PERMISSIONS: ModulePermissions = {
   planning: true,
   finance: true,
   reports: true,
+  revenue: false,
 }
 
 export function mergeModulePermissions(
@@ -83,6 +84,7 @@ const MODULE_PATH_PREFIX: { prefix: string; key: keyof ModulePermissions }[] = [
   { prefix: '/visitantes', key: 'visitors' },
   { prefix: '/planejamento', key: 'planning' },
   { prefix: '/financeiro', key: 'finance' },
+  { prefix: '/receitas', key: 'revenue' },
   { prefix: '/relatorios', key: 'reports' },
 ]
 
@@ -100,15 +102,34 @@ export function isModuleAllowed(
   return permissions[match.key] !== false
 }
 
+/**
+ * Gestão de Receitas: só Gestor de Recursos (permissão) ou Admin Master.
+ * Admin da empresa libera a permissão; não entra automaticamente.
+ */
+export function canAccessRevenue(
+  isPlatformAdmin: boolean,
+  modulePermissions?: Partial<ModulePermissions> | null,
+): boolean {
+  if (isPlatformAdmin) return true
+  return mergeModulePermissions(modulePermissions).revenue === true
+}
+
 /** Rotas permitidas ao cliente. `/configuracoes` é exato (sem lixeira). */
 export function isNavAllowed(
   path: string,
   role: UserRole,
   isAdmin: boolean,
   modulePermissions?: Partial<ModulePermissions> | null,
+  isOrgAdmin = false,
 ): boolean {
   if (path === '/empresas' || path.startsWith('/empresas/')) {
     return isAdmin
+  }
+  if (path === '/usuarios' || path.startsWith('/usuarios/')) {
+    return canManageOrgUsers(isAdmin, isOrgAdmin)
+  }
+  if (path === '/receitas' || path.startsWith('/receitas/')) {
+    return canAccessRevenue(isAdmin, modulePermissions)
   }
   if (isAdmin) return true
   if (role === 'client') {

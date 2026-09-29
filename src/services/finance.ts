@@ -51,6 +51,17 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
     visitId: String(data.visitId ?? ''),
     serviceType:
       data.serviceType === 'despesa_tributavel' ? 'despesa_tributavel' : 'terceiro',
+    costCategory:
+      data.costCategory === 'recursos_humanos' ||
+      data.costCategory === 'servicos_terceiros' ||
+      data.costCategory === 'logistica' ||
+      data.costCategory === 'criacao_producao' ||
+      data.costCategory === 'a_e_b' ||
+      data.costCategory === 'comunicacao' ||
+      data.costCategory === 'custos_extras' ||
+      data.costCategory === 'despesas_tributaveis'
+        ? data.costCategory
+        : undefined,
     serviceName: String(data.serviceName ?? ''),
     budget1: data.budget1 != null ? Number(data.budget1) : undefined,
     budget2: data.budget2 != null ? Number(data.budget2) : undefined,
@@ -117,6 +128,7 @@ export async function createFinanceItem(
   const ref = await addDoc(col, {
     visitId: data.visitId,
     serviceType: data.serviceType ?? 'terceiro',
+    costCategory: data.costCategory ?? null,
     serviceName: data.serviceName,
     budget1: data.budget1 ?? null,
     budget2: data.budget2 ?? null,

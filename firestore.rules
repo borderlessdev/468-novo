@@ -318,6 +318,20 @@ service cloud.firestore {
       allow delete: if canWriteChild();
     }
 
+    match /revenueItems/{itemId} {
+      allow read: if canReadChild();
+      allow create: if canCreateChild()
+        && request.resource.data.visitId is string
+        && request.resource.data.sourceType is string
+        && request.resource.data.natureType is string
+        && request.resource.data.natureLabel is string
+        && request.resource.data.entryDate is string
+        && request.resource.data.amount is number
+        && request.resource.data.orgId is string;
+      allow update: if canWriteChild() && unchangedOwnerId();
+      allow delete: if canWriteChild();
+    }
+
     match /documents/{docId} {
       allow read: if canReadChild();
       allow create: if canCreateChild()

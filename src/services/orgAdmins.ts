@@ -13,6 +13,7 @@ import {
   canAddOrganizationMember,
   listOrganizationMembers,
 } from '@/services/organizations'
+import { cancelPendingInvitesForEmail } from '@/services/invites'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -125,6 +126,8 @@ export async function createOrganizationAdmin(input: {
     orgRole: 'org_admin',
     invitedBy: input.createdBy,
   })
+
+  await cancelPendingInvitesForEmail(input.orgId, email)
 
   return { uid, name, email, password }
 }

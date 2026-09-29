@@ -59,6 +59,8 @@ export interface ModulePermissions {
   planning: boolean
   finance: boolean
   reports: boolean
+  /** Gestão de Receitas — exclusivo do Gestor de Recursos (liberado pelo admin). */
+  revenue: boolean
 }
 
 export interface NotificationPreferences {
@@ -155,6 +157,8 @@ export interface Visit extends SoftDeletable {
   teamMemberIds: string[]
   clientUserIds: string[]
   isTemplate?: boolean
+  /** Libera lançamentos de venda de ingressos na Gestão de Receitas. */
+  hasTicketSales?: boolean
   ownerId: string
   orgId: string
   createdAt?: unknown
@@ -165,6 +169,56 @@ export type FinanceApprovalStatus = 'pending' | 'approved' | 'rejected'
 
 /** Serviço de Terceiro: com orçamentos. Despesa Tributável: sem orçamento (recibo/NF direto). */
 export type FinanceServiceType = 'terceiro' | 'despesa_tributavel'
+
+/** Categoria detalhada para relatórios de custos × receita. */
+export type FinanceCostCategory =
+  | 'recursos_humanos'
+  | 'servicos_terceiros'
+  | 'logistica'
+  | 'criacao_producao'
+  | 'a_e_b'
+  | 'comunicacao'
+  | 'custos_extras'
+  | 'despesas_tributaveis'
+
+/** Origem do recurso na Gestão de Receitas. */
+export type RevenueSourceType =
+  | 'ingressos'
+  | 'apoio_areas'
+  | 'recursos_proprios'
+  | 'patrocinio'
+
+/** Natureza contábil/orçamentária do recurso. */
+export type RevenueNatureType =
+  | 'centro_custos'
+  | 'conta_contabil'
+  | 'rubrica'
+  | 'dotacao_orcamentaria'
+
+export interface RevenueTicketSaleDay {
+  date: string
+  amount: number
+  quantity?: number
+  notes?: string
+}
+
+export interface RevenueItem {
+  id: string
+  visitId: string
+  sourceType: RevenueSourceType
+  natureType: RevenueNatureType
+  /** Centro de custo, conta, rubrica ou dotação (texto livre). */
+  natureLabel: string
+  entryDate: string
+  amount: number
+  notes?: string
+  /** Resumo diário quando sourceType === 'ingressos'. */
+  ticketSales?: RevenueTicketSaleDay[]
+  ownerId: string
+  orgId: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
 
 export type GuestConfirmationStatus = 'pending' | 'confirmed' | 'declined'
 
@@ -299,6 +353,8 @@ export interface FinanceItem extends SoftDeletable {
   visitId: string
   /** Linhas antigas sem o campo são tratadas como `terceiro`. */
   serviceType?: FinanceServiceType
+  /** Categoria para relatório de custos na Gestão de Receitas. */
+  costCategory?: FinanceCostCategory
   serviceName: string
   budget1?: number
   budget2?: number

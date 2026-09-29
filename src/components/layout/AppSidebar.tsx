@@ -14,10 +14,11 @@ import {
   PanelLeft,
   Settings,
   Users,
+  Wallet,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isNavAllowed } from '@/lib/access'
+import { canManageOrgUsers, isNavAllowed } from '@/lib/access'
 import { SafeLogo } from '@/components/SafeLogo'
 import { useOrg } from '@/contexts/OrgContext'
 import { VALE_BRAND } from '@/lib/valeBrand'
@@ -33,6 +34,7 @@ const icons = {
   Users,
   ListTodo,
   DollarSign,
+  Wallet,
   BarChart3,
   CircleHelp,
   Settings,
@@ -46,6 +48,7 @@ interface AppSidebarProps {
   onExpand: () => void
   role: UserRole
   isAdmin: boolean
+  isOrgAdmin?: boolean
   modulePermissions?: Partial<ModulePermissions> | null
 }
 
@@ -57,9 +60,11 @@ export function AppSidebar({
   onExpand,
   role,
   isAdmin,
+  isOrgAdmin = false,
   modulePermissions,
 }: AppSidebarProps) {
   const { activeOrg } = useOrg()
+  const showUsersNav = canManageOrgUsers(isAdmin, isOrgAdmin)
   const [logoutOpen, setLogoutOpen] = useState(false)
   const sairButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
@@ -199,7 +204,9 @@ export function AppSidebar({
             </NavLink>
           ) : null}
           {NAV_ITEMS
-            .filter((item) => isNavAllowed(item.to, role, isAdmin, modulePermissions))
+            .filter((item) =>
+              isNavAllowed(item.to, role, isAdmin, modulePermissions, isOrgAdmin),
+            )
             .map((item) => {
               const Icon = icons[item.icon]
               return (
@@ -239,6 +246,40 @@ export function AppSidebar({
                 </NavLink>
               )
             })}
+          {showUsersNav ? (
+            <NavLink
+              to="/usuarios"
+              onClick={() => {
+                if (collapsed) onExpand()
+                onClose()
+              }}
+              className={({ isActive }) =>
+                cn(
+                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                  collapsed && 'justify-center px-2',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                )
+              }
+              title="Usuários"
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive ? (
+                    <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                  ) : null}
+                  <Users
+                    className={cn(
+                      'h-4 w-4 shrink-0 transition-colors',
+                      isActive ? 'text-brand' : 'group-hover:text-white/90',
+                    )}
+                  />
+                  {!collapsed ? <span className="truncate">Usuários</span> : null}
+                </>
+              )}
+            </NavLink>
+          ) : null}
         </nav>
 
         <div className="shrink-0">

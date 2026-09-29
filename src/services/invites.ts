@@ -124,7 +124,8 @@ export async function createInvite(input: {
     `Você foi convidado como ${roleLabel(input.role)}.`,
     input.department ? `Setor: ${input.department}` : '',
     '',
-    `Acesse o link para criar sua conta:`,
+    `Abra o link abaixo.`,
+    `Se ainda não tem conta, crie uma senha. Se este e-mail já tem conta, entre com a senha atual (a que o administrador enviou) para vincular à empresa.`,
     link,
     '',
     `Este convite expira em 14 dias.`,
@@ -196,7 +197,8 @@ export async function joinOrganizationFromInvite(input: {
   }
 
   const email = input.email.trim().toLowerCase()
-  if (invite.email !== email) {
+  const inviteEmail = invite.email.trim().toLowerCase()
+  if (inviteEmail !== email) {
     throw new Error(
       `Este convite é para ${invite.email}. Entre com esse e-mail ou peça um novo convite.`,
     )
@@ -251,6 +253,19 @@ export async function listInvitesByOrg(orgId: string): Promise<Invite[]> {
 
 export async function cancelInvite(inviteId: string): Promise<void> {
   await deleteDoc(doc(col, inviteId))
+}
+
+export async function cancelPendingInvitesForEmail(orgId: string, email: string): Promise<void> {
+  const normalized = email.trim().toLowerCase()
+  const snap = await getDocs(
+    query(
+      col,
+      where('orgId', '==', orgId),
+      where('email', '==', normalized),
+      where('status', '==', 'pending'),
+    ),
+  )
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
 }
 
 export async function listInvitesByCreator(createdBy: string): Promise<Invite[]> {

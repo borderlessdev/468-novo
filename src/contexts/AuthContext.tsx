@@ -137,12 +137,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
     } catch (error) {
       const code = (error as { code?: string }).code ?? ''
       throw new Error(getAuthErrorMessage(code))
     }
   }, [])
+
+  const joinExistingAccountWithInvite = useCallback(
+    async (input: { email: string; password: string; inviteId: string; name?: string }) => {
+      const email = input.email.trim().toLowerCase()
+      try {
+        await signInWithEmailAndPassword(auth, email, input.password)
+      } catch (signInError) {
+        const signInCode = (signInError as { code?: string }).code ?? ''
+        if (signInCode === 'auth/wrong-password' || signInCode === 'auth/invalid-credential') {
+          throw new Error(
+            'Este e-mail já tem conta. Use a senha atual (a que o administrador enviou) ou redefina a senha. Mantenha o mesmo link de convite.',
+          )
+        }
+        throw new Error(getAuthErrorMessage(signInCode) || 'Não foi possível entrar na conta existente.')
+      }
+      const firebaseUser = auth.currentUser
+      if (!firebaseUser) {
+        throw new Error('Faça login para aceitar o convite')
+      }
+      const invite = await getInviteById(input.inviteId)
+      if (!invite?.token) {
+        throw new Error('Convite inválido, expirado ou já utilizado')
+      }
+      await joinOrganizationFromInvite({
+        token: invite.token,
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? email,
+        name: input.name?.trim() || firebaseUser.displayName || email,
+      })
+      await loadProfile(firebaseUser)
+    },
+    [loadProfile],
+  )
 
   const register = useCallback(
     async (
@@ -158,7 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     ) => {
       try {
-        const credential = await createUserWithEmailAndPassword(auth, email, password)
+        const normalizedEmail = email.trim().toLowerCase()
+        const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
         await updateProfile(credential.user, { displayName: name })
         let orgId = options?.orgId
         let orgRole = options?.orgRole
@@ -178,7 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await createUserProfile({
           uid: credential.user.uid,
           name,
-          email,
+          email: normalizedEmail,
           role,
           orgId,
         })
@@ -187,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await addOrganizationMember({
             orgId,
             uid: credential.user.uid,
-            email,
+            email: normalizedEmail,
             name,
             orgRole,
             department,
@@ -203,14 +237,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         const code = (error as { code?: string }).code ?? ''
         if (code === 'auth/email-already-in-use' && options?.inviteId) {
-          throw new Error(
-            'Este e-mail já tem conta. Entre com a senha e o mesmo link de convite para vincular à empresa.',
-          )
+          await joinExistingAccountWithInvite({
+            email: email.trim().toLowerCase(),
+            password,
+            inviteId: options.inviteId,
+            name,
+          })
+          return
         }
         throw new Error(getAuthErrorMessage(code) || (error instanceof Error ? error.message : 'Falha no cadastro'))
       }
     },
-    [loadProfile],
+    [joinExistingAccountWithInvite, loadProfile],
   )
 
   const acceptInviteLink = useCallback(

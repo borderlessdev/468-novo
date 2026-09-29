@@ -9,15 +9,15 @@ Use este guia para saber o que cada tipo de usuário pode fazer no app.
 - Entra no sistema de qualquer pasta com “Entrar no sistema do cliente”.
 
 ## Admin da empresa (org_admin)
-- Gerencia a própria pasta em **Configurações**.
-- Convida funcionários/equipe/clientes; remove acessos.
-- Define **Whitelabel** (logo) da própria empresa — funcionários herdam automaticamente.
+- Gerencia a própria pasta.
+- Convida funcionários/equipe/clientes em **Usuários** (`/usuarios`); remove acessos.
+- Define **Whitelabel** (logo) da própria empresa em Configurações — funcionários herdam automaticamente.
 - Opera visitas, portal, financeiro, relatórios e playbooks da pasta.
 
 ## Usuário operacional (user)
 - Cria e gerencia visitas (escrita operacional).
 - Não convida usuários nem altera whitelabel.
-- Se perguntar como convidar alguém ou mudar a logo: orientar a pedir ao **Admin da empresa** (ou Admin Master).
+- Se perguntar como convidar alguém ou mudar a logo: orientar a pedir ao **Admin da empresa** (menu **Usuários** para convites, ou Admin Master).
 
 ## Equipe / funcionário (team)
 - Opera o dia a dia conforme permissões de módulos.

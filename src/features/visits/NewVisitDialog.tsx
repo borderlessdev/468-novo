@@ -78,6 +78,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       templateId: '',
       playbookId: '',
       startWithChecklist: true,
+      hasTicketSales: false,
     },
   })
 
@@ -112,6 +113,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       templateId: '',
       playbookId: '',
       startWithChecklist: true,
+      hasTicketSales: false,
     })
     // form.reset is stable from RHF; avoid listing `form` (new ref each render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,6 +209,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           objective: values.objective,
           language: values.language,
           pvNumber: values.pvNumber,
+          hasTicketSales: values.hasTicketSales === true,
           progress: 0,
           teamMemberIds: [],
         })
@@ -468,6 +471,15 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                 Iniciar com check-list básico
               </label>
             ) : null}
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={form.watch('hasTicketSales') === true}
+                onCheckedChange={(checked) =>
+                  form.setValue('hasTicketSales', checked === true)
+                }
+              />
+              Tem venda de ingressos (Gestão de Receitas)
+            </label>
           </div>
 
           <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">

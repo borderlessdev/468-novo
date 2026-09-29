@@ -19,7 +19,7 @@ A logo vale para o CRM (menu e header) e para o portal do visitante. Sem logo, u
 Funcionários, equipe e cliente **não** alteram a logo — herdam a marca definida pelo Admin. Se pedirem o passo a passo, oriente a pedir ao Admin da empresa ou ao Admin Master.
 
 ## Conta e equipe
-Convites e permissões de módulos (conforme papel). Ver `roles.md`.
+Convites de funcionários e permissões de módulos ficam no menu **Usuários** (`/usuarios`), não em Configurações. Ver `usuarios.md` e `roles.md`.
 
 ## Conectar Google Calendar
 1. Abra **Configurações**.

@@ -98,13 +98,16 @@ export function RegisterPage() {
         role: invite ? inviteRoleToUserRole(invite.role) : 'user',
         inviteId: invite?.id,
       })
-      toast.success('Conta criada com sucesso')
+      toast.success(invite ? 'Empresa vinculada com sucesso' : 'Conta criada com sucesso')
       navigate('/')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha no cadastro'
       toast.error(message)
-      if (inviteToken && /já tem conta|já está em uso/i.test(message)) {
-        navigate(`/login?invite=${encodeURIComponent(inviteToken)}`)
+      if (inviteToken && /já tem conta|senha atual|redefina a senha/i.test(message)) {
+        const email = values.email.trim().toLowerCase()
+        navigate(
+          `/login?invite=${encodeURIComponent(inviteToken)}&email=${encodeURIComponent(email)}`,
+        )
       }
     } finally {
       setLoading(false)
@@ -171,7 +174,7 @@ export function RegisterPage() {
                   : invite.role === 'user'
                     ? 'usuário'
                     : 'cliente'
-            }.`
+            }. Se este e-mail já tem senha, use-a abaixo — o sistema vincula a empresa automaticamente.`
           : 'Cadastre-se para começar a organizar visitas.'
       }
     >
@@ -225,16 +228,22 @@ export function RegisterPage() {
           ) : null}
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Criando...' : 'Criar conta'}
+          {loading ? 'Criando...' : invite ? 'Criar conta ou vincular' : 'Criar conta'}
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Já tem conta?{' '}
         <Link
-          to={inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login'}
+          to={
+            inviteToken
+              ? `/login?invite=${encodeURIComponent(inviteToken)}${
+                  invite?.email ? `&email=${encodeURIComponent(invite.email)}` : ''
+                }`
+              : '/login'
+          }
           className="font-medium text-primary hover:underline"
         >
-          Entrar
+          {inviteToken ? 'Entrar e vincular empresa' : 'Entrar'}
         </Link>
       </p>
     </AuthLayout>

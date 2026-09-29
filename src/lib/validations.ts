@@ -54,6 +54,7 @@ const visitBaseSchema = z.object({
   language: z.string().optional(),
   arrivalInstructions: z.string().optional(),
   pvNumber: z.string().trim().min(1, 'Número da PV obrigatório').optional(),
+  hasTicketSales: z.boolean().optional(),
   templateId: z.string().optional(),
   playbookId: z.string().optional(),
   startWithChecklist: z.boolean(),
@@ -194,6 +195,18 @@ export const inviteSchema = z.object({
 
 export const financeItemSchema = z.object({
   serviceType: z.enum(['terceiro', 'despesa_tributavel']),
+  costCategory: z
+    .enum([
+      'recursos_humanos',
+      'servicos_terceiros',
+      'logistica',
+      'criacao_producao',
+      'a_e_b',
+      'comunicacao',
+      'custos_extras',
+      'despesas_tributaveis',
+    ])
+    .optional(),
   serviceName: z.string().min(2, 'Serviço obrigatório'),
   budget1: z.string().optional(),
   budget2: z.string().optional(),
@@ -203,6 +216,26 @@ export const financeItemSchema = z.object({
   winningCompany: z.string().optional(),
   nfReceived: z.boolean(),
   nfDueDate: z.string().optional(),
+})
+
+export const revenueItemSchema = z.object({
+  visitId: z.string().min(1, 'Selecione a visita/evento'),
+  sourceType: z.enum([
+    'ingressos',
+    'apoio_areas',
+    'recursos_proprios',
+    'patrocinio',
+  ]),
+  natureType: z.enum([
+    'centro_custos',
+    'conta_contabil',
+    'rubrica',
+    'dotacao_orcamentaria',
+  ]),
+  natureLabel: z.string().min(1, 'Informe a natureza do recurso'),
+  entryDate: z.string().min(1, 'Data obrigatória'),
+  amount: z.string().min(1, 'Valor obrigatório'),
+  notes: z.string().optional(),
 })
 
 export const playbookItemSchema = z.object({
@@ -254,6 +287,7 @@ export type QuickVisitorInput = z.infer<typeof quickVisitorSchema>
 export type ActivityInput = z.infer<typeof activitySchema>
 export type TaskInput = z.infer<typeof taskSchema>
 export type FinanceItemInput = z.infer<typeof financeItemSchema>
+export type RevenueItemInput = z.infer<typeof revenueItemSchema>
 export type ProfileInput = z.infer<typeof profileSchema>
 export type InviteInput = z.infer<typeof inviteSchema>
 export type PlaybookInput = z.infer<typeof playbookSchema>

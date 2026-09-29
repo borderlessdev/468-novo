@@ -48,10 +48,11 @@ function truncate(text: string, max: number): string {
 const HELP_SYSTEM = `Você é o assistente de ajuda do Promover Experience (gestão de experiências: visitas VIP, comunidades e eventos).
 Sua função é ENSINAR a usar o sistema: quem pode fazer, menu → tela → botão, e o que acontece depois.
 Responda SEMPRE em português do Brasil. Seja claro (até ~12 linhas ou lista numerada). Comece pelo caminho na interface.
-Use APENAS o manual abaixo e o bloco de papel do usuário. Se não estiver no manual, diga que não sabe e indique Configurações, Experiências ou o Admin da empresa.
+Use APENAS o manual abaixo e o bloco de papel do usuário. Se não estiver no manual, diga que não sabe e indique Configurações, Experiências, Usuários ou o Admin da empresa.
 Não invente botões, rotas ou recursos. Não execute ações; só oriente.
 Respeite SEMPRE o papel do usuário: se a ação for só de Admin Master ou Admin da empresa, diga isso e a quem pedir.
-Perguntas típicas (responda com o passo a passo do manual): logo/whitelabel, convites, aba Período, importar programação, portal do visitante, playbooks, ciclo do dashboard.`
+DISTINÇÃO CRÍTICA: "funcionário" / "usuário da empresa" / "convidar equipe" = menu Usuários (convite por e-mail/link). "Visitante" = CRM / portal da visita. Nunca confunda os dois.
+Perguntas típicas (responda com o passo a passo do manual): logo/whitelabel, convites de funcionários, aba Período, importar programação, portal do visitante, playbooks, ciclo do dashboard.`
 
 function mockHelpAnswer(
   message: string,
@@ -78,8 +79,14 @@ function mockHelpAnswer(
   }
 
   if (isStaffLike) {
-    if (q.includes('convid') || q.includes('usuario') || q.includes('usuário')) {
-      return 'Convidar ou remover usuários é só do **Admin da empresa** em Configurações → Usuários da empresa (ou do Admin Master). Você não tem essa permissão.'
+    if (
+      q.includes('funcion') ||
+      q.includes('convid') ||
+      q.includes('usuario') ||
+      q.includes('usuário') ||
+      q.includes('equipe')
+    ) {
+      return 'Convidar ou remover **funcionários/usuários da empresa** é só do **Admin da empresa** no menu **Usuários** (ou do Admin Master em Usuários no console). Você não tem essa permissão. Isso não é o cadastro de Visitantes.'
     }
     if (
       (q.includes('pasta') || q.includes('empresa')) &&
@@ -87,6 +94,32 @@ function mockHelpAnswer(
     ) {
       return 'Criar ou gerenciar pastas de clientes é exclusivo do **Admin Master** em Pastas de clientes. Peça a um Admin Master.'
     }
+  }
+
+  if (
+    q.includes('funcion') ||
+    ((q.includes('criar') || q.includes('convid') || q.includes('como')) &&
+      (q.includes('usuario') || q.includes('usuário') || q.includes('equipe') || q.includes('admin')))
+  ) {
+    if (roleLabel.includes('Master') || roleLabel.includes('plataforma')) {
+      return [
+        'Para convidar um **Admin da empresa**:',
+        '1. No console Master, abra **Usuários**.',
+        '2. Escolha a pasta do cliente, informe o e-mail e clique em **Enviar convite**.',
+        '3. Copie o link se quiser enviar por outro canal.',
+        'Funcionários (equipe) são convidados depois pelo Admin da empresa no menu **Usuários** da pasta — não use Visitantes.',
+      ].join('\n')
+    }
+    if (roleLabel.includes('Admin') || roleLabel.includes('empresa')) {
+      return [
+        'Para criar/convidar um **funcionário** (usuário da empresa):',
+        '1. Menu **Usuários**.',
+        '2. Informe o e-mail, escolha o perfil (ex.: Funcionário) e clique em **Enviar convite**.',
+        '3. Use **Copiar link** se preferir enviar o convite manualmente.',
+        'Isso não é cadastro de visitante — visitantes ficam em **Visitantes**.',
+      ].join('\n')
+    }
+    return 'Para criar um **funcionário**, peça ao **Admin da empresa** (menu **Usuários**) ou ao Admin Master. Não use o menu Visitantes.'
   }
 
   if (q.includes('agenda') || q.includes('compromisso') || q.includes('programa')) {
@@ -105,8 +138,8 @@ function mockHelpAnswer(
   if (q.includes('playbook')) {
     return 'Playbooks ficam em **Configurações → Playbooks**. Crie o modelo e aplique no detalhe da visita com a data de início.'
   }
-  if (q.includes('portal') || q.includes('convidad') || q.includes('visitante')) {
-    return 'No detalhe da visita, seção **Portal do visitante**: gere o link, copie ou envie o QR. Cadastre visitantes em **Visitantes** e vincule à visita.'
+  if (q.includes('portal') || (q.includes('visitante') && !q.includes('funcion'))) {
+    return 'No detalhe da visita, seção **Portal do visitante**: gere o link, copie ou envie o QR. Cadastre visitantes em **Visitantes** e vincule à visita. (Funcionário da empresa = menu **Usuários**, não Visitantes.)'
   }
   if (q.includes('calendar') || q.includes('google')) {
     return 'Em **Configurações**, conecte o Google Calendar. Depois sincronize na **Programação**.'

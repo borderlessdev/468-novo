@@ -497,7 +497,7 @@ export function OrganizationDetailPage() {
               {pending > 0
                 ? ` (${pending} convite${pending === 1 ? '' : 's'} pendente${pending === 1 ? '' : 's'})`
                 : ''}
-              . Convites pendentes ocupam vaga até a pessoa criar a conta ou você cancelar.
+              . Convites pendentes ocupam vaga até a pessoa aceitar o convite ou você cancelar.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -624,7 +624,7 @@ export function OrganizationDetailPage() {
               <CardTitle className="text-base">Administrador da empresa</CardTitle>
               <CardDescription>
                 O Master convida o admin (gera o link e envia). Depois o admin da empresa
-                convida os funcionários em Configurações → Usuários da empresa.
+                convida os funcionários no menu **Usuários**.
               </CardDescription>
             </div>
           </div>
@@ -672,7 +672,8 @@ export function OrganizationDetailPage() {
                   <div>
                     <p className="text-sm font-medium">{invite.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      Aguardando a pessoa criar a conta
+                      Aguardando a pessoa aceitar o convite (criar senha ou entrar com a conta
+                      existente)
                     </p>
                   </div>
                   <Button
@@ -692,8 +693,8 @@ export function OrganizationDetailPage() {
           <div className="space-y-3 rounded-lg border p-3">
             <p className="text-sm font-medium">Convidar administrador</p>
             <p className="text-xs text-muted-foreground">
-              Informe o e-mail, gere o link e envie. A pessoa abre o link, cria a senha e vira
-              admin desta pasta.
+              Informe o e-mail, gere o link e envie. A pessoa abre o link: se ainda não tem
+              conta, cria a senha; se já tem, entra com a senha atual e vira admin desta pasta.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -903,7 +904,7 @@ export function OrganizationDetailPage() {
                 <CardTitle className="text-base">Membros com acesso</CardTitle>
                 <CardDescription>
                   O Master pode remover acessos aqui. Novos funcionários entram pelo convite
-                  que o admin da empresa envia em Configurações → Usuários da empresa.
+                  que o admin da empresa envia no menu **Usuários**.
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="gap-1">

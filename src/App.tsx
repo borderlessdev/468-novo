@@ -21,6 +21,7 @@ import { VisitorsPage } from '@/pages/VisitorsPage'
 import { AgendaPage } from '@/pages/AgendaPage'
 import { PlanningPage } from '@/pages/PlanningPage'
 import { FinancePage } from '@/pages/FinancePage'
+import { RevenuePage } from '@/pages/RevenuePage'
 import { ReportsPage } from '@/pages/ReportsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { PlaybooksPage } from '@/pages/PlaybooksPage'
@@ -29,6 +30,8 @@ import { TrashPage } from '@/pages/TrashPage'
 import { HelpPage } from '@/pages/HelpPage'
 import { OrganizationsPage } from '@/pages/OrganizationsPage'
 import { OrganizationDetailPage } from '@/pages/OrganizationDetailPage'
+import { MasterUsersPage } from '@/pages/MasterUsersPage'
+import { UsersPage } from '@/pages/UsersPage'
 import { MasterShell } from '@/components/layout/MasterShell'
 
 function LegacyAgendaRedirect() {
@@ -59,6 +62,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<MasterShell />}>
               <Route path="/empresas" element={<OrganizationsPage />} />
+              <Route path="/empresas/usuarios" element={<MasterUsersPage />} />
               <Route path="/empresas/:orgId" element={<OrganizationDetailPage />} />
             </Route>
             <Route element={<AppShell />}>
@@ -71,6 +75,8 @@ export default function App() {
               <Route path="/visitantes" element={<VisitorsPage />} />
               <Route path="/planejamento" element={<PlanningPage />} />
               <Route path="/financeiro" element={<FinancePage />} />
+              <Route path="/receitas" element={<RevenuePage />} />
+              <Route path="/usuarios" element={<UsersPage />} />
               <Route path="/relatorios" element={<ReportsPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
               <Route path="/configuracoes/playbooks" element={<PlaybooksPage />} />

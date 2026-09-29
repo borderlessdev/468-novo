@@ -43,7 +43,7 @@ function pickColumn(
   headers: string[],
   key: AliasKey,
 ): number {
-  const wanted = aliases[key]
+  const wanted: readonly string[] = aliases[key]
   return headers.findIndex((header) => wanted.includes(header))
 }
 
