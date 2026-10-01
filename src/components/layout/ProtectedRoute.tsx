@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { isNavAllowed } from '@/lib/access'
+import { clearPendingInviteToken, resolveInviteToken } from '@/lib/inviteSession'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getInviteByToken } from '@/services/invites'
 
 function extractInviteToken(raw: string): string | null {
   const value = raw.trim()
@@ -43,9 +45,11 @@ export function ProtectedRoute() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [inviteInput, setInviteInput] = useState('')
   const [linking, setLinking] = useState(false)
+  const [inviteMismatchEmail, setInviteMismatchEmail] = useState<string | null>(null)
+  const [switchingAccount, setSwitchingAccount] = useState(false)
   const autoInviteTried = useRef<string | null>(null)
 
-  const inviteFromUrl = searchParams.get('invite')
+  const inviteFromUrl = resolveInviteToken(searchParams.get('invite'))
 
   const allowed =
     !user ||
@@ -63,7 +67,6 @@ export function ProtectedRoute() {
     if (loading || orgLoading || !user || allowed) return
     if (deniedPath.current === location.pathname) return
     deniedPath.current = location.pathname
-    // /empresas é só do Master — redireciona em silêncio para o dashboard da empresa
     const isEmpresas =
       location.pathname === '/empresas' || location.pathname.startsWith('/empresas/')
     if (!isEmpresas) {
@@ -72,32 +75,71 @@ export function ProtectedRoute() {
   }, [allowed, loading, orgLoading, user, location.pathname])
 
   useEffect(() => {
-    if (
-      loading ||
-      orgLoading ||
-      !user ||
-      isPlatformAdmin ||
-      activeOrgId ||
-      !inviteFromUrl ||
-      autoInviteTried.current === inviteFromUrl
-    ) {
-      return
-    }
-    autoInviteTried.current = inviteFromUrl
+    if (loading || orgLoading || !user || isPlatformAdmin || !inviteFromUrl) return
+    if (autoInviteTried.current === inviteFromUrl) return
+
+    let cancelled = false
     setLinking(true)
-    void acceptInviteLink(inviteFromUrl)
-      .then(async () => {
+    setInviteMismatchEmail(null)
+
+    void (async () => {
+      try {
+        const invite = await getInviteByToken(inviteFromUrl)
+        if (cancelled) return
+
+        if (!invite) {
+          autoInviteTried.current = inviteFromUrl
+          clearPendingInviteToken()
+          const next = new URLSearchParams(searchParams)
+          next.delete('invite')
+          setSearchParams(next, { replace: true })
+          if (!activeOrgId) {
+            toast.error('Convite inválido, expirado ou já utilizado')
+          }
+          return
+        }
+
+        const userEmail = user.email?.trim().toLowerCase() ?? ''
+        const inviteEmail = invite.email.trim().toLowerCase()
+        if (userEmail && inviteEmail && userEmail !== inviteEmail) {
+          autoInviteTried.current = inviteFromUrl
+          setInviteMismatchEmail(invite.email)
+          return
+        }
+
+        await acceptInviteLink(inviteFromUrl)
+        if (cancelled) return
+        autoInviteTried.current = inviteFromUrl
         await refreshProfile()
         await refreshOrg()
-        toast.success('Empresa vinculada com sucesso')
+        clearPendingInviteToken()
+        toast.success(
+          activeOrgId && activeOrgId !== invite.orgId
+            ? 'Empresa vinculada — pasta atualizada'
+            : 'Empresa vinculada com sucesso',
+        )
         const next = new URLSearchParams(searchParams)
         next.delete('invite')
         setSearchParams(next, { replace: true })
-      })
-      .catch((error) => {
-        toast.error(error instanceof Error ? error.message : 'Não foi possível aceitar o convite')
-      })
-      .finally(() => setLinking(false))
+      } catch (error) {
+        if (cancelled) return
+        autoInviteTried.current = inviteFromUrl
+        const message =
+          error instanceof Error ? error.message : 'Não foi possível aceitar o convite'
+        if (/Este convite é para/i.test(message)) {
+          const match = message.match(/Este convite é para ([^\s.]+)/i)
+          setInviteMismatchEmail(match?.[1] ?? 'outro e-mail')
+          return
+        }
+        toast.error(message)
+      } finally {
+        setLinking(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [
     loading,
     orgLoading,
@@ -111,6 +153,22 @@ export function ProtectedRoute() {
     searchParams,
     setSearchParams,
   ])
+
+  const switchToInviteAccount = async () => {
+    if (!inviteFromUrl || !inviteMismatchEmail) return
+    setSwitchingAccount(true)
+    try {
+      await logout()
+      clearPendingInviteToken()
+      resolveInviteToken(inviteFromUrl)
+      window.location.assign(
+        `/login?invite=${encodeURIComponent(inviteFromUrl)}&email=${encodeURIComponent(inviteMismatchEmail)}&notice=wrong-account`,
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível sair da conta')
+      setSwitchingAccount(false)
+    }
+  }
 
   if (loading || orgLoading || linking) {
     return (
@@ -129,6 +187,46 @@ export function ProtectedRoute() {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  if (inviteMismatchEmail && inviteFromUrl) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="w-full max-w-md space-y-4 text-center">
+          <h1 className="text-lg font-semibold">Conta diferente do convite</h1>
+          <p className="text-sm text-muted-foreground">
+            Este convite é para{' '}
+            <span className="font-medium text-foreground">{inviteMismatchEmail}</span>. Você
+            está logado como{' '}
+            <span className="font-medium text-foreground">{user.email}</span>.
+          </p>
+          <Button
+            type="button"
+            className="w-full cursor-pointer"
+            disabled={switchingAccount}
+            onClick={() => void switchToInviteAccount()}
+          >
+            {switchingAccount ? 'Saindo...' : 'Sair e entrar com o e-mail do convite'}
+          </Button>
+          {activeOrgId ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                clearPendingInviteToken()
+                setInviteMismatchEmail(null)
+                const next = new URLSearchParams(searchParams)
+                next.delete('invite')
+                setSearchParams(next, { replace: true })
+              }}
+            >
+              Continuar nesta conta
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    )
   }
 
   if (!allowed) {
@@ -163,9 +261,22 @@ export function ProtectedRoute() {
       }
       setLinking(true)
       try {
+        const invite = await getInviteByToken(token)
+        if (!invite) {
+          toast.error('Convite inválido, expirado ou já utilizado')
+          return
+        }
+        const userEmail = user.email?.trim().toLowerCase() ?? ''
+        const inviteEmail = invite.email.trim().toLowerCase()
+        if (userEmail && inviteEmail && userEmail !== inviteEmail) {
+          setInviteMismatchEmail(invite.email)
+          resolveInviteToken(token)
+          return
+        }
         await acceptInviteLink(token)
         await refreshProfile()
         await refreshOrg()
+        clearPendingInviteToken()
         toast.success('Empresa vinculada com sucesso')
         setInviteInput('')
       } catch (error) {
@@ -209,9 +320,6 @@ export function ProtectedRoute() {
               Precisa de um convite novo? Peça ao Master/admin em{' '}
               <span className="font-medium">Empresas → Convites</span>.
             </p>
-            <Link to="/perfil" className="text-xs text-primary hover:underline">
-              Abrir perfil
-            </Link>
           </div>
         </div>
       </div>
@@ -225,7 +333,7 @@ export function PublicOnlyRoute() {
   const { user, loading, isPlatformAdmin } = useAuth()
   const { activeOrgId, loading: orgLoading } = useOrg()
   const [searchParams] = useSearchParams()
-  const inviteToken = searchParams.get('invite')
+  const inviteToken = resolveInviteToken(searchParams.get('invite'))
 
   if (loading || (user && orgLoading)) {
     return (
@@ -236,12 +344,12 @@ export function PublicOnlyRoute() {
   }
 
   if (user) {
+    // Com convite pendente: processa no app (mesmo se já tiver empresa).
+    if (inviteToken && !isPlatformAdmin) {
+      return <Navigate to={`/?invite=${encodeURIComponent(inviteToken)}`} replace />
+    }
     if (isPlatformAdmin && !activeOrgId) {
       return <Navigate to="/empresas" replace />
-    }
-    // Conta sem empresa: deixa cadastro/login com convite processarem o vínculo.
-    if (!activeOrgId && !isPlatformAdmin && inviteToken) {
-      return <Outlet />
     }
     if (!activeOrgId && !isPlatformAdmin) {
       return <Navigate to="/" replace />

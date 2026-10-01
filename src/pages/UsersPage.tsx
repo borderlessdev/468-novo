@@ -21,12 +21,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canManageOrgUsers, mergeModulePermissions } from '@/lib/access'
 import { orgRoleLabel } from '@/lib/org'
-import { createInvite, cancelInvite, listPendingInvitesByOrg } from '@/services/invites'
+import {
+  createInvite,
+  cancelInvite,
+  listPendingInvitesByOrg,
+  subscribePendingInvitesByOrg,
+} from '@/services/invites'
 import {
   countOrganizationSeats,
   countPendingInvites,
   listOrganizationMembers,
   removeOrganizationMember,
+  subscribeOrganizationMembers,
 } from '@/services/organizations'
 import { listUsers, updateUserModulePermissions } from '@/services/users'
 import type {
@@ -63,7 +69,7 @@ export function UsersPage() {
   const [inviteRole, setInviteRole] = useState<InviteRole>('team')
   const [inviteDepartment, setInviteDepartment] = useState('')
   const [inviting, setInviting] = useState(false)
-  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null)
+  const [lastInvite, setLastInvite] = useState<{ id: string; link: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const removeMemberDialog = useConfirmDelete<OrganizationMember>()
 
@@ -95,6 +101,30 @@ export function UsersPage() {
     void reload()
   }, [reload])
 
+  useEffect(() => {
+    if (!activeOrgId || !canManage) return
+    const unsubscribeMembers = subscribeOrganizationMembers(
+      activeOrgId,
+      (nextMembers) => {
+        setMembers(nextMembers)
+        setSeatUsage((current) => ({ ...current, members: nextMembers.length }))
+      },
+      (error) => console.error('Não foi possível acompanhar os membros', error),
+    )
+    const unsubscribeInvites = subscribePendingInvitesByOrg(
+      activeOrgId,
+      (nextInvites) => {
+        setPendingInvites(nextInvites)
+        setSeatUsage((current) => ({ ...current, pending: nextInvites.length }))
+      },
+      (error) => console.error('Não foi possível acompanhar os convites', error),
+    )
+    return () => {
+      unsubscribeMembers()
+      unsubscribeInvites()
+    }
+  }, [activeOrgId, canManage])
+
   if (!canManage) {
     return <Navigate to="/" replace />
   }
@@ -114,7 +144,7 @@ export function UsersPage() {
         orgId: activeOrgId,
         department: inviteDepartment.trim() || undefined,
       })
-      setLastInviteLink(created.link)
+      setLastInvite({ id: created.id, link: created.link })
       toast.success(
         created.mailtoOpened
           ? 'Convite criado — cliente de e-mail aberto'
@@ -135,7 +165,7 @@ export function UsersPage() {
     try {
       await cancelInvite(inviteId)
       toast.success('Convite cancelado — vaga liberada')
-      if (lastInviteLink?.includes(inviteId)) setLastInviteLink(null)
+      if (lastInvite?.id === inviteId) setLastInvite(null)
       await reload()
     } catch (error) {
       console.error(error)
@@ -143,16 +173,27 @@ export function UsersPage() {
     }
   }
 
+  const canDeleteMember = (member: OrganizationMember) => {
+    if (user?.uid === member.uid) return false
+    if (isPlatformAdmin) return true
+    // Admin da empresa: exclui funcionários (equipe/usuário/cliente), não outros admins
+    return member.orgRole !== 'org_admin'
+  }
+
   const handleRemoveMember = () => {
     void removeMemberDialog.confirm(async (member) => {
       try {
         await removeOrganizationMember(member.orgId, member.uid)
-        toast.success('Usuário removido da empresa')
+        toast.success(
+          member.orgRole === 'team'
+            ? 'Funcionário excluído da empresa'
+            : 'Usuário excluído da empresa',
+        )
         await reload()
       } catch (error) {
         console.error(error)
         toast.error(
-          error instanceof Error ? error.message : 'Não foi possível remover o usuário',
+          error instanceof Error ? error.message : 'Não foi possível excluir o usuário',
         )
         throw error
       }
@@ -255,13 +296,13 @@ export function UsersPage() {
                 Limite de acessos atingido. Peça ao Admin Master para aumentar o limite.
               </p>
             ) : null}
-            {lastInviteLink ? (
+            {lastInvite ? (
               <div className="space-y-2 rounded-lg border bg-muted/40 p-3" role="status">
                 <Label htmlFor="users-invite-link">Link do convite</Label>
                 <Input
                   id="users-invite-link"
                   readOnly
-                  value={lastInviteLink}
+                  value={lastInvite.link}
                   className="font-mono text-xs"
                 />
                 <Button
@@ -269,7 +310,7 @@ export function UsersPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    void navigator.clipboard.writeText(lastInviteLink)
+                    void navigator.clipboard.writeText(lastInvite.link)
                     toast.success('Link copiado')
                   }}
                 >
@@ -298,6 +339,7 @@ export function UsersPage() {
             <div className="space-y-2">
               {members.map((member) => {
                 const isSelf = user?.uid === member.uid
+                const showDelete = canDeleteMember(member)
                 return (
                   <div
                     key={member.id}
@@ -309,10 +351,14 @@ export function UsersPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs text-muted-foreground">
-                        {orgRoleLabel(member.orgRole)}
+                        {member.orgRole === 'team'
+                          ? 'Funcionário'
+                          : orgRoleLabel(member.orgRole)}
                         {member.department ? ` · ${member.department}` : ''}
                       </span>
-                      {!isSelf ? (
+                      {isSelf ? (
+                        <Badge variant="secondary">Você</Badge>
+                      ) : showDelete ? (
                         <Button
                           type="button"
                           size="sm"
@@ -321,10 +367,10 @@ export function UsersPage() {
                           onClick={() => removeMemberDialog.requestDelete(member)}
                         >
                           <Trash2 className="size-3.5" />
-                          Remover
+                          Excluir
                         </Button>
                       ) : (
-                        <Badge variant="secondary">Você</Badge>
+                        <Badge variant="outline">Admin</Badge>
                       )}
                     </div>
                   </div>
@@ -426,14 +472,18 @@ export function UsersPage() {
       <ConfirmDeleteDialog
         open={removeMemberDialog.open}
         onOpenChange={removeMemberDialog.handleOpenChange}
-        title="Remover usuário da empresa?"
+        title={
+          removeMemberDialog.target?.orgRole === 'team'
+            ? 'Excluir funcionário da empresa?'
+            : 'Excluir usuário da empresa?'
+        }
         description={
           removeMemberDialog.target
             ? `"${removeMemberDialog.target.name}" (${removeMemberDialog.target.email}) perderá o acesso a esta empresa. A conta de login continua existindo.`
             : undefined
         }
         itemName={removeMemberDialog.target?.name}
-        confirmLabel="Remover"
+        confirmLabel="Excluir"
         loading={removeMemberDialog.loading}
         onConfirm={handleRemoveMember}
       />

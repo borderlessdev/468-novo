@@ -245,7 +245,7 @@ function PortalShell({ children }: { children: React.ReactNode }) {
           <SafeLogo
             src="/vale-logo.svg"
             alt=""
-            className="h-9 w-auto max-w-[120px] shrink-0 rounded bg-white px-2 py-1 object-contain sm:h-10 sm:max-w-[140px]"
+            className="h-14 w-auto max-w-[200px] shrink-0 rounded bg-white px-2.5 py-1.5 object-contain sm:h-16 sm:max-w-[240px]"
           />
         </div>
       </div>
@@ -537,7 +537,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
                 src={link.orgLogoUrl}
                 fallbackSrc="/vale-logo.svg"
                 alt=""
-                className="h-10 w-auto max-w-[96px] rounded bg-white/95 object-contain p-1"
+                className="h-14 w-auto max-w-[160px] rounded bg-white/95 object-contain p-1.5 sm:h-16 sm:max-w-[200px]"
               />
             </div>
             <div className="mt-3 h-1 w-full rounded-full bg-brand" />
@@ -599,7 +599,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
               src={link.orgLogoUrl}
               fallbackSrc="/vale-logo.svg"
               alt=""
-              className="h-12 w-auto max-w-[140px] object-contain sm:h-14 sm:max-w-[180px]"
+              className="h-16 w-auto max-w-[200px] object-contain sm:h-20 sm:max-w-[260px]"
             />
             <div className="flex rounded-lg border border-primary/20 bg-background p-0.5 text-xs shadow-sm">
               <Button

@@ -45,7 +45,7 @@ export function HelpPage() {
         <div className="space-y-2">
           <PageHeader
             title="Assistente"
-            description="Pergunte sobre os processos do app — caminhos curtos de tela a tela."
+            description="Converse sobre qualquer assunto ou pergunte como usar o app."
           />
           <AiProviderBadge status={aiStatus} />
         </div>

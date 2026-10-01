@@ -45,14 +45,50 @@ function truncate(text: string, max: number): string {
 
 // --- Help assistant ---------------------------------------------------------
 
-const HELP_SYSTEM = `Você é o assistente de ajuda do Promover Experience (gestão de experiências: visitas VIP, comunidades e eventos).
-Sua função é ENSINAR a usar o sistema: quem pode fazer, menu → tela → botão, e o que acontece depois.
-Responda SEMPRE em português do Brasil. Seja claro (até ~12 linhas ou lista numerada). Comece pelo caminho na interface.
-Use APENAS o manual abaixo e o bloco de papel do usuário. Se não estiver no manual, diga que não sabe e indique Configurações, Experiências, Usuários ou o Admin da empresa.
-Não invente botões, rotas ou recursos. Não execute ações; só oriente.
-Respeite SEMPRE o papel do usuário: se a ação for só de Admin Master ou Admin da empresa, diga isso e a quem pedir.
-DISTINÇÃO CRÍTICA: "funcionário" / "usuário da empresa" / "convidar equipe" = menu Usuários (convite por e-mail/link). "Visitante" = CRM / portal da visita. Nunca confunda os dois.
-Perguntas típicas (responda com o passo a passo do manual): logo/whitelabel, convites de funcionários, aba Período, importar programação, portal do visitante, playbooks, ciclo do dashboard.`
+const PRODUCT_SYSTEM = `Você é o assistente do Promover Experience e está respondendo a uma pergunta sobre o produto.
+- Responda em português do Brasil, de forma clara. Quando perguntarem como usar um recurso, explique o caminho menu → tela → ação.
+- Baseie instruções do produto no manual e no bloco de papel do usuário. Não invente botões, rotas ou telas; se a resposta não estiver documentada, diga isso.
+- Não execute ações no sistema; só oriente. Respeite as permissões do papel atual e diga a quem pedir acesso quando necessário.
+- DISTINÇÃO CRÍTICA: funcionário/usuário da empresa/convidar equipe = menu Usuários. Visitante = CRM/portal da visita. Nunca confunda os dois.`
+
+const GENERAL_SYSTEM = `Você é um assistente conversacional geral, útil e bem informado. Responda à pergunta atual sobre qualquer tema, sem redirecionar a conversa para o Promover Experience e sem limitar os assuntos ao aplicativo. Converse, explique, ajude a pesquisar, compare opções, escreva e raciocine normalmente.
+- Responda em português do Brasil, salvo se o usuário pedir outro idioma. Seja claro, natural e adapte o nível de detalhe ao pedido.
+- Use o histórico apenas quando for relevante para entender a pergunta atual; não presuma que ela é sobre o aplicativo.
+- Seja honesto sobre incertezas e sobre dados que podem ter mudado. Não invente fatos, números, leis ou fontes.
+- Você não tem navegação web em tempo real: ao tratar de informações atuais, deixe isso claro e sugira fontes confiáveis para verificação.`
+
+function isProductQuestion(message: string): boolean {
+  const normalized = message.toLocaleLowerCase('pt-BR')
+  const productTerms = [
+    'promover experience',
+    'no app',
+    'no sistema',
+    'nessa tela',
+    'nesta tela',
+    'neste aplicativo',
+    'funcionalidade',
+    'whitelabel',
+    'playbook',
+    'portal do visitante',
+    'visitante',
+    'visita vip',
+    'visita',
+    'agenda',
+    'compromisso',
+    'programação',
+    'programacao',
+    'experiência',
+    'experiencia',
+    'menu',
+    'google calendar',
+    'usuário da empresa',
+    'usuario da empresa',
+    'convidar equipe',
+    'permissão no',
+    'permissao no',
+  ]
+  return productTerms.some((term) => normalized.includes(term))
+}
 
 function mockHelpAnswer(
   message: string,
@@ -153,8 +189,8 @@ function mockHelpAnswer(
     ].join('\n')
   }
   return [
-    'Posso ajudar com o caminho no app (agenda, visitas, playbooks, portal, financeiro…).',
-    'Ex.: “Como importo a programação?” ou “Como gero o link do portal?”',
+    'Posso ajudar com o app (agenda, visitas, playbooks, portal…) e também com conversa ou pesquisa sobre qualquer assunto.',
+    'Ex.: “Como importo a programação?” ou “Explique o que é LGPD em poucas linhas”.',
     route ? `Você está em: ${route}` : '',
     `Seu perfil: ${roleLabel}`,
   ]
@@ -189,6 +225,7 @@ export const askHelpAssistant = onCall({ timeoutSeconds: 60 }, async (request) =
   }
 
   const route = asString(request.data?.route).slice(0, 200) || undefined
+  const productQuestion = isProductQuestion(message)
   const rawHistory = Array.isArray(request.data?.history) ? request.data.history : []
   const history = rawHistory
     .slice(-8)
@@ -201,27 +238,30 @@ export const askHelpAssistant = onCall({ timeoutSeconds: 60 }, async (request) =
       return [{ role: role as 'user' | 'assistant', content: content.slice(0, 1500) }]
     })
 
-  let roleBlock = ''
   let roleLabel = 'Usuário'
-  try {
-    const ctx = await resolveAssistantUserContext(uid)
-    roleBlock = formatRolePromptBlock(ctx)
-    roleLabel = ctx.label
-  } catch (error) {
-    logger.warn('askHelpAssistant: falha ao resolver papel', error)
+  let roleBlock = ''
+  if (productQuestion) {
+    try {
+      const ctx = await resolveAssistantUserContext(uid)
+      roleBlock = formatRolePromptBlock(ctx)
+      roleLabel = ctx.label
+    } catch (error) {
+      logger.warn('askHelpAssistant: falha ao resolver papel', error)
+    }
   }
 
   if (isAiMockMode()) {
     return { reply: mockHelpAnswer(message, route, roleLabel), provider: 'mock' as const }
   }
 
-  const manual = loadHelpCatalog()
-  const system = [HELP_SYSTEM, roleBlock, '## Manual do produto', manual]
-    .filter(Boolean)
-    .join('\n\n')
+  const system = productQuestion
+    ? [PRODUCT_SYSTEM, roleBlock, '## Manual do produto', loadHelpCatalog()]
+        .filter(Boolean)
+        .join('\n\n')
+    : GENERAL_SYSTEM
   const userPayload = [
-    route ? `Rota atual do usuário: ${route}` : null,
-    `Pergunta: ${message}`,
+    productQuestion && route ? `Rota atual do usuário: ${route}` : null,
+    message,
   ]
     .filter(Boolean)
     .join('\n')
@@ -230,8 +270,8 @@ export const askHelpAssistant = onCall({ timeoutSeconds: 60 }, async (request) =
     const { text, provider } = await chatCompletion({
       system,
       messages: [...history, { role: 'user', content: userPayload }],
-      temperature: 0.2,
-      maxTokens: 800,
+      temperature: productQuestion ? 0.2 : 0.5,
+      maxTokens: productQuestion ? 800 : 1400,
     })
     return { reply: text, provider }
   } catch (error) {

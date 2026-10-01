@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
-import { createInvite, listPendingInvitesByOrg } from '@/services/invites'
+import { createInvite, subscribePendingInvitesByOrg } from '@/services/invites'
 import { listOrganizations } from '@/services/organizations'
 import type { Invite, Organization } from '@/types'
 
@@ -56,11 +56,14 @@ export function MasterUsersPage() {
       setPending([])
       return
     }
-    void listPendingInvitesByOrg(orgId)
-      .then((invites) =>
-        setPending(invites.filter((invite) => invite.role === 'org_admin')),
-      )
-      .catch(() => setPending([]))
+    return subscribePendingInvitesByOrg(
+      orgId,
+      (invites) => setPending(invites.filter((invite) => invite.role === 'org_admin')),
+      (error) => {
+        console.error('Não foi possível acompanhar os convites', error)
+        setPending([])
+      },
+    )
   }, [orgId])
 
   const selectedOrg = orgs.find((o) => o.id === orgId)
@@ -78,8 +81,6 @@ export function MasterUsersPage() {
       setLastLink(created.link)
       setEmail('')
       toast.success('Convite de admin criado — copie o link e envie')
-      const invites = await listPendingInvitesByOrg(orgId)
-      setPending(invites.filter((invite) => invite.role === 'org_admin'))
     } catch (error) {
       console.error(error)
       toast.error(

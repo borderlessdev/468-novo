@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
+import { resolveInviteToken } from '@/lib/inviteSession'
 import { resetPasswordSchema } from '@/lib/validations'
 import type { z } from 'zod'
 
@@ -18,7 +19,7 @@ export function ResetPasswordPage() {
   const { resetPassword } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const inviteToken = searchParams.get('invite')
+  const inviteToken = resolveInviteToken(searchParams.get('invite'))
   const emailFromQuery = searchParams.get('email')?.trim().toLowerCase() ?? ''
   const [loading, setLoading] = useState(false)
   const [sentEmail, setSentEmail] = useState<string | null>(null)
@@ -37,7 +38,10 @@ export function ResetPasswordPage() {
     setLoading(true)
     try {
       const email = values.email.trim().toLowerCase()
-      await resetPassword(email)
+      const continueUrl = new URL('/login', window.location.origin)
+      if (inviteToken) continueUrl.searchParams.set('invite', inviteToken)
+      continueUrl.searchParams.set('email', email)
+      await resetPassword(email, { continueUrl: continueUrl.toString() })
       setSentEmail(email)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao enviar e-mail')
@@ -62,7 +66,7 @@ export function ResetPasswordPage() {
               <span className="font-medium text-foreground">{sentEmail}</span>.
               Confira a caixa de entrada e o spam.
               {inviteToken
-                ? ' Depois de definir a nova senha, volte pelo mesmo link de convite para vincular à empresa.'
+                ? ' Depois de definir a nova senha, você volta ao login com o convite já aplicado para vincular à empresa.'
                 : null}
             </p>
           </div>
@@ -81,7 +85,11 @@ export function ResetPasswordPage() {
   return (
     <AuthLayout
       title="Recuperar senha"
-      subtitle="Informe seu e-mail para receber o link de redefinição."
+      subtitle={
+        inviteToken
+          ? 'Informe seu e-mail. Após redefinir a senha, o convite da empresa será mantido.'
+          : 'Informe seu e-mail para receber o link de redefinição.'
+      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">

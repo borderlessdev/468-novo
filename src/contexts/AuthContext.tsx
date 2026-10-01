@@ -20,9 +20,9 @@ import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
 import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
-import { acceptInvite, getInviteById, joinOrganizationFromInvite } from '@/services/invites'
+import { getInviteById, joinOrganizationFromInvite } from '@/services/invites'
 import { addOrganizationMember } from '@/services/organizations'
-import { ACTIVE_ORG_STORAGE_KEY, inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
+import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/org'
 import type { UserProfile, UserRole } from '@/types'
 import type { NotificationPreferences } from '@/lib/notificationPreferences'
 import { getAuthErrorMessage } from '@/lib/utils'
@@ -52,7 +52,10 @@ interface AuthContextValue {
   /** Vincula a conta logada a uma empresa a partir do token do convite. */
   acceptInviteLink: (token: string) => Promise<void>
   logout: () => Promise<void>
-  resetPassword: (email: string) => Promise<void>
+  resetPassword: (
+    email: string,
+    options?: { continueUrl?: string },
+  ) => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfileData: (data: { name: string; photoURL?: string }) => Promise<void>
   uploadAvatar: (file: File) => Promise<void>
@@ -153,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const signInCode = (signInError as { code?: string }).code ?? ''
         if (signInCode === 'auth/wrong-password' || signInCode === 'auth/invalid-credential') {
           throw new Error(
-            'Este e-mail já tem conta. Use a senha atual (a que o administrador enviou) ou redefina a senha. Mantenha o mesmo link de convite.',
+            'Este e-mail já tem conta. Entre com a senha atual ou use “Esqueceu a senha?” — o convite será mantido.',
           )
         }
         throw new Error(getAuthErrorMessage(signInCode) || 'Não foi possível entrar na conta existente.')
@@ -201,12 +204,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (options?.inviteId) {
           const invite = await getInviteById(options.inviteId)
-          if (invite) {
-            orgId = invite.orgId
-            orgRole = inviteRoleToOrgRole(invite.role)
-            department = invite.department
-            role = inviteRoleToUserRole(invite.role)
+          if (!invite?.token) {
+            throw new Error('Convite inválido, expirado ou já utilizado')
           }
+          await createUserProfile({
+            uid: credential.user.uid,
+            name,
+            email: normalizedEmail,
+            role: 'user',
+          })
+          await joinOrganizationFromInvite({
+            token: invite.token,
+            uid: credential.user.uid,
+            email: normalizedEmail,
+            name,
+          })
+          await loadProfile(credential.user)
+          return
         }
 
         await createUserProfile({
@@ -226,10 +240,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             orgRole,
             department,
           })
-        }
-
-        if (options?.inviteId) {
-          await acceptInvite(options.inviteId, credential.user.uid)
         }
 
         // Garante profile/org no estado após corrida com onAuthStateChanged
@@ -257,12 +267,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!firebaseUser?.email) {
         throw new Error('Faça login para aceitar o convite')
       }
-      await joinOrganizationFromInvite({
+      const joined = await joinOrganizationFromInvite({
         token: token.trim(),
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         name: firebaseUser.displayName ?? undefined,
       })
+      try {
+        localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, joined.orgId)
+      } catch {
+        // ignore
+      }
       await loadProfile(firebaseUser)
     },
     [loadProfile],
@@ -278,19 +293,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth)
   }, [])
 
-  const resetPassword = useCallback(async (email: string) => {
-    try {
-      const normalizedEmail = email.trim().toLowerCase()
-      auth.languageCode = 'pt'
-      await sendPasswordResetEmail(auth, normalizedEmail, {
-        url: `${window.location.origin}/login`,
-        handleCodeInApp: false,
-      })
-    } catch (error) {
-      const code = (error as { code?: string }).code ?? ''
-      throw new Error(getAuthErrorMessage(code))
-    }
-  }, [])
+  const resetPassword = useCallback(
+    async (email: string, options?: { continueUrl?: string }) => {
+      try {
+        const normalizedEmail = email.trim().toLowerCase()
+        auth.languageCode = 'pt'
+        await sendPasswordResetEmail(auth, normalizedEmail, {
+          url: options?.continueUrl ?? `${window.location.origin}/login`,
+          handleCodeInApp: false,
+        })
+      } catch (error) {
+        const code = (error as { code?: string }).code ?? ''
+        throw new Error(getAuthErrorMessage(code))
+      }
+    },
+    [],
+  )
 
   const refreshProfile = useCallback(async () => {
     if (!user) return

@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   setDoc,
@@ -98,6 +99,24 @@ export async function listOrganizationMembers(orgId: string): Promise<Organizati
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
+export function subscribeOrganizationMembers(
+  orgId: string,
+  onChange: (members: OrganizationMember[]) => void,
+  onError: (error: Error) => void,
+): () => void {
+  return onSnapshot(
+    query(membersCol, where('orgId', '==', orgId)),
+    (snap) => {
+      onChange(
+        snap.docs
+          .map((item) => mapMember(item.id, item.data()))
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      )
+    },
+    onError,
+  )
+}
+
 export async function countOrganizationSeats(orgId: string): Promise<number> {
   const snap = await getDocs(query(membersCol, where('orgId', '==', orgId)))
   return snap.size
@@ -188,7 +207,7 @@ export async function updateOrganization(
   })
 }
 
-/** Remove o vínculo do membro com a pasta (Master). Não apaga a conta Auth. */
+/** Remove o vínculo do membro com a pasta. Não apaga a conta Auth. */
 export async function removeOrganizationMember(
   orgId: string,
   uid: string,
@@ -205,4 +224,28 @@ export async function removeOrganizationMember(
       updatedAt: serverTimestamp(),
     })
   }
+}
+
+/**
+ * Exclui a pasta do cliente (Master): remove membros, convites e o documento da organização.
+ * Não apaga contas Auth nem dados operacionais (visitas etc.).
+ */
+export async function deleteOrganization(orgId: string): Promise<void> {
+  const org = await getOrganization(orgId)
+  if (!org) {
+    throw new Error('Cliente não encontrado')
+  }
+
+  const [members, inviteSnap] = await Promise.all([
+    listOrganizationMembers(orgId),
+    getDocs(query(collection(db, 'invites'), where('orgId', '==', orgId))),
+  ])
+
+  await Promise.all(inviteSnap.docs.map((inviteDoc) => deleteDoc(inviteDoc.ref)))
+
+  for (const member of members) {
+    await removeOrganizationMember(orgId, member.uid)
+  }
+
+  await deleteDoc(doc(organizationsCol, orgId))
 }

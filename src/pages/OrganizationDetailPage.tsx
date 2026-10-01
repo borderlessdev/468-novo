@@ -45,6 +45,7 @@ import {
   cancelInvite,
   createInvite,
   listInvitesByOrg,
+  subscribePendingInvitesByOrg,
 } from '@/services/invites'
 import {
   removeOrganizationLogo,
@@ -52,9 +53,11 @@ import {
 } from '@/services/orgLogo'
 import {
   countPendingInvites,
+  deleteOrganization,
   getOrganization,
   listOrganizationMembers,
   removeOrganizationMember,
+  subscribeOrganizationMembers,
   updateOrganization,
 } from '@/services/organizations'
 import type { Invite, Organization, OrganizationMember, OrganizationStatus } from '@/types'
@@ -89,12 +92,15 @@ export function OrganizationDetailPage() {
   const [showPasswordCreate, setShowPasswordCreate] = useState(false)
   const [pendingAdminInvites, setPendingAdminInvites] = useState<Invite[]>([])
   const [pendingInvites, setPendingInvites] = useState<Invite[]>([])
-  const [lastAdminInviteLink, setLastAdminInviteLink] = useState<string | null>(null)
+  const [lastAdminInvite, setLastAdminInvite] = useState<{ id: string; link: string } | null>(
+    null,
+  )
   const [createdCredentials, setCreatedCredentials] =
     useState<CreatedOrgAdminCredentials | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [logoBusy, setLogoBusy] = useState(false)
   const removeDialog = useConfirmDelete<OrganizationMember>()
+  const deleteOrgDialog = useConfirmDelete<Organization>()
 
   const load = useCallback(async () => {
     if (!orgId) return
@@ -130,6 +136,28 @@ export function OrganizationDetailPage() {
     if (!canCreateOrganization(isPlatformAdmin)) return
     void load()
   }, [isPlatformAdmin, load])
+
+  useEffect(() => {
+    if (!orgId || !canCreateOrganization(isPlatformAdmin)) return
+    const unsubscribeMembers = subscribeOrganizationMembers(
+      orgId,
+      (nextMembers) => setMembers(nextMembers),
+      (error) => console.error('Não foi possível acompanhar os membros', error),
+    )
+    const unsubscribeInvites = subscribePendingInvitesByOrg(
+      orgId,
+      (nextInvites) => {
+        setPending(nextInvites.length)
+        setPendingAdminInvites(nextInvites.filter((invite) => invite.role === 'org_admin'))
+        setPendingInvites(nextInvites)
+      },
+      (error) => console.error('Não foi possível acompanhar os convites', error),
+    )
+    return () => {
+      unsubscribeMembers()
+      unsubscribeInvites()
+    }
+  }, [isPlatformAdmin, orgId])
 
   const orgAdmins = useMemo(
     () => members.filter((member) => member.orgRole === 'org_admin'),
@@ -298,7 +326,7 @@ export function OrganizationDetailPage() {
         createdBy: user.uid,
         orgId,
       })
-      setLastAdminInviteLink(created.link)
+      setLastAdminInvite({ id: created.id, link: created.link })
       setAdminEmail('')
       toast.success('Convite de admin criado — copie o link e envie')
       await load()
@@ -316,7 +344,7 @@ export function OrganizationDetailPage() {
     try {
       await cancelInvite(inviteId)
       toast.success('Convite cancelado')
-      if (lastAdminInviteLink?.includes(inviteId)) setLastAdminInviteLink(null)
+      if (lastAdminInvite?.id === inviteId) setLastAdminInvite(null)
       await load()
     } catch (error) {
       console.error(error)
@@ -329,7 +357,7 @@ export function OrganizationDetailPage() {
     try {
       await Promise.all(pendingInvites.map((invite) => cancelInvite(invite.id)))
       toast.success(`${pendingInvites.length} convite(s) cancelado(s) — vagas liberadas`)
-      setLastAdminInviteLink(null)
+      setLastAdminInvite(null)
       await load()
     } catch (error) {
       console.error(error)
@@ -392,6 +420,26 @@ export function OrganizationDetailPage() {
     })
   }
 
+  const handleDeleteClient = () => {
+    void deleteOrgDialog.confirm(async (organization) => {
+      try {
+        await deleteOrganization(organization.id)
+        if (activeOrgId === organization.id) {
+          setActiveOrgId(null)
+          await refreshOrg()
+        }
+        toast.success('Cliente excluído')
+        navigate('/empresas')
+      } catch (error) {
+        console.error(error)
+        toast.error(
+          error instanceof Error ? error.message : 'Não foi possível excluir o cliente',
+        )
+        throw error
+      }
+    })
+  }
+
   if (!canCreateOrganization(isPlatformAdmin)) {
     return null
   }
@@ -421,10 +469,21 @@ export function OrganizationDetailPage() {
         title={org.name}
         description="Configure a pasta do cliente, crie o admin da empresa e entre no sistema de visitas e eventos."
         actions={
-          <Button onClick={enterSystem} disabled={org.status !== 'active'}>
-            <LogIn className="h-4 w-4" />
-            Entrar no sistema do cliente
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={enterSystem} disabled={org.status !== 'active'}>
+              <LogIn className="h-4 w-4" />
+              Entrar no sistema do cliente
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => deleteOrgDialog.requestDelete(org)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Excluir cliente
+            </Button>
+          </div>
         }
       />
 
@@ -569,7 +628,7 @@ export function OrganizationDetailPage() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 p-2">
+          <div className="flex h-36 w-64 items-center justify-center rounded-xl border border-dashed bg-muted/30 p-4 sm:h-40 sm:w-72">
             {org.logoUrl ? (
               <SafeLogo
                 src={org.logoUrl}
@@ -721,21 +780,21 @@ export function OrganizationDetailPage() {
                 Limite de acessos atingido. Aumente o limite antes de convidar.
               </p>
             ) : null}
-            {lastAdminInviteLink ? (
+            {lastAdminInvite ? (
               <div className="space-y-2 rounded-lg bg-muted/40 p-3">
                 <Label htmlFor="admin-invite-link">Link do convite (copie e envie)</Label>
                 <div className="flex gap-2">
                   <Input
                     id="admin-invite-link"
                     readOnly
-                    value={lastAdminInviteLink}
+                    value={lastAdminInvite.link}
                     className="font-mono text-xs"
                   />
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => void copyText('Link do convite', lastAdminInviteLink)}
+                    onClick={() => void copyText('Link do convite', lastAdminInvite.link)}
                   >
                     {copiedField === 'Link do convite' ? (
                       <Check className="h-3.5 w-3.5" />
@@ -972,6 +1031,21 @@ export function OrganizationDetailPage() {
         confirmLabel="Remover"
         loading={removeDialog.loading}
         onConfirm={handleRemoveMember}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteOrgDialog.open}
+        onOpenChange={deleteOrgDialog.handleOpenChange}
+        title="Excluir cliente?"
+        description={
+          deleteOrgDialog.target
+            ? `A pasta "${deleteOrgDialog.target.name}" será excluída. Membros e convites serão desvinculados. Contas de login e visitas não são apagadas.`
+            : undefined
+        }
+        itemName={deleteOrgDialog.target?.name}
+        confirmLabel="Excluir cliente"
+        loading={deleteOrgDialog.loading}
+        onConfirm={handleDeleteClient}
       />
     </div>
   )

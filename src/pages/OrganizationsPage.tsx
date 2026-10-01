@@ -7,11 +7,13 @@ import {
   FolderOpen,
   Plus,
   Search,
+  Trash2,
   Users,
   Building2,
   Gauge,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,6 +34,7 @@ import {
   countOrganizationSeats,
   countPendingInvites,
   createOrganization,
+  deleteOrganization,
   listOrganizations,
 } from '@/services/organizations'
 import type { Organization } from '@/types'
@@ -45,7 +48,7 @@ const CHART_COLORS = ['#0f2f2a', '#1a6b4a', '#d4a017', '#3d9b87', '#c47a0a', '#5
 
 export function OrganizationsPage() {
   const { user, isPlatformAdmin } = useAuth()
-  const { setActiveOrgId, refreshOrg } = useOrg()
+  const { activeOrgId, setActiveOrgId, refreshOrg } = useOrg()
   const location = useLocation()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -55,6 +58,7 @@ export function OrganizationsPage() {
   const [name, setName] = useState('')
   const [maxUsers, setMaxUsers] = useState('10')
   const [creating, setCreating] = useState(false)
+  const deleteDialog = useConfirmDelete<OrgRow>()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -187,6 +191,26 @@ export function OrganizationsPage() {
   const enterOrganization = (orgId: string) => {
     setActiveOrgId(orgId)
     navigate('/')
+  }
+
+  const handleDeleteClient = () => {
+    void deleteDialog.confirm(async (org) => {
+      try {
+        await deleteOrganization(org.id)
+        if (activeOrgId === org.id) {
+          setActiveOrgId(null)
+          await refreshOrg()
+        }
+        toast.success('Cliente excluído')
+        await load()
+      } catch (error) {
+        console.error(error)
+        toast.error(
+          error instanceof Error ? error.message : 'Não foi possível excluir o cliente',
+        )
+        throw error
+      }
+    })
   }
 
   const handleCreate = async () => {
@@ -455,6 +479,16 @@ export function OrganizationsPage() {
                         Entrar no sistema
                       </Button>
                     </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-destructive hover:text-destructive"
+                      onClick={() => deleteDialog.requestDelete(org)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Excluir cliente
+                    </Button>
                   </CardContent>
                 </Card>
               )
@@ -507,6 +541,21 @@ export function OrganizationsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteDialog.open}
+        onOpenChange={deleteDialog.handleOpenChange}
+        title="Excluir cliente?"
+        description={
+          deleteDialog.target
+            ? `A pasta "${deleteDialog.target.name}" será excluída. Membros e convites desta empresa serão desvinculados. Contas de login e dados de visitas não são apagados.`
+            : undefined
+        }
+        itemName={deleteDialog.target?.name}
+        confirmLabel="Excluir cliente"
+        loading={deleteDialog.loading}
+        onConfirm={handleDeleteClient}
+      />
     </div>
   )
 }

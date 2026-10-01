@@ -10,6 +10,8 @@ import {
 export type { StoredHelpMessage }
 
 export const HELP_SUGGESTIONS = [
+  'Explique um assunto que estou tentando entender.',
+  'Compare duas opções e me ajude a decidir.',
   'Como altero a logo whitelabel da empresa?',
   'Como registro um compromisso na agenda?',
   'Como importo a programação de um arquivo?',

@@ -36,7 +36,7 @@ export function AuthLayout({
           <SafeLogo
             src="/vale-logo.svg"
             alt=""
-            className="h-12 w-auto max-w-[200px] rounded bg-white/95 object-contain object-left px-2 py-1"
+            className="h-16 w-auto max-w-[280px] rounded bg-white/95 object-contain object-left px-2.5 py-1.5 xl:h-20 xl:max-w-[320px]"
           />
           <p className="mt-2 text-xs text-white/70">Operações de visitas corporativas</p>
         </div>
@@ -64,11 +64,11 @@ export function AuthLayout({
         <div className="w-full max-w-md animate-fade-in-up">
           {/* Mobile brand mark — top left */}
           <div className="mb-8 lg:hidden">
-            <div className="inline-flex rounded-xl border border-primary/15 bg-white px-3 py-2.5 shadow-sm">
+            <div className="inline-flex rounded-xl border border-primary/15 bg-white px-3.5 py-3 shadow-sm">
               <SafeLogo
                 src="/vale-logo.svg"
                 alt=""
-                className="h-9 w-auto max-w-[180px] object-contain object-left"
+                className="h-12 w-auto max-w-[220px] object-contain object-left sm:h-14 sm:max-w-[260px]"
               />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">Gestão de visitas corporativas</p>

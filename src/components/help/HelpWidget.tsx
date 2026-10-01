@@ -83,7 +83,7 @@ export function HelpWidget() {
                 <p className="text-sm font-semibold leading-tight">Assistente</p>
                 <AiProviderBadge status={aiStatus} compact />
               </div>
-              <p className="text-[11px] text-muted-foreground">Dúvidas sobre o uso do app</p>
+              <p className="text-[11px] text-muted-foreground">Conversa geral e ajuda com o app</p>
             </div>
             <Button
               type="button"

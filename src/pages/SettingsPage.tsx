@@ -502,7 +502,7 @@ export function SettingsPage() {
               </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 p-2">
+            <div className="flex h-36 w-64 items-center justify-center rounded-xl border border-dashed bg-muted/30 p-4 sm:h-40 sm:w-72">
               {activeOrg?.logoUrl ? (
                 <SafeLogo
                   src={activeOrg.logoUrl}

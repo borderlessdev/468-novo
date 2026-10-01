@@ -59,7 +59,7 @@ export function HelpChatInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Como faço para…?"
+          placeholder="Pergunte sobre qualquer assunto…"
           disabled={disabled}
           rows={1}
           className={cn(

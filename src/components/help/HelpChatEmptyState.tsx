@@ -13,8 +13,7 @@ export function HelpChatEmptyState({ onSelect }: HelpChatEmptyStateProps) {
       </div>
       <h2 className="font-display text-xl font-semibold tracking-tight">Como posso ajudar?</h2>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
-        Tire dúvidas sobre agenda, visitas, portal do visitante, integrações e playbooks — com
-        caminhos curtos de tela a tela.
+        Converse sobre qualquer assunto ou tire dúvidas sobre o Promover Experience.
       </p>
       <div className="mt-8 w-full max-w-2xl text-left">
         <HelpChatSuggestions onSelect={onSelect} />

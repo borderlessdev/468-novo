@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
@@ -15,6 +16,9 @@ import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import {
   canAddOrganizationMember,
   addOrganizationMember,
+  countOrganizationSeats,
+  getOrganization,
+  getOrganizationMember,
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import {
@@ -204,6 +208,19 @@ export async function joinOrganizationFromInvite(input: {
     )
   }
 
+  const org = await getOrganization(invite.orgId)
+  if (!org || org.status !== 'active') {
+    throw new Error('Esta empresa não está disponível para novos membros')
+  }
+
+  const alreadyMember = await getOrganizationMember(invite.orgId, input.uid)
+  if (!alreadyMember) {
+    const members = await countOrganizationSeats(invite.orgId)
+    if (members >= org.maxUsers) {
+      throw new Error('Limite de usuários da empresa atingido')
+    }
+  }
+
   const orgRole = inviteRoleToOrgRole(invite.role)
   const role = inviteRoleToUserRole(invite.role)
 
@@ -242,6 +259,24 @@ export async function listPendingInvitesByOrg(orgId: string): Promise<Invite[]> 
   return snap.docs
     .map((d) => mapInvite(d.id, d.data()))
     .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
+}
+
+export function subscribePendingInvitesByOrg(
+  orgId: string,
+  onChange: (invites: Invite[]) => void,
+  onError: (error: Error) => void,
+): () => void {
+  return onSnapshot(
+    query(col, where('orgId', '==', orgId), where('status', '==', 'pending')),
+    (snap) => {
+      onChange(
+        snap.docs
+          .map((item) => mapInvite(item.id, item.data()))
+          .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt)),
+      )
+    },
+    onError,
+  )
 }
 
 export async function listInvitesByOrg(orgId: string): Promise<Invite[]> {
