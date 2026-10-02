@@ -11,7 +11,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { db, functions } from '@/lib/firebase'
 import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import {
   canAddOrganizationMember,
@@ -21,15 +21,17 @@ import {
   getOrganizationMember,
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
-import {
-  getEmailDeliveryMode,
-  isFirestoreEmailEnabled,
-} from '@/services/email'
+import { httpsCallable } from 'firebase/functions'
+import { getEmailDeliveryMode } from '@/services/email'
 import { createEmailLog } from '@/services/emailLogs'
 import { updateUserProfile } from '@/services/users'
 import type { Invite, InviteRole, InviteStatus, OrgRole } from '@/types'
 
 const col = collection(db, 'invites')
+const callSendInviteEmail = httpsCallable<{ inviteId: string; origin: string }, { ok: boolean }>(
+  functions,
+  'sendInviteEmail',
+)
 
 function mapInvite(id: string, data: Record<string, unknown>): Invite {
   return {
@@ -49,19 +51,6 @@ function mapInvite(id: string, data: Record<string, unknown>): Invite {
   }
 }
 
-function roleLabel(role: InviteRole): string {
-  switch (role) {
-    case 'org_admin':
-      return 'admin da empresa'
-    case 'team':
-      return 'equipe'
-    case 'client':
-      return 'cliente'
-    default:
-      return 'usuário'
-  }
-}
-
 export async function createInvite(input: {
   email: string
   role: InviteRole
@@ -70,7 +59,7 @@ export async function createInvite(input: {
   department?: string
   visitId?: string
   createdByName?: string
-}): Promise<Invite & { link: string; mailtoOpened: boolean }> {
+}): Promise<Invite & { link: string; emailSent: boolean; emailError?: string }> {
   const email = input.email.trim().toLowerCase()
 
   // Substitui convites pendentes do mesmo e-mail nesta empresa (evita link antigo
@@ -124,26 +113,11 @@ export async function createInvite(input: {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const link = `${origin}/cadastro?invite=${token}`
   const subject = 'Convite — Promover Experience'
-  const body = [
-    `Você foi convidado como ${roleLabel(input.role)}.`,
-    input.department ? `Setor: ${input.department}` : '',
-    '',
-    `Abra o link abaixo.`,
-    `Se ainda não tem conta, crie uma senha. Se este e-mail já tem conta, entre com a senha atual (a que o administrador enviou) para vincular à empresa.`,
-    link,
-    '',
-    `Este convite expira em 14 dias.`,
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-  let mailtoOpened = false
-  if (isFirestoreEmailEnabled()) {
-    await addDoc(collection(db, 'mail'), {
-      to: [invite.email],
-      message: { subject, text: body },
-      createdAt: serverTimestamp(),
-    })
+  let emailSent = false
+  let emailError: string | undefined
+  try {
+    await callSendInviteEmail({ inviteId: invite.id, origin })
+    emailSent = true
     await createEmailLog({
       to: [invite.email],
       subject,
@@ -152,21 +126,11 @@ export async function createInvite(input: {
       status: 'queued',
       createdBy: input.createdBy,
     })
-  } else {
-    await createEmailLog({
-      to: [invite.email],
-      subject,
-      visitId: input.visitId,
-      kind: 'invite',
-      status: 'mailto',
-      createdBy: input.createdBy,
-    })
-    const mailto = `mailto:${invite.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    const opened = window.open(mailto, '_blank')
-    mailtoOpened = opened != null
+  } catch (error) {
+    console.error('Falha ao enviar e-mail de convite', error)
+    emailError = error instanceof Error ? error.message : 'Falha ao enviar e-mail'
   }
-
-  return { ...invite, link, mailtoOpened }
+  return { ...invite, link, emailSent, emailError }
 }
 
 export async function getInviteById(inviteId: string): Promise<Invite | null> {

@@ -80,7 +80,8 @@ export function MasterUsersPage() {
       })
       setLastLink(created.link)
       setEmail('')
-      toast.success('Convite de admin criado — copie o link e envie')
+      if (created.emailSent) toast.success(`Convite enviado para ${created.email}`)
+      else toast.warning('Convite criado, mas o e-mail não foi enviado — copie o link e envie')
     } catch (error) {
       console.error(error)
       toast.error(

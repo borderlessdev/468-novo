@@ -146,9 +146,9 @@ export function UsersPage() {
       })
       setLastInvite({ id: created.id, link: created.link })
       toast.success(
-        created.mailtoOpened
-          ? 'Convite criado — cliente de e-mail aberto'
-          : 'Convite criado — copie o link abaixo',
+        created.emailSent
+          ? `Convite enviado para ${created.email}`
+          : 'Convite criado, mas o e-mail não foi enviado — copie o link abaixo',
       )
       setInviteEmail('')
       setInviteDepartment('')

@@ -328,7 +328,8 @@ export function OrganizationDetailPage() {
       })
       setLastAdminInvite({ id: created.id, link: created.link })
       setAdminEmail('')
-      toast.success('Convite de admin criado — copie o link e envie')
+      if (created.emailSent) toast.success(`Convite enviado para ${created.email}`)
+      else toast.warning('Convite criado, mas o e-mail não foi enviado — copie o link e envie')
       await load()
     } catch (error) {
       console.error(error)
