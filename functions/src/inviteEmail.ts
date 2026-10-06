@@ -81,7 +81,7 @@ export const sendInviteEmail = onCall<{ inviteId?: string; origin?: string }>(
 
     const resend = new Resend(apiKey)
     const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM || 'onboarding@resend.dev',
+      from: process.env.RESEND_FROM || 'convites@app.promoverexperience.com.br',
       to,
       subject: 'Convite — Promover Experience',
       html,

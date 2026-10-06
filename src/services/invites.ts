@@ -16,9 +16,7 @@ import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
 import {
   canAddOrganizationMember,
   addOrganizationMember,
-  countOrganizationSeats,
   getOrganization,
-  getOrganizationMember,
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import { httpsCallable } from 'firebase/functions'
@@ -177,13 +175,8 @@ export async function joinOrganizationFromInvite(input: {
     throw new Error('Esta empresa não está disponível para novos membros')
   }
 
-  const alreadyMember = await getOrganizationMember(invite.orgId, input.uid)
-  if (!alreadyMember) {
-    const members = await countOrganizationSeats(invite.orgId)
-    if (members >= org.maxUsers) {
-      throw new Error('Limite de usuários da empresa atingido')
-    }
-  }
+  // A vaga foi reservada quando o convite pendente foi criado. Uma conta recém-
+  // cadastrada ainda não pode listar os membros dessa empresa pelas regras do Firestore.
 
   const orgRole = inviteRoleToOrgRole(invite.role)
   const role = inviteRoleToUserRole(invite.role)
