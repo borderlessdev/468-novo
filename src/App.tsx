@@ -13,6 +13,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { GuestPortalPage } from '@/pages/GuestPortalPage'
+import { CommunityConfirmationPage } from '@/pages/CommunityConfirmationPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { OperationsPage } from '@/pages/OperationsPage'
 import { VisitDetailPage } from '@/pages/VisitDetailPage'
@@ -39,6 +40,11 @@ function LegacyAgendaRedirect() {
   return <Navigate to={`/programacao${search}`} replace />
 }
 
+function LegacyVisitorsRedirect() {
+  const { search } = useLocation()
+  return <Navigate to={`/crm${search}`} replace />
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -54,6 +60,7 @@ export default function App() {
           </Route>
 
           <Route path="/portal/:token" element={<GuestPortalPage />} />
+          <Route path="/confirmar-presenca/:token" element={<CommunityConfirmationPage />} />
           <Route
             path="/portal/:token/cracha"
             element={<GuestPortalPage mode="badge" />}
@@ -72,7 +79,8 @@ export default function App() {
               <Route path="/visitas/:id" element={<VisitDetailPage />} />
               <Route path="/programacao" element={<AgendaPage />} />
               <Route path="/agenda" element={<LegacyAgendaRedirect />} />
-              <Route path="/visitantes" element={<VisitorsPage />} />
+              <Route path="/crm" element={<VisitorsPage />} />
+              <Route path="/visitantes" element={<LegacyVisitorsRedirect />} />
               <Route path="/planejamento" element={<PlanningPage />} />
               <Route path="/financeiro" element={<FinancePage />} />
               <Route path="/receitas" element={<RevenuePage />} />

@@ -461,6 +461,8 @@ service cloud.firestore {
         // Rota pública (sem login): apenas confirmação e rascunho(s) do visitante.
         (
           resource.data.revoked != true
+          && resource.data.purpose != 'community_intake'
+          && resource.data.purpose != 'community_registration'
           && 'expiresAtTs' in resource.data
           && request.time < resource.data.expiresAtTs
           && request.resource.data.diff(resource.data).affectedKeys()

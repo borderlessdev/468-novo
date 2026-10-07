@@ -59,7 +59,7 @@ import { BRAZILIAN_STATES } from '@/lib/constants'
 import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
-import { usesConfirmationLink, usesCrmIntake } from '@/features/visitors/visitorFormConfig'
+import { usesCommunityRegistration, usesConfirmationLink, usesCrmIntake } from '@/features/visitors/visitorFormConfig'
 import {
   calculateVisitProgress,
   formatCurrency,
@@ -95,6 +95,7 @@ import {
   applyVisitIntakeDrafts,
   applyVisitorDraft,
   buildGuestAgenda,
+  buildCommunityConfirmationUrl,
   buildGuestPortalUrl,
   createGuestLink,
   createVisitIntakeLink,
@@ -107,6 +108,7 @@ import {
   revokeLink,
   type GuestLinkSnapshot,
 } from '@/services/visitGuestLinks'
+import { reviewCommunityRegistration, sendCommunityConfirmationWhatsApp } from '@/services/communityRegistrations'
 import { averageRating, listFeedbacksForVisit } from '@/services/visitFeedbacks'
 import type {
   Activity,
@@ -136,6 +138,18 @@ function documentCategoryLabel(category: DocumentCategory) {
   return DOCUMENT_CATEGORIES.find((item) => item.value === category)?.label ?? category
 }
 
+function datesBetween(startDate: string, endDate: string): string[] {
+  if (!startDate || !endDate || endDate < startDate) return []
+  const dates: string[] = []
+  const cursor = new Date(`${startDate}T12:00:00`)
+  const end = new Date(`${endDate}T12:00:00`)
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
 function GuestStatusBadge({ link }: { link: VisitGuestLink }) {
   if (link.confirmationStatus === 'confirmed') {
     return <Badge variant="success">Confirmado</Badge>
@@ -150,7 +164,7 @@ export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, isAdmin, role, canWrite, profile } = useAuth()
-  const { activeOrgId, activeOrg } = useOrg()
+  const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
@@ -184,6 +198,7 @@ export function VisitDetailPage() {
   const [guestInviteBody, setGuestInviteBody] = useState('')
   const [guestInviteLabel, setGuestInviteLabel] = useState('')
   const [draftingGuestInvite, setDraftingGuestInvite] = useState(false)
+  const [guestInviteLoadingDots, setGuestInviteLoadingDots] = useState(3)
   const [teamIdsInput, setTeamIdsInput] = useState('')
   const [clientIdsInput, setClientIdsInput] = useState('')
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
@@ -559,6 +574,11 @@ export function VisitDetailPage() {
     return intake[0] ?? null
   }, [guestLinks])
 
+  const communityRegistrationLinks = useMemo(
+    () => guestLinks.filter((link) => link.purpose === 'community_registration'),
+    [guestLinks],
+  )
+
   const feedbackAverage = useMemo(() => averageRating(feedbacks), [feedbacks])
 
   const confirmationSummary = useMemo(() => {
@@ -615,6 +635,16 @@ export function VisitDetailPage() {
     }
   }
 
+  const copyCommunityConfirmationUrl = async (token: string) => {
+    const url = buildCommunityConfirmationUrl(token)
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link de confirmação copiado')
+    } catch {
+      toast.error(`Copie manualmente: ${url}`)
+    }
+  }
+
   const handleGenerateGuestLink = async (visitor: Visitor) => {
     if (!user || !id || !visit) return
     const snapshot = buildSnapshot(visitor)
@@ -666,6 +696,43 @@ export function VisitDetailPage() {
       toast.error('Não foi possível gerar o link de cadastro')
     } finally {
       setPortalBusyId(null)
+    }
+  }
+
+  const handleCommunityReview = async (link: VisitGuestLink, decision: 'approve' | 'reject') => {
+    try {
+      await reviewCommunityRegistration(link.id, decision)
+      toast.success(decision === 'approve' ? 'Inscrição aprovada' : 'Inscrição recusada e vaga liberada')
+      await load({ silent: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível analisar a inscrição')
+    }
+  }
+
+  const handleSendCommunityWhatsApp = async (link: VisitGuestLink) => {
+    try {
+      await sendCommunityConfirmationWhatsApp(link.id)
+      toast.success('Link de confirmação enviado pelo WhatsApp')
+      await load({ silent: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'WhatsApp Business ainda não configurado')
+    }
+  }
+
+  const handleCommunityCapacityUpdate = async (date: string, value: string) => {
+    if (!visit || !value) return
+    const capacity = Number(value)
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      toast.error('Informe ao menos uma vaga para esta data')
+      return
+    }
+    try {
+      const next = { ...(visit.communityDailyCapacity ?? {}), [date]: capacity }
+      await updateVisit(visit.id, { communityDailyCapacity: next })
+      setVisit((current) => current ? { ...current, communityDailyCapacity: next } : current)
+      toast.success('Vagas atualizadas')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível atualizar as vagas')
     }
   }
 
@@ -1062,6 +1129,7 @@ export function VisitDetailPage() {
     setGuestInviteLabel(visitorName)
     setGuestInviteBody('')
     setGuestInviteOpen(true)
+    setGuestInviteLoadingDots(3)
     setDraftingGuestInvite(true)
     try {
       const draft = await draftCommunication({
@@ -1083,6 +1151,16 @@ export function VisitDetailPage() {
       setDraftingGuestInvite(false)
     }
   }
+
+  useEffect(() => {
+    if (!draftingGuestInvite) return
+
+    const interval = window.setInterval(() => {
+      setGuestInviteLoadingDots((dots) => (dots === 3 ? 2 : dots + 1))
+    }, 450)
+
+    return () => window.clearInterval(interval)
+  }, [draftingGuestInvite])
 
   const handleSendEmail = async () => {
     if (!visit || !user) return
@@ -1756,7 +1834,9 @@ export function VisitDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Portal do visitante</CardTitle>
             <p className="text-sm text-muted-foreground">
-              {usesCrmIntake(visit.eventKind)
+              {usesCommunityRegistration(visit.eventKind)
+                ? 'Comunidade: envie o link de inscrição. Após a análise, o link individual de confirmação é liberado.'
+                : usesCrmIntake(visit.eventKind)
                 ? 'Visita VIP: envie o link único de cadastro. Os dados entram no CRM ligados a esta experiência.'
                 : usesConfirmationLink(visit.eventKind)
                   ? 'Comunidade e evento: envie o link de confirmação para cada visitante vinculado.'
@@ -1851,7 +1931,79 @@ export function VisitDetailPage() {
             </div>
             )}
 
-            {linkedVisitors.length > 0 ? (
+            {usesCommunityRegistration(visit.eventKind) ? (
+              <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                <div>
+                  <p className="text-sm font-semibold">Vagas por dia</p>
+                  <p className="text-xs text-muted-foreground">A ocupação é reservada no envio da inscrição.</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {datesBetween(visit.startDate, visit.endDate).map((date) => (
+                    <label key={date} className="flex items-center justify-between gap-2 text-sm">
+                      <span>{formatDate(date)} · {visit.communityDailyOccupancy?.[date] ?? 0} inscrito(s)</span>
+                      <Input
+                        type="number"
+                        min="1"
+                        defaultValue={visit.communityDailyCapacity?.[date] ?? ''}
+                        className="h-8 w-20"
+                        disabled={!canWrite}
+                        onBlur={(event) => void handleCommunityCapacityUpdate(date, event.target.value)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {usesCommunityRegistration(visit.eventKind) ? (
+              <div className="space-y-3 rounded-lg border px-3 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Inscrições da comunidade</p>
+                    <p className="text-xs text-muted-foreground">Inscritos entram no CRM aguardando análise.</p>
+                  </div>
+                  <Badge variant="secondary">{communityRegistrationLinks.length} inscrição(ões)</Badge>
+                </div>
+                {communityRegistrationLinks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma inscrição recebida.</p>
+                ) : communityRegistrationLinks.map((link) => (
+                  <div key={link.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 p-3 text-sm">
+                    <div>
+                      <p className="font-medium">{link.visitorName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {link.registrationDate ? formatDate(link.registrationDate) : 'Data não informada'}
+                        {link.visitorDraft?.whatsapp ? ` · WhatsApp ${link.visitorDraft.whatsapp}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={link.registrationStatus === 'confirmed' ? 'success' : link.registrationStatus === 'rejected' ? 'warning' : 'muted'}>
+                        {link.registrationStatus === 'pending_review'
+                          ? 'Aguardando análise'
+                          : link.registrationStatus === 'approved_pending_confirmation'
+                            ? 'Aprovado · aguardando confirmação'
+                            : link.registrationStatus === 'confirmed'
+                              ? 'Presença confirmada'
+                              : 'Recusado'}
+                      </Badge>
+                      {(isAdmin || isOrgAdmin) && link.registrationStatus === 'pending_review' ? (
+                        <>
+                          <Button size="sm" onClick={() => void handleCommunityReview(link, 'approve')}>Aprovar</Button>
+                          <Button size="sm" variant="outline" onClick={() => void handleCommunityReview(link, 'reject')}>Recusar</Button>
+                        </>
+                      ) : null}
+                      {(isAdmin || isOrgAdmin) && link.registrationStatus === 'approved_pending_confirmation' ? (
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => void copyCommunityConfirmationUrl(link.token)}>Copiar link</Button>
+                          <Button size="sm" onClick={() => void handleSendCommunityWhatsApp(link)}>Enviar WhatsApp</Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {!usesCommunityRegistration(visit.eventKind) && linkedVisitors.length > 0 ? (
               <div className="rounded-lg border bg-muted/30 px-3 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium">
@@ -1897,7 +2049,7 @@ export function VisitDetailPage() {
               </div>
             ) : null}
 
-            {linkedVisitors.length === 0 ? (
+            {!usesCommunityRegistration(visit.eventKind) ? (linkedVisitors.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {usesConfirmationLink(visit.eventKind)
                   ? 'Vincule visitantes acima e gere o link de confirmação para cada um.'
@@ -2038,7 +2190,7 @@ export function VisitDetailPage() {
                 )
               })}
               </>
-            )}
+            )) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -2209,7 +2361,11 @@ export function VisitDetailPage() {
               value={guestInviteBody}
               onChange={(e) => setGuestInviteBody(e.target.value)}
               disabled={draftingGuestInvite}
-              placeholder={draftingGuestInvite ? 'Gerando mensagem…' : ''}
+              placeholder={
+                draftingGuestInvite
+                  ? `Gerando mensagem${'.'.repeat(guestInviteLoadingDots)}`
+                  : ''
+              }
             />
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => setGuestInviteOpen(false)}>

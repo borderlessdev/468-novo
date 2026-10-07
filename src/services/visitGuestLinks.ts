@@ -139,6 +139,26 @@ function mapGuestLink(id: string, data: Record<string, unknown>): VisitGuestLink
     orgName: data.orgName ? String(data.orgName) : undefined,
     orgLogoUrl: data.orgLogoUrl ? String(data.orgLogoUrl) : undefined,
     confirmationStatus: CONFIRMATION_STATUSES.includes(status) ? status : 'pending',
+    purpose:
+      data.purpose === 'community_intake' || data.purpose === 'community_registration'
+        ? data.purpose
+        : 'portal',
+    registrationStatus:
+      data.registrationStatus === 'pending_review' ||
+      data.registrationStatus === 'approved_pending_confirmation' ||
+      data.registrationStatus === 'confirmed' ||
+      data.registrationStatus === 'rejected'
+        ? data.registrationStatus
+        : undefined,
+    registrationDate: data.registrationDate ? String(data.registrationDate) : undefined,
+    sourceLinkId: data.sourceLinkId ? String(data.sourceLinkId) : undefined,
+    confirmationSentAt: data.confirmationSentAt ? String(data.confirmationSentAt) : undefined,
+    confirmationSendStatus:
+      data.confirmationSendStatus === 'sent' ||
+      data.confirmationSendStatus === 'not_configured' ||
+      data.confirmationSendStatus === 'error'
+        ? data.confirmationSendStatus
+        : undefined,
     visitorDraft: draftRaw ? mapDraft(draftRaw) : undefined,
     visitorDrafts: Array.isArray(data.visitorDrafts)
       ? data.visitorDrafts
@@ -278,6 +298,14 @@ export function isVisitIntakeLink(link: VisitGuestLink): boolean {
   return !link.visitorId
 }
 
+export function isCommunityIntakeLink(link: VisitGuestLink): boolean {
+  return link.purpose === 'community_intake'
+}
+
+export function isCommunityRegistrationLink(link: VisitGuestLink): boolean {
+  return link.purpose === 'community_registration'
+}
+
 /** Rascunhos pendentes: array (intake) ou rascunho único (compat). */
 export function getGuestDrafts(link: VisitGuestLink): GuestVisitorDraft[] {
   if (link.visitorDrafts && link.visitorDrafts.length > 0) {
@@ -306,6 +334,11 @@ export function hasPendingGuestDraft(link: VisitGuestLink): boolean {
 export function buildGuestPortalUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   return `${origin}/portal/${token}`
+}
+
+export function buildCommunityConfirmationUrl(token: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${origin}/confirmar-presenca/${token}`
 }
 
 export interface GuestLinkSnapshot {
@@ -436,6 +469,9 @@ export async function createVisitIntakeLink(
     revoked: false,
     ...snapshotPayload({ ...input, visitorName }),
     confirmationStatus: 'pending',
+    purpose: input.eventKind === 'comunidade_prioritaria' || input.eventKind === 'visita_comunidade'
+      ? 'community_intake'
+      : 'portal',
     visitorDraft: null,
     visitorDrafts: [],
     lastAppliedAt: null,
@@ -464,6 +500,9 @@ export async function createVisitIntakeLink(
     orgName: input.orgName,
     orgLogoUrl: input.orgLogoUrl,
     confirmationStatus: 'pending',
+    purpose: input.eventKind === 'comunidade_prioritaria' || input.eventKind === 'visita_comunidade'
+      ? 'community_intake'
+      : 'portal',
   }
 }
 

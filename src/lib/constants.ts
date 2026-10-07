@@ -77,7 +77,7 @@ export const NAV_ITEMS = [
   { to: '/operacoes', label: 'Operações', icon: 'ClipboardList' },
   { to: '/visitas', label: 'Experiências', icon: 'MapPin' },
   { to: '/programacao', label: 'Programação', icon: 'Calendar' },
-  { to: '/visitantes', label: 'Visitantes', icon: 'Users' },
+  { to: '/crm', label: 'CRM', icon: 'Users' },
   { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
   { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },
   { to: '/receitas', label: 'Receitas', icon: 'Wallet' },

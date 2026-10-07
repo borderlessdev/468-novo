@@ -51,6 +51,22 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
       : [],
     isTemplate: data.isTemplate === true,
     hasTicketSales: data.hasTicketSales === true,
+    communityDailyCapacity:
+      data.communityDailyCapacity && typeof data.communityDailyCapacity === 'object'
+        ? Object.fromEntries(
+            Object.entries(data.communityDailyCapacity as Record<string, unknown>)
+              .filter(([, value]) => typeof value === 'number')
+              .map(([date, value]) => [date, Number(value)]),
+          )
+        : undefined,
+    communityDailyOccupancy:
+      data.communityDailyOccupancy && typeof data.communityDailyOccupancy === 'object'
+        ? Object.fromEntries(
+            Object.entries(data.communityDailyOccupancy as Record<string, unknown>)
+              .filter(([, value]) => typeof value === 'number')
+              .map(([date, value]) => [date, Number(value)]),
+          )
+        : undefined,
     ownerId: String(data.ownerId ?? ''),
     orgId: String(data.orgId ?? ''),
     isDeleted: data.isDeleted === true,
@@ -152,6 +168,8 @@ export async function createVisit(
     clientUserIds: data.clientUserIds ?? [],
     isTemplate: data.isTemplate === true,
     hasTicketSales: data.hasTicketSales === true,
+    communityDailyCapacity: data.communityDailyCapacity ?? null,
+    communityDailyOccupancy: data.communityDailyOccupancy ?? null,
     ownerId,
     orgId,
     isDeleted: false,

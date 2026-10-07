@@ -55,6 +55,7 @@ const visitBaseSchema = z.object({
   arrivalInstructions: z.string().optional(),
   pvNumber: z.string().trim().min(1, 'Número da PV obrigatório').optional(),
   hasTicketSales: z.boolean().optional(),
+  communityDailyCapacity: z.record(z.string(), z.number().int().min(1)).optional(),
   templateId: z.string().optional(),
   playbookId: z.string().optional(),
   startWithChecklist: z.boolean(),
@@ -80,6 +81,15 @@ export const visitSchema = visitBaseSchema
     {
       message: 'Selecione se o evento é interno ou externo',
       path: ['eventScope'],
+    },
+  )
+  .refine(
+    (data) =>
+      !['visita_comunidade', 'comunidade_prioritaria'].includes(data.eventKind) ||
+      Object.keys(data.communityDailyCapacity ?? {}).length > 0,
+    {
+      message: 'Informe as vagas disponíveis para cada dia da Comunidade',
+      path: ['communityDailyCapacity'],
     },
   )
 

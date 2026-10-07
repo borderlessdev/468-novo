@@ -24,6 +24,15 @@ export async function listVisitVisitors(
       visitId: String(data.visitId),
       visitorId: String(data.visitorId),
       ownerId: String(data.ownerId),
+      registrationStatus:
+        data.registrationStatus === 'pending_review' ||
+        data.registrationStatus === 'approved_pending_confirmation' ||
+        data.registrationStatus === 'confirmed' ||
+        data.registrationStatus === 'rejected'
+          ? data.registrationStatus
+          : undefined,
+      registrationDate: data.registrationDate ? String(data.registrationDate) : undefined,
+      registrationLinkId: data.registrationLinkId ? String(data.registrationLinkId) : undefined,
       createdAt: data.createdAt,
     }
   })

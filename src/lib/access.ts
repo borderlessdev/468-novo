@@ -81,7 +81,7 @@ export function clientNavPaths(): string[] {
 }
 
 const MODULE_PATH_PREFIX: { prefix: string; key: keyof ModulePermissions }[] = [
-  { prefix: '/visitantes', key: 'visitors' },
+  { prefix: '/crm', key: 'visitors' },
   { prefix: '/planejamento', key: 'planning' },
   { prefix: '/financeiro', key: 'finance' },
   { prefix: '/receitas', key: 'revenue' },

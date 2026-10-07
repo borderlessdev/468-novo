@@ -198,6 +198,12 @@ body {
     linear-gradient(135deg, #f3f7f6 0%, #fff8e6 100%);
 }
 
+.dark .vale-portal-shell {
+  background:
+    linear-gradient(180deg, rgba(43, 179, 173, 0.12) 0%, transparent 28%),
+    linear-gradient(135deg, #061413 0%, #102624 100%);
+}
+
 .vale-portal-topbar {
   background: #007e7a;
   color: #ffffff;

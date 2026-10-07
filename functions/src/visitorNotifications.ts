@@ -473,7 +473,9 @@ export const onVisitGuestLinkWritten = onDocumentWritten(
         }
       }
 
-      if (isCommunity(afterData)) {
+      // Inscrições de Comunidade aguardam análise; o WhatsApp com o link só é
+      // disparado explicitamente após a aprovação.
+      if (isCommunity(afterData) && afterData.purpose !== 'community_registration') {
         for (const draft of drafts) {
           const phone = String(draft.whatsapp ?? draft.phone ?? '').trim()
           if (!phone) {

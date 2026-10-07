@@ -27,13 +27,17 @@ export function usesCrmIntake(eventKind?: VisitEventKind | null): boolean {
   return eventKind === 'visita_vip'
 }
 
-/** Comunidade e evento usam confirmação de presença. */
-export function usesConfirmationLink(eventKind?: VisitEventKind | null): boolean {
+/** Comunidade usa inscrição antes da confirmação individual. */
+export function usesCommunityRegistration(eventKind?: VisitEventKind | null): boolean {
   return (
     eventKind === 'comunidade_prioritaria' ||
-    eventKind === 'visita_comunidade' ||
-    eventKind === 'evento'
+    eventKind === 'visita_comunidade'
   )
+}
+
+/** Comunidade e evento usam confirmação de presença. */
+export function usesConfirmationLink(eventKind?: VisitEventKind | null): boolean {
+  return eventKind === 'evento'
 }
 
 export function isVipLikeVariant(variant: VisitorFormVariant): boolean {

@@ -43,6 +43,18 @@ import { Search, UserPlus, X } from 'lucide-react'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
 import { kindsForExperienceTab } from '@/lib/visitEvent'
 
+function datesBetween(startDate: string, endDate: string): string[] {
+  if (!startDate || !endDate || endDate < startDate) return []
+  const dates: string[] = []
+  const cursor = new Date(`${startDate}T12:00:00`)
+  const end = new Date(`${endDate}T12:00:00`)
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
 interface NewVisitDialogProps {
   onCreated?: () => void
 }
@@ -79,6 +91,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       playbookId: '',
       startWithChecklist: true,
       hasTicketSales: false,
+      communityDailyCapacity: {},
     },
   })
 
@@ -114,6 +127,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       playbookId: '',
       startWithChecklist: true,
       hasTicketSales: false,
+      communityDailyCapacity: {},
     })
     // form.reset is stable from RHF; avoid listing `form` (new ref each render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,7 +223,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           objective: values.objective,
           language: values.language,
           pvNumber: values.pvNumber,
-          hasTicketSales: values.hasTicketSales === true,
+           hasTicketSales: values.hasTicketSales === true,
+           communityDailyCapacity:
+             values.eventKind === 'visita_comunidade' || values.eventKind === 'comunidade_prioritaria'
+               ? values.communityDailyCapacity
+               : undefined,
           progress: 0,
           teamMemberIds: [],
         })
@@ -350,7 +368,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
               </div>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="title">Título da visita *</Label>
+              <Label htmlFor="title">Título *</Label>
               <Input id="title" {...form.register('title')} />
               {form.formState.errors.title ? (
                 <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
@@ -418,6 +436,33 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                 <Input id="city" {...form.register('city')} />
               </div>
             </div>
+            {['visita_comunidade', 'comunidade_prioritaria'].includes(form.watch('eventKind') ?? '') ? (
+              <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                <Label>Vagas por dia *</Label>
+                {datesBetween(form.watch('startDate'), form.watch('endDate')).length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {datesBetween(form.watch('startDate'), form.watch('endDate')).map((date) => (
+                      <label key={date} className="flex items-center justify-between gap-2 text-sm">
+                        <span>{date.split('-').reverse().join('/')}</span>
+                        <Input
+                          type="number"
+                          min="1"
+                          className="h-9 w-24"
+                          value={form.watch(`communityDailyCapacity.${date}`) ?? ''}
+                          onChange={(event) =>
+                            form.setValue(`communityDailyCapacity.${date}`, Number(event.target.value), {
+                              shouldValidate: true,
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Informe o período para definir as vagas.</p>
+                )}
+              </div>
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="startDate">Data início *</Label>
@@ -484,7 +529,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
 
           <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
             <div>
-              <h3 className="font-semibold">Visitantes desta visita</h3>
+              <h3 className="font-semibold">
+                {defaultEventKind === 'evento'
+                  ? 'Visitantes deste evento'
+                  : 'Visitantes'}
+              </h3>
               <p className="mt-1 text-xs text-muted-foreground">
                 Busque visitantes existentes ou cadastre um novo rapidamente.
               </p>

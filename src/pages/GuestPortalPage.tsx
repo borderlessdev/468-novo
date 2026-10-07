@@ -39,10 +39,16 @@ import {
   buildGuestPortalUrl,
   getGuestDrafts,
   getGuestLinkAvailability,
+  isCommunityIntakeLink,
   getGuestLinkByToken,
   isVisitIntakeLink,
   updateGuestPortal,
 } from '@/services/visitGuestLinks'
+import {
+  getCommunityAvailability,
+  submitCommunityRegistration,
+  type CommunityAvailability,
+} from '@/services/communityRegistrations'
 import {
   guestLookupVisitorByName,
   lookupResultToProfileForm,
@@ -271,13 +277,17 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   const [comment, setComment] = useState('')
   const [sendingFeedback, setSendingFeedback] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [communityDates, setCommunityDates] = useState<CommunityAvailability[]>([])
+  const [registrationDate, setRegistrationDate] = useState('')
+  const [communitySubmitted, setCommunitySubmitted] = useState(false)
 
   const portalUrl = useMemo(() => buildGuestPortalUrl(token), [token])
   const formVariant = link ? linkFormVariant(link) : 'geral'
   const intro = portalIntroCopy[formVariant]
   const isIntake = link ? isVisitIntakeLink(link) : false
   const isVipPortal = formVariant === 'vip'
-  const showConfirmationCard = !isVipPortal || Boolean(link?.visitorId)
+  const isCommunityRegistration = Boolean(link && isCommunityIntakeLink(link))
+  const showConfirmationCard = !isCommunityRegistration && (!isVipPortal || Boolean(link?.visitorId))
   const primaryDraft = drafts[0] ?? EMPTY_VISITOR_PROFILE
   const lgpdOk = drafts.every((item) => item.lgpdConsent)
 
@@ -315,6 +325,16 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!link || !isCommunityIntakeLink(link)) return
+    void getCommunityAvailability(link.token)
+      .then((dates) => {
+        setCommunityDates(dates)
+        setRegistrationDate((current) => current || dates[0]?.date || '')
+      })
+      .catch((error) => console.error(error))
+  }, [link])
 
   useEffect(() => {
     if (!link || state !== 'ok') return
@@ -404,6 +424,16 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
     setSavingDraft(true)
     try {
       const payloads = drafts.map((item) => toDraftPayload(item))
+      if (isCommunityRegistration) {
+        await submitCommunityRegistration({
+          token: link.token,
+          registrationDate,
+          draft: payloads[0],
+        })
+        setCommunitySubmitted(true)
+        toast.success('Inscrição enviada para análise.')
+        return
+      }
       await updateGuestPortal(link.id, {
         visitorDrafts: payloads,
         visitorDraft: payloads[0],
@@ -599,7 +629,7 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
               src={link.orgLogoUrl}
               fallbackSrc="/vale-logo.svg"
               alt=""
-              className="h-16 w-auto max-w-[200px] object-contain sm:h-20 sm:max-w-[260px]"
+              className="h-24 w-auto max-w-[280px] object-contain sm:h-28 sm:max-w-[320px]"
             />
             <div className="flex rounded-lg border border-primary/20 bg-background p-0.5 text-xs shadow-sm">
               <Button
@@ -800,7 +830,38 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
             </div>
           ))}
 
-          {isIntake ? (
+          {isCommunityRegistration ? (
+            <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
+              <p className="text-sm font-medium">Data da inscrição</p>
+              {communityDates.length > 0 ? (
+                <select
+                  value={registrationDate}
+                  onChange={(event) => setRegistrationDate(event.target.value)}
+                  className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+                  disabled={communitySubmitted}
+                >
+                  {communityDates.map((item) => (
+                    <option key={item.date} value={item.date}>
+                      {formatDate(item.date)} · {item.capacity - item.occupied} vaga(s) disponível(is)
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-destructive">Não há vagas disponíveis para esta experiência.</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Esta é uma inscrição. A confirmação de presença será enviada pelo WhatsApp após a análise.
+              </p>
+            </div>
+          ) : null}
+
+          {communitySubmitted ? (
+            <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
+              Inscrição recebida. Aguarde a análise; se aprovada, você receberá um link individual para confirmar a presença.
+            </div>
+          ) : null}
+
+          {isIntake && !isCommunityRegistration ? (
             <div className="space-y-2 rounded-lg border border-dashed p-3">
               <p className="text-sm">{t('addAnother', locale)}</p>
               <Button
@@ -815,8 +876,11 @@ export function GuestPortalPage({ mode = 'portal' }: { mode?: 'portal' | 'badge'
             </div>
           ) : null}
 
-          <Button disabled={savingDraft} onClick={() => void handleSaveDraft()}>
-            {savingDraft ? t('sending', locale) : t('sendData', locale)}
+          <Button
+            disabled={savingDraft || communitySubmitted || (isCommunityRegistration && (!registrationDate || communityDates.length === 0))}
+            onClick={() => void handleSaveDraft()}
+          >
+            {savingDraft ? t('sending', locale) : isCommunityRegistration ? 'Enviar inscrição' : t('sendData', locale)}
           </Button>
         </CardContent>
       </Card>

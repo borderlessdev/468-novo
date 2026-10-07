@@ -566,4 +566,12 @@ export {
 export { guestLookupVisitorByName } from './guestLookup'
 export { onVisitGuestLinkWritten } from './visitorNotifications'
 export { getTwilioStatus, sendTwilioTestMessage } from './twilioCallables'
+export {
+  getCommunityRegistrationAvailability,
+  submitCommunityRegistration,
+  reviewCommunityRegistration,
+  getCommunityConfirmation,
+  confirmCommunityPresence,
+  sendCommunityConfirmationWhatsApp,
+} from './communityRegistrations'
 export { sendInviteEmail } from './inviteEmail'

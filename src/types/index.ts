@@ -159,6 +159,9 @@ export interface Visit extends SoftDeletable {
   isTemplate?: boolean
   /** Libera lançamentos de venda de ingressos na Gestão de Receitas. */
   hasTicketSales?: boolean
+  /** Limite e ocupação por dia, usados somente em visitas de Comunidade. */
+  communityDailyCapacity?: Record<string, number>
+  communityDailyOccupancy?: Record<string, number>
   ownerId: string
   orgId: string
   createdAt?: unknown
@@ -221,6 +224,15 @@ export interface RevenueItem {
 }
 
 export type GuestConfirmationStatus = 'pending' | 'confirmed' | 'declined'
+
+/** Etapas exclusivas da inscrição de Comunidade. */
+export type CommunityRegistrationStatus =
+  | 'pending_review'
+  | 'approved_pending_confirmation'
+  | 'confirmed'
+  | 'rejected'
+
+export type GuestLinkPurpose = 'portal' | 'community_intake' | 'community_registration'
 
 export type CalendarProvider = 'google' | 'outlook'
 
@@ -311,6 +323,9 @@ export interface VisitVisitor {
   visitId: string
   visitorId: string
   ownerId: string
+  registrationStatus?: CommunityRegistrationStatus
+  registrationDate?: string
+  registrationLinkId?: string
   createdAt?: unknown
 }
 
@@ -607,6 +622,12 @@ export interface VisitGuestLink {
   orgName?: string
   orgLogoUrl?: string
   confirmationStatus: GuestConfirmationStatus
+  purpose?: GuestLinkPurpose
+  registrationStatus?: CommunityRegistrationStatus
+  registrationDate?: string
+  sourceLinkId?: string
+  confirmationSentAt?: string
+  confirmationSendStatus?: 'sent' | 'not_configured' | 'error'
   /** Rascunho único (links antigos / primeiro visitante). */
   visitorDraft?: GuestVisitorDraft
   /** Vários rascunhos no link de cadastro da visita (Dia 2). */

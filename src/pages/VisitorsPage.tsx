@@ -43,7 +43,7 @@ import { formatDateTime, formatWeightKgNumber } from '@/lib/utils'
 import { createVisitor, deleteVisitor, listVisitors, updateVisitor } from '@/services/visitors'
 import { listVisitIdsForVisitor, listVisitVisitors } from '@/services/visitVisitors'
 import { getVisit, listVisits } from '@/services/visits'
-import type { Visit, Visitor, VisitorFormVariant } from '@/types'
+import type { Visit, VisitVisitor, Visitor, VisitorFormVariant } from '@/types'
 import { Badge } from '@/components/ui/badge'
 
 type ViewMode = 'table' | 'cards' | 'company'
@@ -57,6 +57,7 @@ export function VisitorsPage() {
   const [search, setSearch] = useState('')
   const [visitFilter, setVisitFilter] = useState<string>('todos')
   const [visitVisitorIds, setVisitVisitorIds] = useState<Set<string> | null>(null)
+  const [visitRegistrationByVisitorId, setVisitRegistrationByVisitorId] = useState<Record<string, VisitVisitor>>({})
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('visitors-view-mode')
     return saved === 'table' || saved === 'cards' || saved === 'company' ? saved : 'table'
@@ -104,6 +105,7 @@ export function VisitorsPage() {
   useEffect(() => {
     if (visitFilter === 'todos') {
       setVisitVisitorIds(null)
+      setVisitRegistrationByVisitorId({})
       return
     }
     let cancelled = false
@@ -117,10 +119,14 @@ export function VisitorsPage() {
         )
         if (!cancelled) {
           setVisitVisitorIds(new Set(links.map((link) => link.visitorId)))
+          setVisitRegistrationByVisitorId(
+            Object.fromEntries(links.map((link) => [link.visitorId, link])),
+          )
         }
       } catch (error) {
         console.error(error)
         if (!cancelled) setVisitVisitorIds(new Set())
+        if (!cancelled) setVisitRegistrationByVisitorId({})
       }
     })()
     return () => {
@@ -331,7 +337,7 @@ export function VisitorsPage() {
   return (
     <div>
       <PageHeader
-        title="CRM de Visitantes"
+        title="CRM"
         description="Base de dados de todos os visitantes"
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
@@ -573,6 +579,7 @@ export function VisitorsPage() {
                     <th className="px-4 py-3 font-medium">Nº calçado</th>
                     <th className="px-4 py-3 font-medium">Restrição alimentar</th>
                     <th className="px-4 py-3 font-medium">Brindes</th>
+                    {visitFilter !== 'todos' ? <th className="px-4 py-3 font-medium">Inscrição</th> : null}
                     {canWrite ? (
                       <th className="px-4 py-3 font-medium">Ações</th>
                     ) : null}
@@ -588,6 +595,21 @@ export function VisitorsPage() {
                       <td className="px-4 py-3">
                         {visitor.weightKg != null ? `${formatWeightKgNumber(visitor.weightKg)} kg` : '—'}
                       </td>
+                      {visitFilter !== 'todos' ? (
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const status = visitRegistrationByVisitorId[visitor.id]?.registrationStatus
+                            if (!status) return '—'
+                            return status === 'pending_review'
+                              ? 'Aguardando análise'
+                              : status === 'approved_pending_confirmation'
+                                ? 'Aprovado · aguardando confirmação'
+                                : status === 'confirmed'
+                                  ? 'Presença confirmada'
+                                  : 'Recusado'
+                          })()}
+                        </td>
+                      ) : null}
                       <td className="px-4 py-3">{visitor.shoeSize ?? '—'}</td>
                       <td className="px-4 py-3">
                         {visitor.dietaryRestriction || 'Nenhuma'}

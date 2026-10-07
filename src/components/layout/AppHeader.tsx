@@ -81,7 +81,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
             src={activeOrg?.logoUrl}
             fallbackSrc={VALE_BRAND.logoSrc}
             alt=""
-            className="h-7 w-auto max-w-[96px] object-contain sm:h-8 sm:max-w-[120px] md:h-9 md:max-w-[140px]"
+            className="h-10 w-auto max-w-[128px] object-contain sm:h-11 sm:max-w-[156px] md:h-12 md:max-w-[180px]"
           />
           <NotificationBell />
           <Link
