@@ -77,6 +77,7 @@ export async function updateUserProfile(
       | 'photoURL'
       | 'photoStoragePath'
       | 'notificationPreferences'
+      | 'emailNotificationPreferences'
       | 'modulePermissions'
       | 'role'
       | 'orgId'
@@ -108,6 +109,20 @@ export async function updateUserNotificationPreferences(
   preferences: NotificationPreferences,
 ): Promise<void> {
   await updateUserProfile(uid, { notificationPreferences: preferences })
+}
+
+export async function getUserEmailNotificationPreferences(
+  uid: string,
+): Promise<NotificationPreferences> {
+  const profile = await getUserProfile(uid)
+  return mergeNotificationPreferences(profile?.emailNotificationPreferences)
+}
+
+export async function updateUserEmailNotificationPreferences(
+  uid: string,
+  preferences: NotificationPreferences,
+): Promise<void> {
+  await updateUserProfile(uid, { emailNotificationPreferences: preferences })
 }
 
 export async function findUserByEmail(email: string): Promise<UserProfile | null> {

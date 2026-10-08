@@ -18,7 +18,7 @@ import {
 } from 'firebase/auth'
 import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
-import { createUserProfile, getUserProfile, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
+import { createUserProfile, getUserProfile, updateUserEmailNotificationPreferences, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
 import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
 import { getInviteById, joinOrganizationFromInvite } from '@/services/invites'
 import { addOrganizationMember } from '@/services/organizations'
@@ -61,6 +61,9 @@ interface AuthContextValue {
   uploadAvatar: (file: File) => Promise<void>
   removeAvatar: () => Promise<void>
   updateNotificationPreferences: (
+    preferences: import('@/lib/notificationPreferences').NotificationPreferences,
+  ) => Promise<void>
+  updateEmailNotificationPreferences: (
     preferences: import('@/lib/notificationPreferences').NotificationPreferences,
   ) => Promise<void>
 }
@@ -369,6 +372,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProfile, user],
   )
 
+  const updateEmailNotificationPreferences = useCallback(
+    async (preferences: NotificationPreferences) => {
+      if (!user) return
+      await updateUserEmailNotificationPreferences(user.uid, preferences)
+      await refreshProfile()
+    },
+    [refreshProfile, user],
+  )
+
   const role: UserRole = isPlatformAdmin ? 'admin' : (profile?.role ?? 'user')
   const isClient = role === 'client'
   const canWrite = canWriteOperations(role, isPlatformAdmin)
@@ -393,6 +405,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       uploadAvatar,
       removeAvatar,
       updateNotificationPreferences,
+      updateEmailNotificationPreferences,
     }),
     [
       user,
@@ -413,6 +426,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       uploadAvatar,
       removeAvatar,
       updateNotificationPreferences,
+      updateEmailNotificationPreferences,
     ],
   )
 

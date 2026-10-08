@@ -101,18 +101,20 @@ npm run seed:accounts
 
 Gera `credenciais.md` com operador (`user`), equipe (`team`) e cliente (`client`). Para admin, use o script acima no UID desejado.
 
-## E-mail de resumo da visita
+## E-mails transacionais (Resend)
 
-Por padrão (`VITE_EMAIL_MODE=mailto`), o botão abre o cliente de e-mail local.
+Convites, resumos de visita, confirmações de visitantes e notificações operacionais
+são enviados pelas Cloud Functions usando Resend. Configure em `functions/.env`:
 
-Para envio automático:
+```env
+RESEND_API_KEY=re_...
+RESEND_FROM=convites@app.promoverexperience.com.br
+APP_ORIGIN=https://app.promoverexperience.com.br
+```
 
-1. Instale a extensão [Trigger Email](https://extensions.dev/extensions/firebase/firestore-send-email) no Firebase Console.
-2. Configure SMTP/SendGrid na extensão.
-3. Defina `VITE_EMAIL_MODE=firestore` no `.env`.
-4. Faça deploy das rules: `npm run deploy:rules`.
-
-O app enfileira documentos em `mail/{id}`; a extensão envia e atualiza o status.
+O domínio do remetente deve estar verificado no Resend. As entregas e falhas ficam
+registradas em `emailDeliveries` e `emailLogs`; a antiga coleção `mail` não é usada
+pelos novos fluxos.
 
 ## SMS / WhatsApp (Twilio) — confirmação Comunidade
 
@@ -158,7 +160,7 @@ envie também em **Configurações → Marca da empresa**.
 10. Com um segundo usuário, confirme isolamento por `ownerId`. Com admin (claim), confirme visão global.
 11. Abra uma visita pelo link na listagem; edite dados, vincule visitantes e faça upload de documento (Storage habilitado).
 12. Edite atividades, tarefas e linhas financeiras; confira progresso da visita após concluir tarefas.
-13. Envie resumo por e-mail (mailto ou fila Firestore, conforme `VITE_EMAIL_MODE`).
+13. Envie resumo por e-mail e confirme a entrega registrada pelo Resend.
 14. **Mobile (~375px):** login → visitas (cards) → detalhe → agenda → planejamento (scroll horizontal) → financeiro → CRM.
 
 ### Checklist de aceite (homologação)
@@ -169,7 +171,7 @@ envie também em **Configurações → Marca da empresa**.
 - [ ] Fluxo ok no celular (375px)
 - [ ] `npm run deploy:rules` e `npm run deploy:hosting` executados (requer `firebase login`)
 - [ ] Storage habilitado no Console + upload de documento funcional
-- [ ] (Opcional) Trigger Email configurado + resumo chega na caixa de teste
+- [ ] Resend configurado + resumo e uma notificação chegam na caixa de teste
 
 ## Ciclo de medição
 

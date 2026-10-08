@@ -14,7 +14,8 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { isNotificationTypeEnabled } from '@/lib/notificationPreferences'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { getUserNotificationPreferences } from '@/services/users'
 import type {
   Notification,
@@ -24,6 +25,19 @@ import type {
 } from '@/types'
 
 const col = collection(db, 'notifications')
+const dispatchNotificationEmail = httpsCallable<
+  {
+    recipientId: string
+    type: NotificationType
+    title: string
+    body: string
+    visitId?: string
+    entityId?: string
+    href?: string
+    dedupeKey?: string
+  },
+  { ok: boolean; skipped?: string }
+>(functions, 'dispatchNotificationEmail')
 
 function mapNotification(id: string, data: Record<string, unknown>): Notification {
   return {
@@ -87,26 +101,43 @@ export async function createNotification(
 
   const preferences =
     options?.preferences ?? (await getUserNotificationPreferences(input.recipientId))
-  if (!isNotificationTypeEnabled(input.type, preferences)) {
-    return null
+  let notificationId: string | null = null
+  if (isNotificationTypeEnabled(input.type, preferences)) {
+    const ref = await addDoc(col, {
+      recipientId: input.recipientId,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      visitId: input.visitId ?? null,
+      entityId: input.entityId ?? null,
+      href: input.href ?? null,
+      read: input.read ?? false,
+      actorId: input.actorId ?? null,
+      actorName: input.actorName ?? null,
+      dedupeKey: input.dedupeKey ?? null,
+      createdAt: serverTimestamp(),
+    })
+    notificationId = ref.id
   }
 
-  const ref = await addDoc(col, {
-    recipientId: input.recipientId,
-    type: input.type,
-    title: input.title,
-    body: input.body,
-    visitId: input.visitId ?? null,
-    entityId: input.entityId ?? null,
-    href: input.href ?? null,
-    read: input.read ?? false,
-    actorId: input.actorId ?? null,
-    actorName: input.actorName ?? null,
-    dedupeKey: input.dedupeKey ?? null,
-    createdAt: serverTimestamp(),
-  })
+  // E-mail é um canal independente: não depende da preferência do sino.
+  try {
+    await dispatchNotificationEmail({
+      recipientId: input.recipientId,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      visitId: input.visitId,
+      entityId: input.entityId,
+      href: input.href,
+      dedupeKey: input.dedupeKey,
+    })
+  } catch (error) {
+    // A operação principal e a notificação interna não devem falhar se o e-mail estiver indisponível.
+    console.warn('Failed to dispatch notification email', error)
+  }
   if (input.dedupeKey) options?.knownDedupeKeys?.add(input.dedupeKey)
-  return ref.id
+  return notificationId
 }
 
 export async function notifyVisitStakeholders(

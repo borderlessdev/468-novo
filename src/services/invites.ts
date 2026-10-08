@@ -20,8 +20,6 @@ import {
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import { httpsCallable } from 'firebase/functions'
-import { getEmailDeliveryMode } from '@/services/email'
-import { createEmailLog } from '@/services/emailLogs'
 import { updateUserProfile } from '@/services/users'
 import type { Invite, InviteRole, InviteStatus, OrgRole } from '@/types'
 
@@ -110,20 +108,11 @@ export async function createInvite(input: {
 
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const link = `${origin}/cadastro?invite=${token}`
-  const subject = 'Convite — Promover Experience'
   let emailSent = false
   let emailError: string | undefined
   try {
     await callSendInviteEmail({ inviteId: invite.id, origin })
     emailSent = true
-    await createEmailLog({
-      to: [invite.email],
-      subject,
-      visitId: input.visitId,
-      kind: 'invite',
-      status: 'queued',
-      createdBy: input.createdBy,
-    })
   } catch (error) {
     console.error('Falha ao enviar e-mail de convite', error)
     emailError = error instanceof Error ? error.message : 'Falha ao enviar e-mail'
@@ -269,4 +258,3 @@ export async function listInvitesByCreator(createdBy: string): Promise<Invite[]>
 
 export { inviteRoleToOrgRole, mapInviteRoleToOrgRole }
 export type { OrgRole }
-export { getEmailDeliveryMode }

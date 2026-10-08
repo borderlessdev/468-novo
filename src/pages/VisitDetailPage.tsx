@@ -89,7 +89,7 @@ import { applyPlaybookToVisit, saveVisitAsPlaybook } from '@/services/playbookAp
 import { listPlaybooks } from '@/services/playbooks'
 import { listDocumentPlaceholders } from '@/services/documentPlaceholders'
 import { unmatchedPlaceholders } from '@/lib/operations'
-import { isFirestoreEmailEnabled, sendVisitSummaryEmail } from '@/services/email'
+import { sendVisitSummaryEmail } from '@/services/email'
 import { draftCommunication } from '@/services/ai'
 import {
   applyVisitIntakeDrafts,
@@ -1166,18 +1166,14 @@ export function VisitDetailPage() {
     if (!visit || !user) return
     setSendingEmail(true)
     try {
-      const mode = await sendVisitSummaryEmail({
+      await sendVisitSummaryEmail({
         to: emailTo,
         subject: emailSubject.trim() || `Resumo da visita: ${visit.title}`,
         body: emailBody.trim() || emailSummary,
         visitId: visit.id,
         createdBy: user.uid,
       })
-      if (mode === 'firestore') {
-        toast.success('Resumo enfileirado para envio por e-mail')
-      } else {
-        toast.success('Cliente de e-mail aberto com o resumo')
-      }
+      toast.success('Resumo enviado por e-mail')
       setEmailOpen(false)
     } catch (error) {
       console.error(error)
@@ -2322,9 +2318,7 @@ export function VisitDetailPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {isFirestoreEmailEnabled()
-                ? 'O resumo será enfileirado na coleção mail e enviado pela extensão Trigger Email (SMTP/SendGrid).'
-                : 'Abre seu cliente de e-mail com o resumo preenchido. Para envio automático, defina VITE_EMAIL_MODE=firestore e instale a extensão Trigger Email.'}
+              O resumo será enviado automaticamente pelo serviço de e-mail da plataforma.
             </p>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => setEmailOpen(false)}>
@@ -2334,11 +2328,7 @@ export function VisitDetailPage() {
                 onClick={() => void handleSendEmail()}
                 disabled={sendingEmail || draftingEmail || !emailBody.trim()}
               >
-                {sendingEmail
-                  ? 'Enviando…'
-                  : isFirestoreEmailEnabled()
-                    ? 'Enviar e-mail'
-                    : 'Preparar envio'}
+                {sendingEmail ? 'Enviando…' : 'Enviar e-mail'}
               </Button>
             </div>
           </div>

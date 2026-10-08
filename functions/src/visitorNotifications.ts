@@ -15,6 +15,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { logger } from 'firebase-functions'
 import { FieldValue, getFirestore, type DocumentData } from 'firebase-admin/firestore'
 import { sendTwilioMessage, type TwilioSendResult } from './twilio'
+import { sendResendEmail } from './resendEmail'
 
 const db = getFirestore()
 
@@ -326,23 +327,16 @@ async function queueMail(input: {
   kind: string
   createdBy: string
 }): Promise<void> {
-  await db.collection('mail').add({
-    to: [input.to],
-    message: {
-      subject: input.subject,
-      text: input.text,
-    },
-    visitId: input.visitId ?? null,
-    createdAt: FieldValue.serverTimestamp(),
-  })
-  await db.collection('emailLogs').add({
-    to: [input.to],
+  await sendResendEmail({
+    to: input.to,
     subject: input.subject,
-    visitId: input.visitId ?? null,
-    kind: input.kind,
-    status: 'queued',
+    text: input.text,
+    kind: input.kind === 'visitor_registration_confirm'
+      ? 'visitor_registration_confirm'
+      : 'visitor_registration_owner',
     createdBy: input.createdBy,
-    createdAt: FieldValue.serverTimestamp(),
+    visitId: input.visitId,
+    dedupeKey: `visitor:${input.kind}:${input.visitId ?? ''}:${input.to}:${input.subject}`,
   })
 }
 

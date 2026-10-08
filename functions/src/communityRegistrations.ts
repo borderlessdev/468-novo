@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore'
 import { getTwilioConfigStatus, sendTwilioMessage } from './twilio'
+import { sendResendEmail } from './resendEmail'
 
 const db = getFirestore()
 const COMMUNITY_KINDS = new Set(['visita_comunidade', 'comunidade_prioritaria'])
@@ -40,6 +41,30 @@ function confirmationExpiry() {
   const date = new Date()
   date.setDate(date.getDate() + CONFIRMATION_VALIDITY_DAYS)
   return date
+}
+
+async function sendCommunityDecisionEmail(input: {
+  data: FirebaseFirestore.DocumentData
+  decision: 'approved' | 'rejected'
+}) {
+  const email = string(input.data.visitorDraft?.email)
+  if (!email) return
+  const name = string(input.data.visitorName) || 'visitante'
+  const visitTitle = string(input.data.visitTitle) || 'sua experiência'
+  const origin = (process.env.APP_ORIGIN?.trim() || 'https://app.promoverexperience.com.br').replace(/\/+$/, '')
+  const confirmationUrl = `${origin}/confirmar-presenca/${String(input.data.confirmationToken ?? '')}`
+  const approved = input.decision === 'approved'
+  await sendResendEmail({
+    to: email,
+    subject: approved ? `Inscrição aprovada — ${visitTitle}` : `Atualização da inscrição — ${visitTitle}`,
+    text: approved
+      ? `Olá ${name}, sua inscrição para "${visitTitle}" foi aprovada. Confirme sua presença: ${confirmationUrl}`
+      : `Olá ${name}, sua inscrição para "${visitTitle}" não foi aprovada nesta oportunidade.`,
+    kind: 'community_registration',
+    createdBy: 'system',
+    visitId: string(input.data.visitId) || undefined,
+    dedupeKey: `community-decision:${String(input.data.visitId)}:${String(input.data.visitorId)}:${input.decision}`,
+  })
 }
 
 async function loadCommunityIntake(token: string) {
@@ -216,6 +241,7 @@ export const reviewCommunityRegistration = onCall(async (request) => {
       transaction.update(ref, { registrationStatus: 'rejected', updatedAt: FieldValue.serverTimestamp() })
       transaction.update(db.collection('visitVisitors').doc(String(data.visitVisitorId)), { registrationStatus: 'rejected' })
     })
+    await sendCommunityDecisionEmail({ data, decision: 'rejected' }).catch(() => undefined)
     return { status: 'rejected' }
   }
   const expires = confirmationExpiry()
@@ -230,6 +256,7 @@ export const reviewCommunityRegistration = onCall(async (request) => {
       registrationStatus: 'approved_pending_confirmation',
     })
   })
+  await sendCommunityDecisionEmail({ data, decision: 'approved' }).catch(() => undefined)
   return { status: 'approved_pending_confirmation' }
 })
 

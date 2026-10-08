@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   Bell,
+  Mail,
   CalendarDays,
   ClipboardList,
   ImagePlus,
@@ -100,6 +101,7 @@ export function SettingsPage() {
   const {
     profile,
     updateNotificationPreferences,
+    updateEmailNotificationPreferences,
     resetPassword,
     isClient,
     isAdmin,
@@ -114,6 +116,10 @@ export function SettingsPage() {
     () => mergeNotificationPreferences(profile?.notificationPreferences),
   )
   const [savingPrefs, setSavingPrefs] = useState(false)
+  const [emailNotificationPrefs, setEmailNotificationPrefs] = useState<NotificationPreferences>(
+    () => mergeNotificationPreferences(profile?.emailNotificationPreferences),
+  )
+  const [savingEmailPrefs, setSavingEmailPrefs] = useState(false)
   const [calendar, setCalendar] = useState<CalendarStatuses | null>(null)
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [calendarBusy, setCalendarBusy] = useState(false)
@@ -124,6 +130,10 @@ export function SettingsPage() {
   useEffect(() => {
     setNotificationPrefs(mergeNotificationPreferences(profile?.notificationPreferences))
   }, [profile?.notificationPreferences])
+
+  useEffect(() => {
+    setEmailNotificationPrefs(mergeNotificationPreferences(profile?.emailNotificationPreferences))
+  }, [profile?.emailNotificationPreferences])
 
   useEffect(() => {
     if (!user) return
@@ -253,6 +263,25 @@ export function SettingsPage() {
       toast.error(error instanceof Error ? error.message : 'Falha ao enviar e-mail')
     } finally {
       setSendingReset(false)
+    }
+  }
+
+  const handleEmailNotificationToggle = async (
+    key: keyof NotificationPreferences,
+    checked: boolean,
+  ) => {
+    const next = { ...emailNotificationPrefs, [key]: checked }
+    setEmailNotificationPrefs(next)
+    setSavingEmailPrefs(true)
+    try {
+      await updateEmailNotificationPreferences(next)
+      toast.success('Preferências de e-mail atualizadas')
+    } catch (error) {
+      console.error(error)
+      setEmailNotificationPrefs(emailNotificationPrefs)
+      toast.error('Não foi possível salvar as preferências de e-mail')
+    } finally {
+      setSavingEmailPrefs(false)
     }
   }
 
@@ -415,6 +444,38 @@ export function SettingsPage() {
                   onCheckedChange={(checked) =>
                     void handleNotificationToggle(item.key, checked)
                   }
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Notificações por e-mail
+          </CardTitle>
+          <CardDescription>
+            Escolha quais alertas operacionais deseja receber por e-mail. Estas opções são independentes do sino.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y">
+            {NOTIFICATION_PREFERENCE_ITEMS.map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+                <div className="space-y-0.5">
+                  <Label htmlFor={`email-notif-${item.key}`} className="text-sm font-medium">
+                    {item.label}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{item.description}</p>
+                </div>
+                <Switch
+                  id={`email-notif-${item.key}`}
+                  checked={emailNotificationPrefs[item.key]}
+                  disabled={savingEmailPrefs}
+                  onCheckedChange={(checked) => void handleEmailNotificationToggle(item.key, checked)}
                 />
               </div>
             ))}

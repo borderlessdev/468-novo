@@ -150,7 +150,10 @@ export function AppSidebar({
               alt=""
               className={cn(
                 'object-contain',
-                collapsed ? 'h-9 w-9' : 'h-9 w-auto max-w-[140px] object-left',
+                collapsed ? 'h-9 w-9' : 'h-12 w-auto max-w-[180px] object-left',
+                // Logos enviadas pelos clientes costumam trazer margem transparente no arquivo.
+                // Escalamos somente nesse caso para o símbolo ter presença visual no topo.
+                !collapsed && activeOrg?.logoUrl && 'origin-left scale-[1.65]',
               )}
             />
           </Link>

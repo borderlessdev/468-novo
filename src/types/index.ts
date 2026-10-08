@@ -112,6 +112,8 @@ export interface UserProfile {
   /** Empresa à qual o usuário pertence (usuários comuns). */
   orgId?: string
   notificationPreferences?: Partial<NotificationPreferences>
+  /** Preferências do canal e-mail; independentes da central de notificações. */
+  emailNotificationPreferences?: Partial<NotificationPreferences>
   modulePermissions?: Partial<ModulePermissions>
   createdAt?: unknown
   updatedAt?: unknown
@@ -531,7 +533,9 @@ export type EmailLogKind =
   | 'invite'
   | 'visitor_registration_confirm'
   | 'visitor_registration_owner'
-export type EmailLogStatus = 'queued' | 'mailto'
+  | 'notification'
+  | 'community_registration'
+export type EmailLogStatus = 'queued' | 'mailto' | 'sent' | 'failed'
 
 export interface EmailLog {
   id: string

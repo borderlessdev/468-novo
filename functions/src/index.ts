@@ -575,3 +575,5 @@ export {
   sendCommunityConfirmationWhatsApp,
 } from './communityRegistrations'
 export { sendInviteEmail } from './inviteEmail'
+export { dispatchNotificationEmail, sendVisitSummaryEmail } from './notificationEmail'
+export { sendDailyOperationalReminders } from './scheduledReminders'

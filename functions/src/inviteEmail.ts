@@ -5,23 +5,14 @@
  * functions/.env: RESEND_API_KEY, RESEND_FROM (opcional), APP_ORIGIN
  */
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { logger } from 'firebase-functions'
 import { getFirestore } from 'firebase-admin/firestore'
-import { Resend } from 'resend'
+import { escapeEmailHtml, sendResendEmail } from './resendEmail'
 
 const ROLE_LABELS: Record<string, string> = {
   org_admin: 'administrador da empresa',
   team: 'funcionário (equipe)',
   client: 'cliente',
   user: 'usuário',
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 export const sendInviteEmail = onCall<{ inviteId?: string; origin?: string }>(
@@ -71,25 +62,28 @@ export const sendInviteEmail = onCall<{ inviteId?: string; origin?: string }>(
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
         <h2>Convite — Promover Experience</h2>
-        <p>Você foi convidado como <strong>${escapeHtml(role)}</strong>${
-          orgName ? ` da empresa <strong>${escapeHtml(orgName)}</strong>` : ''
+        <p>Você foi convidado como <strong>${escapeEmailHtml(role)}</strong>${
+          orgName ? ` da empresa <strong>${escapeEmailHtml(orgName)}</strong>` : ''
         }.</p>
-        ${department ? `<p>Setor: ${escapeHtml(department)}</p>` : ''}
-        <p><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;border-radius:6px;text-decoration:none">Aceitar convite</a></p>
-        <p style="font-size:13px;color:#555">Se ainda não tem conta, crie uma senha. Este convite expira em 14 dias.<br>Link: ${escapeHtml(link)}</p>
+        ${department ? `<p>Setor: ${escapeEmailHtml(department)}</p>` : ''}
+        <p><a href="${escapeEmailHtml(link)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;border-radius:6px;text-decoration:none">Aceitar convite</a></p>
+        <p style="font-size:13px;color:#555">Se ainda não tem conta, crie uma senha. Este convite expira em 14 dias.<br>Link: ${escapeEmailHtml(link)}</p>
       </div>`
 
-    const resend = new Resend(apiKey)
-    const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM || 'convites@app.promoverexperience.com.br',
-      to,
-      subject: 'Convite — Promover Experience',
-      html,
-    })
-    if (error) {
-      logger.error('Resend falhou', { inviteId, error })
-      throw new HttpsError('internal', error.message || 'Falha ao enviar e-mail.')
+    try {
+      const result = await sendResendEmail({
+        to,
+        subject: 'Convite — Promover Experience',
+        html,
+        text: `Você foi convidado para o Promover Experience. Aceite o convite: ${link}`,
+        kind: 'invite',
+        createdBy: request.auth.uid,
+        visitId: invite.visitId ? String(invite.visitId) : undefined,
+        dedupeKey: `invite:${inviteId}`,
+      })
+      return { ok: true, id: result.id, to }
+    } catch (error) {
+      throw new HttpsError('internal', error instanceof Error ? error.message : 'Falha ao enviar e-mail.')
     }
-    return { ok: true, id: data?.id ?? null, to }
   },
 )
