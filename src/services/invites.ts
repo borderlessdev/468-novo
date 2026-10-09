@@ -8,26 +8,36 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
-import { inviteRoleToOrgRole, inviteRoleToUserRole } from '@/lib/org'
+import { inviteRoleToOrgRole } from '@/lib/org'
 import {
   canAddOrganizationMember,
-  addOrganizationMember,
-  getOrganization,
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import { httpsCallable } from 'firebase/functions'
-import { updateUserProfile } from '@/services/users'
 import type { Invite, InviteRole, InviteStatus, OrgRole } from '@/types'
+
+/** Campos que podem ser devolvidos ao portador de um token de convite. */
+export type PublicInvite = Pick<
+  Invite,
+  'id' | 'email' | 'role' | 'status' | 'orgId' | 'department' | 'visitId' | 'expiresAt'
+>
 
 const col = collection(db, 'invites')
 const callSendInviteEmail = httpsCallable<{ inviteId: string; origin: string }, { ok: boolean }>(
   functions,
   'sendInviteEmail',
 )
+const callGetInviteByToken = httpsCallable<{ token: string }, PublicInvite>(
+  functions,
+  'getInviteByToken',
+)
+const callAcceptInvite = httpsCallable<
+  { token: string; name?: string },
+  { orgId: string; inviteId: string }
+>(functions, 'acceptInvite')
 
 function mapInvite(id: string, data: Record<string, unknown>): Invite {
   return {
@@ -126,14 +136,16 @@ export async function getInviteById(inviteId: string): Promise<Invite | null> {
   return mapInvite(snap.id, snap.data())
 }
 
-export async function getInviteByToken(token: string): Promise<Invite | null> {
-  const snap = await getDocs(
-    query(col, where('token', '==', token), where('status', '==', 'pending')),
-  )
-  if (snap.empty) return null
-  const invite = mapInvite(snap.docs[0].id, snap.docs[0].data())
-  if (new Date(invite.expiresAt).getTime() < Date.now()) return null
-  return invite
+export async function getInviteByToken(token: string): Promise<PublicInvite | null> {
+  const trimmed = token.trim()
+  if (!trimmed) return null
+  try {
+    const { data } = await callGetInviteByToken({ token: trimmed })
+    if (!data?.id || new Date(data.expiresAt).getTime() < Date.now()) return null
+    return data
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -142,60 +154,17 @@ export async function getInviteByToken(token: string): Promise<Invite | null> {
  */
 export async function joinOrganizationFromInvite(input: {
   token: string
-  uid: string
-  email: string
   name?: string
 }): Promise<{ orgId: string; inviteId: string }> {
-  const invite = await getInviteByToken(input.token)
-  if (!invite) {
-    throw new Error('Convite inválido, expirado ou já utilizado')
+  try {
+    const { data } = await callAcceptInvite({
+      token: input.token.trim(),
+      name: input.name?.trim() || undefined,
+    })
+    return data
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Não foi possível aceitar o convite')
   }
-
-  const email = input.email.trim().toLowerCase()
-  const inviteEmail = invite.email.trim().toLowerCase()
-  if (inviteEmail !== email) {
-    throw new Error(
-      `Este convite é para ${invite.email}. Entre com esse e-mail ou peça um novo convite.`,
-    )
-  }
-
-  const org = await getOrganization(invite.orgId)
-  if (!org || org.status !== 'active') {
-    throw new Error('Esta empresa não está disponível para novos membros')
-  }
-
-  // A vaga foi reservada quando o convite pendente foi criado. Uma conta recém-
-  // cadastrada ainda não pode listar os membros dessa empresa pelas regras do Firestore.
-
-  const orgRole = inviteRoleToOrgRole(invite.role)
-  const role = inviteRoleToUserRole(invite.role)
-
-  // setDoc é idempotente — evita get em membership inexistente (rules negavam).
-  await addOrganizationMember({
-    orgId: invite.orgId,
-    uid: input.uid,
-    email,
-    name: input.name?.trim() || email,
-    orgRole,
-    department: invite.department,
-    invitedBy: invite.createdBy,
-  })
-
-  await updateUserProfile(input.uid, {
-    orgId: invite.orgId,
-    role,
-  })
-
-  await acceptInvite(invite.id, input.uid)
-  return { orgId: invite.orgId, inviteId: invite.id }
-}
-
-export async function acceptInvite(inviteId: string, uid: string): Promise<void> {
-  await updateDoc(doc(col, inviteId), {
-    status: 'accepted',
-    acceptedBy: uid,
-    acceptedAt: serverTimestamp(),
-  })
 }
 
 export async function listPendingInvitesByOrg(orgId: string): Promise<Invite[]> {

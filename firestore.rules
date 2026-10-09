@@ -127,7 +127,7 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId} {
-      allow get: if isSignedIn();
+      allow get: if canAccessOrg(orgId);
       allow list: if isPlatformAdmin();
       allow create: if isPlatformAdmin()
         && request.resource.data.name is string
@@ -164,13 +164,14 @@ service cloud.firestore {
           || resource.data.uid == request.auth.uid
           || (resource.data.orgId is string && canAccessOrg(resource.data.orgId))
         );
-      allow create: if isSignedIn()
+      // Vínculos são criados exclusivamente pelo Admin SDK ao aceitar convite,
+      // ou pelo admin de plataforma ao provisionar uma organização.
+      allow create: if isPlatformAdmin()
         && request.resource.data.orgId is string
         && request.resource.data.uid is string
         && request.resource.data.email is string
         && request.resource.data.name is string
-        && request.resource.data.orgRole in ['org_admin', 'user', 'team', 'client']
-        && (isPlatformAdmin() || request.resource.data.uid == request.auth.uid);
+        && request.resource.data.orgRole in ['org_admin', 'user', 'team', 'client'];
       allow update: if isPlatformAdmin();
       // Master ou admin da empresa (não remove a si mesmo pela rule — UI também bloqueia).
       allow delete: if isPlatformAdmin()
@@ -182,23 +183,29 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() && (
+        isPlatformAdmin()
+        || request.auth.uid == userId
+        || (resource.data.orgId is string && canAccessOrg(resource.data.orgId))
+      );
       allow list: if isAdmin();
 
-      // Conta própria OU platform admin criando perfil do admin da empresa.
-      // orgId pode ser null no placeholder pós-Auth (antes do vínculo do convite).
+      // O cliente só pode criar um perfil sem empresa; o vínculo é feito pelo
+      // Admin SDK ao aceitar convite.
       allow create: if isSignedIn()
         && request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.name is string
         && request.resource.data.role in ['user', 'team', 'client']
         && (
-          !('orgId' in request.resource.data)
-          || request.resource.data.orgId == null
-          || request.resource.data.orgId is string
-        )
-        && (
-          request.auth.uid == userId
+          (
+            request.auth.uid == userId
+            && request.resource.data.role == 'user'
+            && (
+              !('orgId' in request.resource.data)
+              || request.resource.data.orgId == null
+            )
+          )
           || (
             isPlatformAdmin()
             && request.resource.data.orgId is string
@@ -212,6 +219,10 @@ service cloud.firestore {
             && request.resource.data.uid == resource.data.uid
             && request.resource.data.role in ['user', 'team', 'client']
             && resource.data.role in ['user', 'team', 'client']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'name', 'photoURL', 'photoStoragePath', 'notificationPreferences',
+              'emailNotificationPreferences', 'updatedAt'
+            ])
           )
           || isAdmin()
           || isPlatformAdmin()
@@ -354,11 +365,8 @@ service cloud.firestore {
 
     // Firebase Extension "Trigger Email" — fila de envio (SMTP/SendGrid/etc.)
     match /mail/{mailId} {
-      allow create: if isSignedIn()
-        && request.resource.data.to is list
-        && request.resource.data.message.subject is string
-        && request.resource.data.message.text is string;
-      allow read, update, delete: if false;
+      // E-mails são enviados apenas por Cloud Functions/Admin SDK.
+      allow read, write: if false;
     }
 
     match /notifications/{notificationId} {
@@ -404,24 +412,23 @@ service cloud.firestore {
     }
 
     match /invites/{inviteId} {
-      allow read: if resource.data.status == 'pending'
-        || (isSignedIn() && (
+      allow read: if isSignedIn() && (
           resource.data.createdBy == request.auth.uid
           || isAdmin()
           || isPlatformAdmin()
           || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
-        ));
+        );
       allow create: if isSignedIn()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.email is string
         && request.resource.data.token is string
         && request.resource.data.role in ['team', 'client', 'user', 'org_admin']
         && request.resource.data.status == 'pending'
-        && request.resource.data.orgId is string;
+        && request.resource.data.orgId is string
+        && (isPlatformAdmin() || isOrgAdminOf(request.resource.data.orgId));
       allow update: if isSignedIn()
         && (
-          (resource.data.status == 'pending' && request.resource.data.status == 'accepted')
-          || resource.data.createdBy == request.auth.uid
+          resource.data.createdBy == request.auth.uid
           || isAdmin()
           || isPlatformAdmin()
           || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
@@ -533,10 +540,8 @@ service cloud.firestore {
     }
 
     match /emailLogs/{logId} {
-      allow create: if isSignedIn()
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.subject is string
-        && request.resource.data.to is list;
+      // Logs de entrega são a trilha de auditoria do backend; clientes não os forjam.
+      allow create: if false;
       allow read: if isSignedIn()
         && (isAdmin() || resource.data.createdBy == request.auth.uid);
       allow update, delete: if false;

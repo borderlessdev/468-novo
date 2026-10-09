@@ -20,7 +20,7 @@ import { auth, initAnalytics } from '@/lib/firebase'
 import { canWriteOperations } from '@/lib/access'
 import { createUserProfile, getUserProfile, updateUserEmailNotificationPreferences, updateUserNotificationPreferences, updateUserProfile } from '@/services/users'
 import { removeProfilePhoto, uploadProfilePhoto } from '@/services/profilePhoto'
-import { getInviteById, joinOrganizationFromInvite } from '@/services/invites'
+import { joinOrganizationFromInvite } from '@/services/invites'
 import { addOrganizationMember } from '@/services/organizations'
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/org'
 import type { UserProfile, UserRole } from '@/types'
@@ -43,7 +43,7 @@ interface AuthContextValue {
     password: string,
     options?: {
       role?: UserRole
-      inviteId?: string
+      inviteToken?: string
       orgId?: string
       orgRole?: import('@/types').OrgRole
       department?: string
@@ -134,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null)
           setIsAdmin(false)
+          setIsPlatformAdmin(false)
         }
         setLoading(false)
       })()
@@ -151,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const joinExistingAccountWithInvite = useCallback(
-    async (input: { email: string; password: string; inviteId: string; name?: string }) => {
+    async (input: { email: string; password: string; inviteToken: string; name?: string }) => {
       const email = input.email.trim().toLowerCase()
       try {
         await signInWithEmailAndPassword(auth, email, input.password)
@@ -168,14 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!firebaseUser) {
         throw new Error('Faça login para aceitar o convite')
       }
-      const invite = await getInviteById(input.inviteId)
-      if (!invite?.token) {
-        throw new Error('Convite inválido, expirado ou já utilizado')
-      }
       await joinOrganizationFromInvite({
-        token: invite.token,
-        uid: firebaseUser.uid,
-        email: firebaseUser.email ?? email,
+        token: input.inviteToken,
         name: input.name?.trim() || firebaseUser.displayName || email,
       })
       await loadProfile(firebaseUser)
@@ -190,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       options?: {
         role?: UserRole
-        inviteId?: string
+        inviteToken?: string
         orgId?: string
         orgRole?: import('@/types').OrgRole
         department?: string
@@ -205,21 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let department = options?.department
         let role = options?.role ?? 'user'
 
-        if (options?.inviteId) {
-          const invite = await getInviteById(options.inviteId)
-          if (!invite?.token) {
-            throw new Error('Convite inválido, expirado ou já utilizado')
-          }
-          await createUserProfile({
-            uid: credential.user.uid,
-            name,
-            email: normalizedEmail,
-            role: 'user',
-          })
+        if (options?.inviteToken) {
           await joinOrganizationFromInvite({
-            token: invite.token,
-            uid: credential.user.uid,
-            email: normalizedEmail,
+            token: options.inviteToken,
             name,
           })
           await loadProfile(credential.user)
@@ -249,11 +232,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadProfile(credential.user)
       } catch (error) {
         const code = (error as { code?: string }).code ?? ''
-        if (code === 'auth/email-already-in-use' && options?.inviteId) {
+        if (code === 'auth/email-already-in-use' && options?.inviteToken) {
           await joinExistingAccountWithInvite({
             email: email.trim().toLowerCase(),
             password,
-            inviteId: options.inviteId,
+            inviteToken: options.inviteToken,
             name,
           })
           return
@@ -272,8 +255,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const joined = await joinOrganizationFromInvite({
         token: token.trim(),
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
         name: firebaseUser.displayName ?? undefined,
       })
       try {

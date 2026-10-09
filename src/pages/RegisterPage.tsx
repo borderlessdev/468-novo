@@ -13,8 +13,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { clearPendingInviteToken, resolveInviteToken } from '@/lib/inviteSession'
 import { registerSchema, type RegisterInput } from '@/lib/validations'
 import { inviteRoleToUserRole } from '@/lib/org'
-import { getInviteByToken } from '@/services/invites'
-import type { Invite } from '@/types'
+import { getInviteByToken, type PublicInvite } from '@/services/invites'
 
 export function RegisterPage() {
   const { register: registerUser, user, acceptInviteLink, refreshProfile, logout } = useAuth()
@@ -24,7 +23,7 @@ export function RegisterPage() {
   const inviteToken = resolveInviteToken(inviteFromUrl)
   const [loading, setLoading] = useState(false)
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken))
-  const [invite, setInvite] = useState<Invite | null>(null)
+  const [invite, setInvite] = useState<PublicInvite | null>(null)
   const [inviteInvalid, setInviteInvalid] = useState(false)
   const [inviteAcceptError, setInviteAcceptError] = useState<string | null>(null)
   const [switchingAccount, setSwitchingAccount] = useState(false)
@@ -155,7 +154,7 @@ export function RegisterPage() {
     try {
       await registerUser(values.name, values.email, values.password, {
         role: invite ? inviteRoleToUserRole(invite.role) : 'user',
-        inviteId: invite?.id,
+        inviteToken: invite ? inviteToken ?? undefined : undefined,
       })
       clearPendingInviteToken()
       toast.success(invite ? 'Empresa vinculada com sucesso' : 'Conta criada com sucesso')
