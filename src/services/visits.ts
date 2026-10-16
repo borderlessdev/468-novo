@@ -88,12 +88,20 @@ export async function getVisit(id: string): Promise<Visit | null> {
 
 export async function listVisits(
   orgId: string,
-  _uid: string,
+  uid: string,
   _isPlatformAdmin: boolean,
-  _role: UserRole = 'user',
+  role: UserRole = 'user',
 ): Promise<Visit[]> {
   if (!orgId) return []
-  const snap = await getDocs(query(visitsCol, where('orgId', '==', orgId)))
+  const snap = await getDocs(
+    role === 'client'
+      ? query(
+          visitsCol,
+          where('orgId', '==', orgId),
+          where('clientUserIds', 'array-contains', uid),
+        )
+      : query(visitsCol, where('orgId', '==', orgId)),
+  )
   return snap.docs
     .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
     .map((d) => mapVisit(d.id, d.data()))

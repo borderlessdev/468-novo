@@ -133,13 +133,28 @@ export async function countPendingInvites(orgId: string): Promise<number> {
   return snap.size
 }
 
+export async function countPendingInvitesByRole(orgId: string, role: InviteRole): Promise<number> {
+  const snap = await getDocs(
+    query(
+      collection(db, 'invites'),
+      where('orgId', '==', orgId),
+      where('status', '==', 'pending'),
+      where('role', '==', role),
+    ),
+  )
+  return snap.size
+}
+
 export async function canAddOrganizationMember(orgId: string): Promise<boolean> {
   const org = await getOrganization(orgId)
   if (!org || org.status !== 'active') return false
-  const [members, pending] = await Promise.all([
-    countOrganizationSeats(orgId),
-    countPendingInvites(orgId),
-  ])
+  let pending: number
+  try {
+    pending = await countPendingInvites(orgId)
+  } catch {
+    pending = await countPendingInvitesByRole(orgId, 'client')
+  }
+  const members = await countOrganizationSeats(orgId)
   return members + pending < org.maxUsers
 }
 

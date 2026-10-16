@@ -114,6 +114,20 @@ function mockHelpAnswer(
     ].join('\n')
   }
 
+  if (
+    (roleLabel.includes('Equipe') || roleLabel.includes('funcionário')) &&
+    q.includes('cliente') &&
+    (q.includes('convid') || q.includes('convite') || q.includes('cadastr'))
+  ) {
+    return [
+      'Para convidar um **cliente** da sua empresa:',
+      '1. Menu **Configurações** → **Convidar cliente**.',
+      '2. Informe o e-mail e clique em **Enviar convite**.',
+      '3. Use **Copiar link** se quiser enviar por outro canal.',
+      'O cliente conclui o cadastro pelo link e entra só em **Orçamento** e **Planejamento**.',
+    ].join('\n')
+  }
+
   if (isStaffLike) {
     if (
       q.includes('funcion') ||

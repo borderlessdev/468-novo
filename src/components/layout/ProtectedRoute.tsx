@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { isNavAllowed } from '@/lib/access'
+import { clientHomePath, isNavAllowed } from '@/lib/access'
 import { clearPendingInviteToken, resolveInviteToken } from '@/lib/inviteSession'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,6 +51,7 @@ export function ProtectedRoute() {
 
   const inviteFromUrl = resolveInviteToken(searchParams.get('invite'))
 
+  const clientHome = Boolean(user) && !isPlatformAdmin && role === 'client'
   const allowed =
     !user ||
     loading ||
@@ -65,6 +66,7 @@ export function ProtectedRoute() {
 
   useEffect(() => {
     if (loading || orgLoading || !user || allowed) return
+    if (clientHome && location.pathname === '/') return
     if (deniedPath.current === location.pathname) return
     deniedPath.current = location.pathname
     const isEmpresas =
@@ -72,11 +74,20 @@ export function ProtectedRoute() {
     if (!isEmpresas) {
       toast.error('Você não tem permissão para acessar esta página')
     }
-  }, [allowed, loading, orgLoading, user, location.pathname])
+  }, [allowed, clientHome, loading, orgLoading, user, location.pathname])
 
   useEffect(() => {
     if (loading || orgLoading || !user || isPlatformAdmin || !inviteFromUrl) return
-    if (autoInviteTried.current === inviteFromUrl) return
+    if (autoInviteTried.current === inviteFromUrl) {
+      const next = new URLSearchParams(searchParams)
+      if (next.has('invite') && activeOrgId) {
+        next.delete('invite')
+        setSearchParams(next, { replace: true })
+        clearPendingInviteToken()
+      }
+      return
+    }
+    autoInviteTried.current = inviteFromUrl
 
     let cancelled = false
     setLinking(true)
@@ -88,7 +99,6 @@ export function ProtectedRoute() {
         if (cancelled) return
 
         if (!invite) {
-          autoInviteTried.current = inviteFromUrl
           clearPendingInviteToken()
           const next = new URLSearchParams(searchParams)
           next.delete('invite')
@@ -109,7 +119,6 @@ export function ProtectedRoute() {
 
         await acceptInviteLink(inviteFromUrl)
         if (cancelled) return
-        autoInviteTried.current = inviteFromUrl
         await refreshProfile()
         await refreshOrg()
         clearPendingInviteToken()
@@ -123,9 +132,15 @@ export function ProtectedRoute() {
         setSearchParams(next, { replace: true })
       } catch (error) {
         if (cancelled) return
-        autoInviteTried.current = inviteFromUrl
         const message =
           error instanceof Error ? error.message : 'Não foi possível aceitar o convite'
+        if (/já utilizado|expirado/i.test(message) && activeOrgId) {
+          clearPendingInviteToken()
+          const next = new URLSearchParams(searchParams)
+          next.delete('invite')
+          setSearchParams(next, { replace: true })
+          return
+        }
         if (/Este convite é para/i.test(message)) {
           const match = message.match(/Este convite é para ([^\s.]+)/i)
           setInviteMismatchEmail(match?.[1] ?? 'outro e-mail')
@@ -230,7 +245,11 @@ export function ProtectedRoute() {
   }
 
   if (!allowed) {
-    return <Navigate to="/" replace />
+    if (!clientHome) return <Navigate to="/" replace />
+    const next = new URLSearchParams(searchParams)
+    const query = next.toString()
+    const target = clientHomePath()
+    return <Navigate to={query ? `${target}?${query}` : target} replace />
   }
 
   const isOrganizationsRoute =
@@ -330,7 +349,7 @@ export function ProtectedRoute() {
 }
 
 export function PublicOnlyRoute() {
-  const { user, loading, isPlatformAdmin } = useAuth()
+  const { user, loading, isPlatformAdmin, role } = useAuth()
   const { activeOrgId, loading: orgLoading } = useOrg()
   const [searchParams] = useSearchParams()
   const inviteToken = resolveInviteToken(searchParams.get('invite'))
@@ -344,9 +363,11 @@ export function PublicOnlyRoute() {
   }
 
   if (user) {
+    const home =
+      !isPlatformAdmin && role === 'client' && activeOrgId ? clientHomePath() : '/'
     // Com convite pendente: processa no app (mesmo se já tiver empresa).
     if (inviteToken && !isPlatformAdmin) {
-      return <Navigate to={`/?invite=${encodeURIComponent(inviteToken)}`} replace />
+      return <Navigate to={`${home}?invite=${encodeURIComponent(inviteToken)}`} replace />
     }
     if (isPlatformAdmin && !activeOrgId) {
       return <Navigate to="/empresas" replace />
@@ -354,7 +375,7 @@ export function PublicOnlyRoute() {
     if (!activeOrgId && !isPlatformAdmin) {
       return <Navigate to="/" replace />
     }
-    return <Navigate to="/" replace />
+    return <Navigate to={home} replace />
   }
 
   return <Outlet />

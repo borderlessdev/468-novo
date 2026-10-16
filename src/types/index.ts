@@ -379,6 +379,10 @@ export interface FinanceItem extends SoftDeletable {
   serviceValue?: number
   /** Valor pago / realizado (opcional). */
   actualValue?: number
+  /** Estimativa aprovada pelo cliente. Não entra nas cotações de fornecedor. */
+  clientBudgetAmount?: number
+  /** Item de orçamento que originou este lançamento. */
+  budgetItemId?: string
   winningCompany?: string
   nfReceived: boolean
   nfDueDate?: string
@@ -486,6 +490,46 @@ export interface Notification {
   actorName?: string
   dedupeKey?: string
   createdAt?: unknown
+}
+
+export type BudgetStatus = 'draft' | 'published'
+
+export type BudgetDecision = 'pending' | 'approved' | 'rejected'
+
+export type BudgetIntegrationStatus = 'none' | 'pending' | 'created' | 'failed'
+
+export interface Budget {
+  id: string
+  orgId: string
+  visitId: string
+  clientUserId: string
+  status: BudgetStatus
+  createdBy: string
+  publishedAt?: string
+  publishedBy?: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+export interface BudgetItem {
+  id: string
+  budgetId: string
+  orgId: string
+  visitId: string
+  clientUserId: string
+  description: string
+  quantity: number
+  unitAmount: number
+  /** Congelado na publicação. */
+  lineAmount: number
+  budgetStatus: BudgetStatus
+  decision: BudgetDecision
+  decidedBy?: string
+  decidedAt?: string
+  financeItemId?: string
+  integrationStatus: BudgetIntegrationStatus
+  createdAt?: unknown
+  updatedAt?: unknown
 }
 
 export type ActivityLogEntityType =

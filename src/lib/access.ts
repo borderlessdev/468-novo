@@ -26,6 +26,15 @@ export function canManageOrgUsers(
   return isPlatformAdmin || isOrgAdmin
 }
 
+/** Convite de cliente: admin da plataforma, admin da empresa ou funcionário (equipe). */
+export function canInviteClients(
+  isPlatformAdmin: boolean,
+  isOrgAdmin: boolean,
+  role: UserRole,
+): boolean {
+  return canManageOrgUsers(isPlatformAdmin, isOrgAdmin) || role === 'team'
+}
+
 /** Whitelabel (logo da pasta): Admin Master e Admin da empresa. Funcionários só herdam. */
 export function canManageWhitelabel(
   isPlatformAdmin: boolean,
@@ -76,13 +85,19 @@ export function canManageVisitAccess(
   return visit.ownerId === uid && role === 'user'
 }
 
+/** Entrada do cliente após o login. As telas reais entram nestas rotas depois. */
+export function clientHomePath(): string {
+  return '/orcamento'
+}
+
 export function clientNavPaths(): string[] {
-  return ['/', '/visitas', '/programacao', '/assistente', '/ajuda', '/configuracoes']
+  return ['/orcamento', '/planejamento', '/perfil']
 }
 
 const MODULE_PATH_PREFIX: { prefix: string; key: keyof ModulePermissions }[] = [
   { prefix: '/crm', key: 'visitors' },
   { prefix: '/planejamento', key: 'planning' },
+  { prefix: '/orcamento', key: 'finance' },
   { prefix: '/financeiro', key: 'finance' },
   { prefix: '/receitas', key: 'revenue' },
   { prefix: '/relatorios', key: 'reports' },
@@ -94,7 +109,8 @@ export function isModuleAllowed(
   role: UserRole,
   isAdmin: boolean,
 ): boolean {
-  if (isAdmin || role === 'client') return true
+  if (isAdmin) return true
+  if (role === 'client') return false
   const match = MODULE_PATH_PREFIX.find(
     (item) => path === item.prefix || path.startsWith(`${item.prefix}/`),
   )
@@ -114,7 +130,7 @@ export function canAccessRevenue(
   return mergeModulePermissions(modulePermissions).revenue === true
 }
 
-/** Rotas permitidas ao cliente. `/configuracoes` é exato (sem lixeira). */
+/** Rotas permitidas ao cliente: Orçamento, Planejamento e o perfil do header. */
 export function isNavAllowed(
   path: string,
   role: UserRole,
@@ -122,6 +138,11 @@ export function isNavAllowed(
   modulePermissions?: Partial<ModulePermissions> | null,
   isOrgAdmin = false,
 ): boolean {
+  if (path === '/orcamento' || path.startsWith('/orcamento/')) {
+    if (!isAdmin && role === 'client') return true
+    if (isAdmin || isOrgAdmin) return true
+    return isModuleAllowed(path, mergeModulePermissions(modulePermissions), role, isAdmin)
+  }
   if (path === '/empresas' || path.startsWith('/empresas/')) {
     return isAdmin
   }
@@ -133,19 +154,9 @@ export function isNavAllowed(
   }
   if (isAdmin) return true
   if (role === 'client') {
-    if (path === '/') return true
-    if (path === '/programacao' || path.startsWith('/programacao/')) return true
-    if (path === '/agenda' || path.startsWith('/agenda/')) return true
-    if (path === '/visitas' || path.startsWith('/visitas/')) return true
-    if (
-      path === '/assistente' ||
-      path.startsWith('/assistente/') ||
-      path === '/ajuda' ||
-      path.startsWith('/ajuda/')
-    ) {
-      return true
-    }
-    if (path === '/configuracoes') return true
+    if (path === '/orcamento' || path.startsWith('/orcamento/')) return true
+    if (path === '/planejamento' || path.startsWith('/planejamento/')) return true
+    if (path === '/perfil') return true
     return false
   }
   return isModuleAllowed(path, mergeModulePermissions(modulePermissions), role, isAdmin)

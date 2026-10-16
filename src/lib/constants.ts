@@ -72,6 +72,12 @@ export const DEFAULT_CHECKLIST = [
   'Confirmar agenda com stakeholders',
 ] as const
 
+/** Navegação exclusiva do perfil cliente. Ícones já usados na sidebar. */
+export const CLIENT_NAV_ITEMS = [
+  { to: '/orcamento', label: 'Orçamento', icon: 'DollarSign' },
+  { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
+] as const
+
 export const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: 'LayoutDashboard' },
   { to: '/operacoes', label: 'Operações', icon: 'ClipboardList' },
@@ -79,6 +85,7 @@ export const NAV_ITEMS = [
   { to: '/programacao', label: 'Programação', icon: 'Calendar' },
   { to: '/crm', label: 'CRM', icon: 'Users' },
   { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
+  { to: '/orcamento', label: 'Orçamento', icon: 'Receipt' },
   { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },
   { to: '/receitas', label: 'Receitas', icon: 'Wallet' },
   { to: '/relatorios', label: 'Relatórios', icon: 'BarChart3' },

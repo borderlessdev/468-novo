@@ -576,5 +576,6 @@ export {
 } from './communityRegistrations'
 export { sendInviteEmail } from './inviteEmail'
 export { acceptInvite, getInviteByToken } from './inviteAcceptance'
+export { publishBudget, decideBudgetItem } from './budget'
 export { dispatchNotificationEmail, sendVisitSummaryEmail } from './notificationEmail'
 export { sendDailyOperationalReminders } from './scheduledReminders'

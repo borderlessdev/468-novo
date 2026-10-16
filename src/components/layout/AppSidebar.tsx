@@ -12,17 +12,18 @@ import {
   LogOut,
   MapPin,
   PanelLeft,
+  Receipt,
   Settings,
   Users,
   Wallet,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { canManageOrgUsers, isNavAllowed } from '@/lib/access'
+import { canManageOrgUsers, clientHomePath, isNavAllowed } from '@/lib/access'
 import { SafeLogo } from '@/components/SafeLogo'
 import { useOrg } from '@/contexts/OrgContext'
 import { VALE_BRAND } from '@/lib/valeBrand'
-import { NAV_ITEMS } from '@/lib/constants'
+import { CLIENT_NAV_ITEMS, NAV_ITEMS } from '@/lib/constants'
 import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import type { ModulePermissions, UserRole } from '@/types'
 
@@ -34,6 +35,7 @@ const icons = {
   Users,
   ListTodo,
   DollarSign,
+  Receipt,
   Wallet,
   BarChart3,
   CircleHelp,
@@ -64,7 +66,9 @@ export function AppSidebar({
   modulePermissions,
 }: AppSidebarProps) {
   const { activeOrg } = useOrg()
+  const isClientNav = !isAdmin && role === 'client'
   const showUsersNav = canManageOrgUsers(isAdmin, isOrgAdmin)
+  const navItems = isClientNav ? CLIENT_NAV_ITEMS : NAV_ITEMS
   const [logoutOpen, setLogoutOpen] = useState(false)
   const sairButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
@@ -125,7 +129,7 @@ export function AppSidebar({
           )}
         >
           <Link
-            to="/"
+            to={isClientNav ? clientHomePath() : '/'}
             onClick={(event) => {
               event.stopPropagation()
               if (collapsed) onExpand()
@@ -184,7 +188,7 @@ export function AppSidebar({
         </div>
 
         <nav className="scrollbar-thin space-y-1 overflow-y-auto px-2.5 py-4">
-          {isAdmin ? (
+          {isAdmin && !isClientNav ? (
             <NavLink
               to="/empresas"
               onClick={() => {
@@ -206,8 +210,9 @@ export function AppSidebar({
               {!collapsed ? <span className="truncate">Pastas de clientes</span> : null}
             </NavLink>
           ) : null}
-          {NAV_ITEMS
+          {navItems
             .filter((item) =>
+              isClientNav ||
               isNavAllowed(item.to, role, isAdmin, modulePermissions, isOrgAdmin),
             )
             .map((item) => {
@@ -249,7 +254,7 @@ export function AppSidebar({
                 </NavLink>
               )
             })}
-          {showUsersNav ? (
+          {showUsersNav && !isClientNav ? (
             <NavLink
               to="/usuarios"
               onClick={() => {

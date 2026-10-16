@@ -37,6 +37,12 @@ service cloud.firestore {
         && get(memberDocPath(orgId, request.auth.uid)).data.orgRole == 'org_admin';
     }
 
+    function isOrgTeamOf(orgId) {
+      return isSignedIn()
+        && exists(memberDocPath(orgId, request.auth.uid))
+        && get(memberDocPath(orgId, request.auth.uid)).data.orgRole == 'team';
+    }
+
     function visitData(visitId) {
       return get(/databases/$(database)/documents/visits/$(visitId)).data;
     }
@@ -82,6 +88,22 @@ service cloud.firestore {
 
     function isClientUser() {
       return isSignedIn() && signedInRole() == 'client';
+    }
+
+    function isOrgOperatorOf(orgId) {
+      return isPlatformAdmin()
+        || (
+          isSignedIn()
+          && exists(memberDocPath(orgId, request.auth.uid))
+          && get(memberDocPath(orgId, request.auth.uid)).data.orgRole in ['org_admin', 'team', 'user']
+        );
+    }
+
+    function clientLinkedToVisit(visitId) {
+      let visit = visitData(visitId);
+      return isClientUser()
+        && canAccessOrg(visit.orgId)
+        && request.auth.uid in memberIds(visit.clientUserIds);
     }
 
     function isCurrentlyDeleted() {
@@ -240,7 +262,11 @@ service cloud.firestore {
     }
 
     match /visits/{visitId} {
-      allow read: if canAccessOrg(resource.data.orgId);
+      // Regras separadas: uma consulta precisa caber inteira em uma delas.
+      allow read: if !isClientUser() && canAccessOrg(resource.data.orgId);
+      allow read: if isClientUser()
+        && canAccessOrg(resource.data.orgId)
+        && request.auth.uid in resource.data.clientUserIds;
 
       allow create: if creatingOwnDoc()
         && request.resource.data.orgId is string
@@ -303,7 +329,8 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow read: if canReadChild();
+      allow read: if !isClientUser() && canReadChild();
+      allow read: if clientLinkedToVisit(resource.data.visitId);
       allow create: if canCreateChild()
         && request.resource.data.visitId is string
         && request.resource.data.title is string
@@ -317,7 +344,7 @@ service cloud.firestore {
     }
 
     match /financeItems/{itemId} {
-      allow read: if canReadChild();
+      allow read: if canReadChild() && !isClientUser();
       allow create: if canCreateChild()
         && request.resource.data.visitId is string
         && request.resource.data.serviceName is string
@@ -361,6 +388,72 @@ service cloud.firestore {
         && request.resource.data.category is string;
       allow update: if canWriteChild() && unchangedOwnerId();
       allow delete: if canWriteChild();
+    }
+
+    match /budgets/{budgetId} {
+      allow read: if !isClientUser() && canAccessOrg(resource.data.orgId);
+      allow read: if isClientUser()
+        && resource.data.status == 'published'
+        && resource.data.clientUserId == request.auth.uid
+        && canAccessOrg(resource.data.orgId);
+      allow create: if !isClientUser()
+        && canAccessOrg(request.resource.data.orgId)
+        && request.resource.data.status == 'draft'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.visitId is string
+        && request.resource.data.clientUserId is string
+        && request.resource.data.orgId is string;
+      allow update: if !isClientUser()
+        && canAccessOrg(resource.data.orgId)
+        && resource.data.status == 'draft'
+        && request.resource.data.status == 'draft'
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.visitId == resource.data.visitId
+        && request.resource.data.clientUserId == resource.data.clientUserId
+        && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if !isClientUser()
+        && canAccessOrg(resource.data.orgId)
+        && resource.data.status == 'draft';
+    }
+
+    match /budgetItems/{itemId} {
+      allow read: if !isClientUser() && canAccessOrg(resource.data.orgId);
+      allow read: if isClientUser()
+        && resource.data.budgetStatus == 'published'
+        && resource.data.clientUserId == request.auth.uid
+        && canAccessOrg(resource.data.orgId);
+      allow create: if !isClientUser()
+        && canAccessOrg(request.resource.data.orgId)
+        && request.resource.data.budgetStatus == 'draft'
+        && request.resource.data.decision == 'pending'
+        && request.resource.data.integrationStatus == 'none'
+        && request.resource.data.budgetId is string
+        && request.resource.data.visitId is string
+        && request.resource.data.clientUserId is string
+        && request.resource.data.description is string
+        && request.resource.data.quantity is number
+        && request.resource.data.quantity > 0
+        && request.resource.data.unitAmount is number
+        && request.resource.data.unitAmount >= 0
+        && request.resource.data.lineAmount is number;
+      allow update: if !isClientUser()
+        && canAccessOrg(resource.data.orgId)
+        && resource.data.budgetStatus == 'draft'
+        && resource.data.decision == 'pending'
+        && request.resource.data.budgetStatus == 'draft'
+        && request.resource.data.decision == 'pending'
+        && request.resource.data.integrationStatus == 'none'
+        && request.resource.data.budgetId == resource.data.budgetId
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.visitId == resource.data.visitId
+        && request.resource.data.clientUserId == resource.data.clientUserId
+        && !('financeItemId' in request.resource.data)
+        && !('decidedBy' in request.resource.data)
+        && !('decidedAt' in request.resource.data);
+      allow delete: if !isClientUser()
+        && canAccessOrg(resource.data.orgId)
+        && resource.data.budgetStatus == 'draft'
+        && resource.data.decision == 'pending';
     }
 
     // Firebase Extension "Trigger Email" — fila de envio (SMTP/SendGrid/etc.)
@@ -417,6 +510,11 @@ service cloud.firestore {
           || isAdmin()
           || isPlatformAdmin()
           || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
+          || (
+            resource.data.orgId is string
+            && resource.data.role == 'client'
+            && isOrgTeamOf(resource.data.orgId)
+          )
         );
       allow create: if isSignedIn()
         && request.resource.data.createdBy == request.auth.uid
@@ -425,13 +523,26 @@ service cloud.firestore {
         && request.resource.data.role in ['team', 'client', 'user', 'org_admin']
         && request.resource.data.status == 'pending'
         && request.resource.data.orgId is string
-        && (isPlatformAdmin() || isOrgAdminOf(request.resource.data.orgId));
+        && (
+          isPlatformAdmin()
+          || isOrgAdminOf(request.resource.data.orgId)
+          || (
+            request.resource.data.role == 'client'
+            && isOrgTeamOf(request.resource.data.orgId)
+          )
+        );
       allow update: if isSignedIn()
         && (
-          resource.data.createdBy == request.auth.uid
-          || isAdmin()
+          isAdmin()
           || isPlatformAdmin()
           || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
+          || (
+            resource.data.createdBy == request.auth.uid
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.orgId == resource.data.orgId
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.token == resource.data.token
+          )
         );
       allow delete: if isSignedIn()
         && (
@@ -439,6 +550,11 @@ service cloud.firestore {
           || isAdmin()
           || isPlatformAdmin()
           || (resource.data.orgId is string && isOrgAdminOf(resource.data.orgId))
+          || (
+            resource.data.role == 'client'
+            && resource.data.orgId is string
+            && isOrgTeamOf(resource.data.orgId)
+          )
         );
     }
 

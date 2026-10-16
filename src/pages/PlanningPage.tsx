@@ -21,8 +21,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { Clock, Plus, Users } from 'lucide-react'
-import { PageHeader } from '@/components/shared/PageHeader'
+import { Clock, ListTodo, Plus, Users } from 'lucide-react'
+import { EmptyState, PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -87,11 +87,11 @@ function SortableTaskCard({
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      className={`cursor-grab rounded-lg border bg-card p-3 shadow-sm active:cursor-grabbing ${
-        isDragging ? 'opacity-40' : ''
-      }`}
-      {...attributes}
-      {...listeners}
+      className={`rounded-lg border bg-card p-3 shadow-sm ${
+        canWrite ? 'cursor-grab active:cursor-grabbing' : ''
+      } ${isDragging ? 'opacity-40' : ''}`}
+      {...(canWrite ? attributes : {})}
+      {...(canWrite ? listeners : {})}
     >
       <p className="text-sm font-medium">{task.title}</p>
       {task.assigneeName ? (
@@ -228,6 +228,9 @@ export function PlanningPage() {
       setLoading(true)
       try {
         setVisits(await listVisits(activeOrgId, user.uid, isAdmin, role))
+      } catch (error) {
+        console.error(error)
+        toast.error('Não foi possível carregar as visitas')
       } finally {
         setLoading(false)
       }
@@ -239,6 +242,10 @@ export function PlanningPage() {
       setTasks([])
       return
     }
+    if (role === 'client' && !selectedVisit) {
+      setTasks([])
+      return
+    }
     const ownerIdForQuery = selectedVisit?.ownerId ?? user.uid
     try {
       setTasks(await listTasks(visitId, ownerIdForQuery, isAdmin))
@@ -246,7 +253,7 @@ export function PlanningPage() {
       console.error(error)
       toast.error('Erro ao carregar tarefas')
     }
-  }, [visitId, user, isAdmin, selectedVisit?.ownerId])
+  }, [visitId, user, isAdmin, role, selectedVisit])
 
   useEffect(() => {
     void loadTasks()
@@ -467,8 +474,13 @@ export function PlanningPage() {
     <div>
       <PageHeader
         title="Planejamento"
-        description="Selecione uma visita para visualizar e organizar o planejamento."
+        description={
+          role === 'client'
+            ? 'Acompanhe as tarefas das visitas vinculadas a você.'
+            : 'Selecione uma visita para visualizar e organizar o planejamento.'
+        }
         actions={
+          visits.length === 0 && !loading ? null : (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="space-y-1">
               <Label className="text-xs">Visita em planejamento</Label>
@@ -495,10 +507,12 @@ export function PlanningPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button disabled={!visitId || !canWrite} onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Nova tarefa
-            </Button>
+            {canWrite ? (
+              <Button disabled={!visitId} onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Nova tarefa
+              </Button>
+            ) : null}
             {visitId ? (
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
                 <SelectTrigger className="w-full sm:w-48">
@@ -516,30 +530,40 @@ export function PlanningPage() {
               </Select>
             ) : null}
           </div>
+          )
         }
       />
 
+      {selectedVisit ? (
       <Card className="mb-6">
         <CardContent className="flex items-center justify-between gap-4 p-5">
           <div className="flex items-start gap-3">
             <Users className="mt-0.5 h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="font-medium">Equipe envolvida</p>
+              <p className="font-medium">{selectedVisit.title}</p>
               <p className="text-sm text-muted-foreground">
-                {selectedVisit?.teamMemberIds?.length
-                  ? `${selectedVisit.teamMemberIds.length} pessoa(s)`
+                {selectedVisit.teamMemberIds?.length
+                  ? `${selectedVisit.teamMemberIds.length} pessoa(s) na equipe`
                   : 'Nenhuma equipe cadastrada para esta visita'}
               </p>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {selectedVisit?.teamMemberIds?.length ?? 0} pessoa(s)
-          </p>
         </CardContent>
       </Card>
+      ) : null}
 
       {loading ? (
         <Skeleton className="h-80 w-full" />
+      ) : visits.length === 0 ? (
+        <EmptyState
+          icon={ListTodo}
+          title={role === 'client' ? 'Nenhuma visita vinculada' : 'Nenhuma visita em planejamento'}
+          description={
+            role === 'client'
+              ? 'O quadro de tarefas aparece quando a equipe publica um orçamento de uma visita sua.'
+              : 'Cadastre uma visita para montar o quadro de tarefas.'
+          }
+        />
       ) : !visitId ? (
         <Card>
           <CardContent className="p-10 text-center text-sm text-muted-foreground">

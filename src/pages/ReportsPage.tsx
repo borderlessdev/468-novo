@@ -54,6 +54,7 @@ import {
 import { listVisits } from '@/services/visits'
 import { listVisitors } from '@/services/visitors'
 import { listFinanceItemsByOwner } from '@/services/finance'
+import { BudgetComparisonReport } from '@/features/budgets/BudgetComparisonReport'
 import {
   listVisitIdsForVisitor,
   listVisitVisitors,
@@ -496,6 +497,10 @@ export function ReportsPage() {
   return (
     <div>
       <PageHeader title="Relatórios" description="Relatórios exportáveis do sistema" />
+
+      {activeOrgId ? (
+        <BudgetComparisonReport orgId={activeOrgId} visits={visits} financeItems={financeItems} />
+      ) : null}
 
       <Card className="mb-6">
         <CardHeader>

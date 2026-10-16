@@ -11,16 +11,16 @@ import { scanDueReminders } from '@/services/notificationReminders'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
-  const { user, role, isPlatformAdmin, profile } = useAuth()
+  const { user, role, isPlatformAdmin, isClient, profile } = useAuth()
   const { activeOrgId, isOrgAdmin } = useOrg()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    if (!user || !activeOrgId) return
+    if (!user || !activeOrgId || isClient) return
     void scanDueReminders(activeOrgId, user.uid, isPlatformAdmin, role)
-  }, [activeOrgId, user, isPlatformAdmin, role])
+  }, [activeOrgId, user, isPlatformAdmin, isClient, role])
 
   return (
     <VisitDialogProvider>
@@ -61,8 +61,8 @@ export function AppShell() {
           </main>
         </div>
       </div>
-      <NewVisitDialog onCreated={() => setRefreshKey((k) => k + 1)} />
-      <HelpWidget />
+      {isClient ? null : <NewVisitDialog onCreated={() => setRefreshKey((k) => k + 1)} />}
+      {isClient ? null : <HelpWidget />}
     </VisitDialogProvider>
   )
 }

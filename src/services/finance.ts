@@ -68,6 +68,9 @@ function mapItem(id: string, data: Record<string, unknown>): FinanceItem {
     budget3: data.budget3 != null ? Number(data.budget3) : undefined,
     serviceValue: data.serviceValue != null ? Number(data.serviceValue) : undefined,
     actualValue: data.actualValue != null ? Number(data.actualValue) : undefined,
+    clientBudgetAmount:
+      data.clientBudgetAmount != null ? Number(data.clientBudgetAmount) : undefined,
+    budgetItemId: data.budgetItemId ? String(data.budgetItemId) : undefined,
     winningCompany: data.winningCompany ? String(data.winningCompany) : undefined,
     nfReceived: Boolean(data.nfReceived),
     nfDueDate: data.nfDueDate ? String(data.nfDueDate) : undefined,
@@ -111,6 +114,7 @@ export async function listFinanceItemsByOwner(
   role: UserRole = 'user',
   visits?: Visit[],
 ): Promise<FinanceItem[]> {
+  if (role === 'client') return []
   const visitList = visits ?? (await listVisits(orgId, ownerId, isPlatformAdmin, role))
   if (visitList.length === 0) return []
 

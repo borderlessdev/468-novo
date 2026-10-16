@@ -27,7 +27,9 @@ function typeToPreference(type: string): string {
   } as Record<string, string>)[type] ?? type
 }
 
-export const dispatchNotificationEmail = onCall(async (request) => {
+export const dispatchNotificationEmail = onCall(
+  { cors: true, invoker: 'public' },
+  async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.')
   const input = request.data ?? {}
   const type = String(input.type ?? '')
@@ -78,7 +80,8 @@ export const dispatchNotificationEmail = onCall(async (request) => {
     dedupeKey: `notification:${recipientId}:${type}:${String(input.dedupeKey || input.entityId || Date.now())}`,
   })
   return { ok: true }
-})
+  },
+)
 
 export const sendVisitSummaryEmail = onCall(async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.')

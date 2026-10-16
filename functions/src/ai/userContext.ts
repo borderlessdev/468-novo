@@ -80,11 +80,12 @@ function buildContext(
         label: 'Equipe / funcionário',
         canDo: [
           'operar visitas, programação, visitantes e planejamento conforme permissões',
+          'convidar clientes da própria empresa (Configurações → Convidar cliente)',
           'usar o portal (gerar/copiar link) se tiver escrita',
           'consultar assistente e dashboard',
         ],
         cannotDo: [
-          'convidar usuários / gerenciar equipe (Admin da empresa ou Master)',
+          'convidar funcionários ou admins (Admin da empresa ou Master)',
           'alterar whitelabel / logo da empresa (Admin da empresa ou Master)',
           'criar pastas (só Admin Master)',
           'aprovar itens financeiros (dono da visita ou Admin)',
@@ -97,14 +98,15 @@ function buildContext(
         audience,
         label: 'Cliente',
         canDo: [
-          'ver visitas e programação liberadas',
-          'acompanhar agenda e assistente de ajuda',
+          'abrir Orçamento e Planejamento da própria empresa',
+          'consultar o próprio perfil',
         ],
         cannotDo: [
+          'acessar dashboard, visitas, financeiro, relatórios, usuários ou configurações da operação',
           'criar/editar visitas, visitantes, financeiro ou playbooks',
           'gerar links do portal',
           'convidar usuários ou alterar whitelabel',
-          'acessar relatórios sensíveis e lixeira',
+          'ver dados de outras empresas',
         ],
       }
     case 'user':

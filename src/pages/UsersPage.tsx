@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canManageOrgUsers, mergeModulePermissions } from '@/lib/access'
+import { ClientInviteCard } from '@/features/invites/ClientInviteCard'
 import { orgRoleLabel } from '@/lib/org'
 import {
   createInvite,
@@ -322,6 +323,10 @@ export function UsersPage() {
           </form>
         </CardContent>
       </Card>
+
+      {user && activeOrgId ? (
+        <ClientInviteCard orgId={activeOrgId} org={activeOrg} createdBy={user.uid} />
+      ) : null}
 
       <Card>
         <CardHeader>

@@ -21,6 +21,7 @@ import { VisitsPage } from '@/pages/VisitsPage'
 import { VisitorsPage } from '@/pages/VisitorsPage'
 import { AgendaPage } from '@/pages/AgendaPage'
 import { PlanningPage } from '@/pages/PlanningPage'
+import { BudgetPage } from '@/pages/BudgetPage'
 import { FinancePage } from '@/pages/FinancePage'
 import { RevenuePage } from '@/pages/RevenuePage'
 import { ReportsPage } from '@/pages/ReportsPage'
@@ -82,6 +83,7 @@ export default function App() {
               <Route path="/crm" element={<VisitorsPage />} />
               <Route path="/visitantes" element={<LegacyVisitorsRedirect />} />
               <Route path="/planejamento" element={<PlanningPage />} />
+              <Route path="/orcamento" element={<BudgetPage />} />
               <Route path="/financeiro" element={<FinancePage />} />
               <Route path="/receitas" element={<RevenuePage />} />
               <Route path="/usuarios" element={<UsersPage />} />

@@ -70,15 +70,39 @@ export async function createInvite(input: {
 
   // Substitui convites pendentes do mesmo e-mail nesta empresa (evita link antigo
   // "já utilizado" / vários tokens vivos para a mesma pessoa).
-  const previousPending = await getDocs(
-    query(
-      col,
-      where('orgId', '==', input.orgId),
-      where('email', '==', email),
-      where('status', '==', 'pending'),
-    ),
+  const previousQuery = query(
+    col,
+    where('orgId', '==', input.orgId),
+    where('email', '==', email),
+    where('status', '==', 'pending'),
   )
-  await Promise.all(previousPending.docs.map((d) => deleteDoc(d.ref)))
+  let previousPending
+  try {
+    previousPending = await getDocs(previousQuery)
+  } catch (error) {
+    if (input.role !== 'client') throw error
+    previousPending = await getDocs(
+      query(
+        col,
+        where('orgId', '==', input.orgId),
+        where('email', '==', email),
+        where('status', '==', 'pending'),
+        where('role', '==', 'client'),
+      ),
+    )
+  }
+  await Promise.all(
+    previousPending.docs.map(async (pendingDoc) => {
+      try {
+        await deleteDoc(pendingDoc.ref)
+      } catch (error) {
+        // Funcionário só cancela convites de cliente. Um convite de outro perfil
+        // para o mesmo e-mail permanece com quem tem permissão de gestão.
+        if (input.role === 'client' && pendingDoc.data().role !== 'client') return
+        throw error
+      }
+    }),
+  )
 
   const canAdd = await canAddOrganizationMember(input.orgId)
   if (!canAdd) {
@@ -183,6 +207,29 @@ export function subscribePendingInvitesByOrg(
 ): () => void {
   return onSnapshot(
     query(col, where('orgId', '==', orgId), where('status', '==', 'pending')),
+    (snap) => {
+      onChange(
+        snap.docs
+          .map((item) => mapInvite(item.id, item.data()))
+          .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt)),
+      )
+    },
+    onError,
+  )
+}
+
+export function subscribePendingClientInvitesByOrg(
+  orgId: string,
+  onChange: (invites: Invite[]) => void,
+  onError: (error: Error) => void,
+): () => void {
+  return onSnapshot(
+    query(
+      col,
+      where('orgId', '==', orgId),
+      where('status', '==', 'pending'),
+      where('role', '==', 'client'),
+    ),
     (snap) => {
       onChange(
         snap.docs

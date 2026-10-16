@@ -56,8 +56,11 @@ export const getInviteByToken = onCall({ invoker: 'public' }, async (request) =>
   }
 })
 
-/** Aceita o convite de forma atômica e cria perfil/membership via Admin SDK. */
-export const acceptInvite = onCall(async (request) => {
+/**
+ * Aceita o convite de forma atômica e cria perfil/membership via Admin SDK.
+ * `invoker: 'public'` libera o preflight do navegador; o login continua obrigatório abaixo.
+ */
+export const acceptInvite = onCall({ cors: true, invoker: 'public' }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login para aceitar o convite.')
   const token = requireToken(request.data?.token)
   const uid = request.auth.uid
@@ -88,6 +91,22 @@ export const acceptInvite = onCall(async (request) => {
     const org = await transaction.get(orgRef)
     if (!org.exists || org.get('status') !== 'active') {
       throw new HttpsError('failed-precondition', 'Esta empresa não está disponível para novos membros.')
+    }
+
+    const membersSnap = await transaction.get(
+      db.collection('organizationMembers').where('orgId', '==', orgId),
+    )
+    const pendingSnap = await transaction.get(
+      db.collection('invites').where('orgId', '==', orgId).where('status', '==', 'pending'),
+    )
+    const maxUsers = Number(org.get('maxUsers'))
+    if (Number.isFinite(maxUsers) && maxUsers > 0) {
+      const alreadyMember = membersSnap.docs.some((item) => item.get('uid') === uid)
+      const otherPending = pendingSnap.docs.filter((item) => item.ref.id !== inviteRef.id).length
+      const projectedMembers = membersSnap.size + (alreadyMember ? 0 : 1)
+      if (projectedMembers + otherPending > maxUsers) {
+        throw new HttpsError('resource-exhausted', 'Limite de usuários da empresa atingido.')
+      }
     }
 
     const userRef = db.collection('users').doc(uid)
