@@ -63,12 +63,14 @@ firebase deploy --only firestore
 
 ## Admin (Custom Claims)
 
-As regras usam `request.auth.token.admin == true` como fonte de verdade. O campo `users.role` espelha o perfil operacional e **não** pode ser elevado pelo próprio usuário no cadastro.
+As regras usam a claim `admin` ou `platformAdmin` como acesso de administrador master. O campo `users.role` espelha o perfil e **não** pode ser elevado pelo cliente: a troca de tipo fica na callable `changeUserAccountType`, exclusiva do administrador master.
 
-Perfis (`users.role`):
-- `user` — operador/dono das visitas (padrão)
-- `team` — equipe convidada via `teamMemberIds` na visita
-- `client` — cliente com leitura das visitas em `clientUserIds`
+Perfis (`users.role` e `organizationMembers.orgRole`):
+- `admin` / administrador master — claim `admin` + `platformAdmin` e `users.role == 'admin'`
+- `org_admin` — administrador da empresa (`users.role` permanece `user`)
+- `team` — funcionário
+- `user` — usuário da empresa
+- `client` — cliente, com leitura das visitas em `clientUserIds`
 
 Para promover perfil ou admin (Admin SDK):
 

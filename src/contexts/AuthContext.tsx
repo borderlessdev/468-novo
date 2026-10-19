@@ -89,6 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await new Promise((resolve) => setTimeout(resolve, 500))
       userProfile = await getUserProfile(firebaseUser.uid)
     }
+    const token = await firebaseUser.getIdTokenResult(true)
+    const platformAdmin =
+      token.claims.admin === true || token.claims.platformAdmin === true
+    setIsPlatformAdmin(platformAdmin)
+    setIsAdmin(platformAdmin)
+
     if (!userProfile) {
       // Placeholder mínimo — sem orgId:null forçado (merge preserva vínculo).
       await createUserProfile({
@@ -96,22 +102,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: firebaseUser.displayName ?? 'Usuário',
         email: firebaseUser.email ?? '',
         photoURL: firebaseUser.photoURL ?? undefined,
+        role: platformAdmin ? 'admin' : undefined,
       })
       userProfile = await getUserProfile(firebaseUser.uid)
-    } else if (!userProfile.orgId) {
+    } else if (!platformAdmin && userProfile.role !== 'admin' && !userProfile.orgId) {
       // register() ainda pode estar gravando orgId — releituras ajudam.
+      // Master não tem empresa; não espera vínculo que não existe.
       for (let attempt = 0; attempt < 3 && !userProfile.orgId; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 400))
         userProfile = (await getUserProfile(firebaseUser.uid)) ?? userProfile
       }
     }
     setProfile(userProfile)
-
-    const token = await firebaseUser.getIdTokenResult(true)
-    const platformAdmin =
-      token.claims.admin === true || token.claims.platformAdmin === true
-    setIsPlatformAdmin(platformAdmin)
-    setIsAdmin(platformAdmin)
   }, [])
 
   useEffect(() => {
@@ -120,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void initAnalytics()
     }
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setLoading(true)
       void (async () => {
         setUser(firebaseUser)
         if (firebaseUser) {

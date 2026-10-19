@@ -1,5 +1,6 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { getFirestore } from 'firebase-admin/firestore'
+import { callerIsPlatformAdmin } from './platformAdmin'
 import { escapeEmailHtml, sendResendEmail } from './resendEmail'
 
 const db = getFirestore()
@@ -56,7 +57,8 @@ export const dispatchNotificationEmail = onCall(
     const visit = visitSnap.data()!
     const orgId = String(visit.orgId ?? '')
     const callerMember = await db.collection('organizationMembers').doc(`${orgId}_${request.auth.uid}`).get()
-    const callerAllowed = request.auth.uid === visit.ownerId || (Array.isArray(visit.teamMemberIds) && visit.teamMemberIds.includes(request.auth.uid)) || callerMember.get('orgRole') === 'org_admin' || request.auth.token.platformAdmin === true
+    const callerIsMaster = await callerIsPlatformAdmin(request.auth.uid, request.auth.token)
+    const callerAllowed = request.auth.uid === visit.ownerId || (Array.isArray(visit.teamMemberIds) && visit.teamMemberIds.includes(request.auth.uid)) || callerMember.get('orgRole') === 'org_admin' || callerIsMaster
     if (!callerAllowed) throw new HttpsError('permission-denied', 'Sem acesso à visita.')
     const recipientMember = await db.collection('organizationMembers').doc(`${orgId}_${recipientId}`).get()
     const role = String(recipientMember.get('orgRole') ?? '')
@@ -96,7 +98,8 @@ export const sendVisitSummaryEmail = onCall(async (request) => {
     if (!visitSnap.exists) throw new HttpsError('not-found', 'Visita não encontrada.')
     const visit = visitSnap.data()!
     const member = await db.collection('organizationMembers').doc(`${String(visit.orgId)}_${request.auth.uid}`).get()
-    const allowed = request.auth.uid === visit.ownerId || (visit.teamMemberIds ?? []).includes(request.auth.uid) || member.get('orgRole') === 'org_admin' || request.auth.token.platformAdmin === true
+    const callerIsMaster = await callerIsPlatformAdmin(request.auth.uid, request.auth.token)
+    const allowed = request.auth.uid === visit.ownerId || (visit.teamMemberIds ?? []).includes(request.auth.uid) || member.get('orgRole') === 'org_admin' || callerIsMaster
     if (!allowed) throw new HttpsError('permission-denied', 'Sem acesso à visita.')
   }
   const result = await sendResendEmail({

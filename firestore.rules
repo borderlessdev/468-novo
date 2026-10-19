@@ -194,7 +194,11 @@ service cloud.firestore {
         && request.resource.data.email is string
         && request.resource.data.name is string
         && request.resource.data.orgRole in ['org_admin', 'user', 'team', 'client'];
-      allow update: if isPlatformAdmin();
+      // orgRole só muda pelo Admin SDK (changeUserAccountType). O cliente não eleva privilégio.
+      allow update: if isPlatformAdmin()
+        && request.resource.data.orgRole == resource.data.orgRole
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.orgId == resource.data.orgId;
       // Master ou admin da empresa (não remove a si mesmo pela rule — UI também bloqueia).
       allow delete: if isPlatformAdmin()
         || (
@@ -246,8 +250,18 @@ service cloud.firestore {
               'emailNotificationPreferences', 'updatedAt'
             ])
           )
-          || isAdmin()
-          || isPlatformAdmin()
+          // Master pode manter o perfil, mas não troca role pelo cliente.
+          || (
+            isPlatformAdmin()
+            && request.resource.data.uid == resource.data.uid
+            && (
+              (
+                !('role' in resource.data)
+                && !('role' in request.resource.data)
+              )
+              || request.resource.data.role == resource.data.role
+            )
+          )
           // Admin da empresa removendo vínculo: só limpa orgId do membro da sua pasta.
           || (
             resource.data.orgId is string

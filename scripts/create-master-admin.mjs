@@ -128,7 +128,7 @@ async function ensureUser() {
       name,
       email,
       photoURL: null,
-      role: 'user',
+      role: 'admin',
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
     },

@@ -20,6 +20,8 @@ import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canManageOrgUsers, mergeModulePermissions } from '@/lib/access'
+import { resolveDisplayedAccountType } from '@/lib/accountType'
+import { ChangeAccountTypeControl } from '@/features/users/ChangeAccountTypeControl'
 import { ClientInviteCard } from '@/features/invites/ClientInviteCard'
 import { orgRoleLabel } from '@/lib/org'
 import {
@@ -225,7 +227,11 @@ export function UsersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Usuários"
-        description="Convide funcionários da empresa por e-mail. Também pode copiar o link do convite e enviar por outro canal."
+        description={
+          isPlatformAdmin
+            ? 'Convide funcionários e altere o tipo de cada membro. A confirmação salva o novo perfil e as permissões correspondentes.'
+            : 'Convide funcionários da empresa por e-mail. Também pode copiar o link do convite e enviar por outro canal.'
+        }
       />
 
       <Card>
@@ -355,12 +361,27 @@ export function UsersPage() {
                       <p className="text-xs text-muted-foreground">{member.email}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {member.orgRole === 'team'
-                          ? 'Funcionário'
-                          : orgRoleLabel(member.orgRole)}
-                        {member.department ? ` · ${member.department}` : ''}
-                      </span>
+                      {isPlatformAdmin ? (
+                        <ChangeAccountTypeControl
+                          uid={member.uid}
+                          name={member.name}
+                          orgId={member.orgId}
+                          currentType={resolveDisplayedAccountType(
+                            users.find((profile) => profile.uid === member.uid)?.role,
+                            member.orgRole,
+                          )}
+                          onChanged={() => void reload()}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {member.orgRole === 'team'
+                            ? 'Funcionário'
+                            : orgRoleLabel(member.orgRole)}
+                        </span>
+                      )}
+                      {member.department ? (
+                        <span className="text-xs text-muted-foreground">{member.department}</span>
+                      ) : null}
                       {isSelf ? (
                         <Badge variant="secondary">Você</Badge>
                       ) : showDelete ? (

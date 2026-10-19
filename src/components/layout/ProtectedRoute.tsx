@@ -51,7 +51,8 @@ export function ProtectedRoute() {
 
   const inviteFromUrl = resolveInviteToken(searchParams.get('invite'))
 
-  const clientHome = Boolean(user) && !isPlatformAdmin && role === 'client'
+  const isMaster = isPlatformAdmin || profile?.role === 'admin'
+  const clientHome = Boolean(user) && !isMaster && role === 'client'
   const allowed =
     !user ||
     loading ||
@@ -77,7 +78,7 @@ export function ProtectedRoute() {
   }, [allowed, clientHome, loading, orgLoading, user, location.pathname])
 
   useEffect(() => {
-    if (loading || orgLoading || !user || isPlatformAdmin || !inviteFromUrl) return
+    if (loading || orgLoading || !user || isMaster || !inviteFromUrl) return
     if (autoInviteTried.current === inviteFromUrl) {
       const next = new URLSearchParams(searchParams)
       if (next.has('invite') && activeOrgId) {
@@ -159,7 +160,7 @@ export function ProtectedRoute() {
     loading,
     orgLoading,
     user,
-    isPlatformAdmin,
+    isMaster,
     activeOrgId,
     inviteFromUrl,
     acceptInviteLink,
@@ -193,7 +194,7 @@ export function ProtectedRoute() {
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
           <p className="text-center text-sm text-muted-foreground">
-            {linking ? 'Vinculando empresa…' : 'Carregando sua empresa…'}
+            {linking ? 'Vinculando empresa…' : 'Carregando sua sessão…'}
           </p>
         </div>
       </div>
@@ -257,11 +258,11 @@ export function ProtectedRoute() {
   const isMasterAllowedWithoutOrg =
     isOrganizationsRoute || location.pathname === '/perfil'
 
-  if (isPlatformAdmin && !activeOrgId && !isMasterAllowedWithoutOrg) {
+  if (isMaster && !activeOrgId && !isMasterAllowedWithoutOrg) {
     return <Navigate to="/empresas" replace />
   }
 
-  if (!isPlatformAdmin && !activeOrgId && !isOrganizationsRoute) {
+  if (!isMaster && !activeOrgId && !isOrganizationsRoute) {
     const handleLogout = async () => {
       setLoggingOut(true)
       try {
@@ -366,13 +367,14 @@ export function PublicOnlyRoute() {
     const home =
       !isPlatformAdmin && role === 'client' && activeOrgId ? clientHomePath() : '/'
     // Com convite pendente: processa no app (mesmo se já tiver empresa).
-    if (inviteToken && !isPlatformAdmin) {
+    const isMaster = isPlatformAdmin || role === 'admin'
+    if (inviteToken && !isMaster) {
       return <Navigate to={`${home}?invite=${encodeURIComponent(inviteToken)}`} replace />
     }
-    if (isPlatformAdmin && !activeOrgId) {
+    if (isMaster && !activeOrgId) {
       return <Navigate to="/empresas" replace />
     }
-    if (!activeOrgId && !isPlatformAdmin) {
+    if (!activeOrgId && !isMaster) {
       return <Navigate to="/" replace />
     }
     return <Navigate to={home} replace />

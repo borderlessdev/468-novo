@@ -36,6 +36,9 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canCreateOrganization } from '@/lib/access'
+import { resolveDisplayedAccountType } from '@/lib/accountType'
+import { ChangeAccountTypeControl } from '@/features/users/ChangeAccountTypeControl'
+import { listUsers } from '@/services/users'
 import { generatePassword } from '@/lib/password'
 import {
   createOrganizationAdmin,
@@ -60,7 +63,7 @@ import {
   subscribeOrganizationMembers,
   updateOrganization,
 } from '@/services/organizations'
-import type { Invite, Organization, OrganizationMember, OrganizationStatus } from '@/types'
+import type { Invite, Organization, OrganizationMember, OrganizationStatus, UserProfile } from '@/types'
 
 const ROLE_LABEL: Record<OrganizationMember['orgRole'], string> = {
   org_admin: 'Admin da empresa',
@@ -79,6 +82,7 @@ export function OrganizationDetailPage() {
   const [saving, setSaving] = useState(false)
   const [org, setOrg] = useState<Organization | null>(null)
   const [members, setMembers] = useState<OrganizationMember[]>([])
+  const [profiles, setProfiles] = useState<UserProfile[]>([])
   const [pending, setPending] = useState(0)
   const [name, setName] = useState('')
   const [maxUsers, setMaxUsers] = useState('10')
@@ -106,11 +110,15 @@ export function OrganizationDetailPage() {
     if (!orgId) return
     setLoading(true)
     try {
-      const [organization, memberList, pendingCount, invites] = await Promise.all([
+      const [organization, memberList, pendingCount, invites, userList] = await Promise.all([
         getOrganization(orgId),
         listOrganizationMembers(orgId),
         countPendingInvites(orgId),
         listInvitesByOrg(orgId),
+        listUsers(true).catch((error) => {
+          console.error(error)
+          return [] as UserProfile[]
+        }),
       ])
       if (!organization) {
         toast.error('Pasta não encontrada')
@@ -119,6 +127,7 @@ export function OrganizationDetailPage() {
       }
       setOrg(organization)
       setMembers(memberList)
+      setProfiles(userList)
       setPending(pendingCount)
       setPendingAdminInvites(
         invites.filter((invite) => invite.status === 'pending' && invite.role === 'org_admin'),
@@ -995,7 +1004,16 @@ export function OrganizationDetailPage() {
                         <td className="px-4 py-2.5 font-medium">{member.name}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">{member.email}</td>
                         <td className="px-4 py-2.5">
-                          <Badge variant="secondary">{ROLE_LABEL[member.orgRole]}</Badge>
+                          <ChangeAccountTypeControl
+                            uid={member.uid}
+                            name={member.name}
+                            orgId={member.orgId}
+                            currentType={resolveDisplayedAccountType(
+                              profiles.find((profile) => profile.uid === member.uid)?.role,
+                              member.orgRole,
+                            )}
+                            onChanged={() => void load()}
+                          />
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           <Button

@@ -80,7 +80,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
     setLoading(true)
     try {
-      if (isPlatformAdmin) {
+      const isMaster = isPlatformAdmin || profile?.role === 'admin'
+      if (isMaster) {
         const orgs = await listOrganizations()
         setOrganizations(orgs)
         // Releia o storage no momento de aplicar o estado para não sobrescrever
@@ -157,7 +158,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       setResolvedUid(user.uid)
       setLoading(false)
     }
-  }, [isPlatformAdmin, profile?.orgId, user])
+  }, [isPlatformAdmin, profile?.orgId, profile?.role, user])
 
   useEffect(() => {
     if (authLoading) return

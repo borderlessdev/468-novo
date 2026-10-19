@@ -2,16 +2,12 @@
  * Callables Twilio — status e teste de envio (admin / platform admin).
  */
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
+import { callerIsPlatformAdmin } from './platformAdmin'
 import { getTwilioConfigStatus, sendTwilioMessage } from './twilio'
 
-function requireAdmin(auth: { uid: string; token: Record<string, unknown> } | undefined): void {
+async function requireAdmin(auth: { uid: string; token: Record<string, unknown> } | undefined): Promise<void> {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.')
-  const token = auth.token ?? {}
-  const isAdmin =
-    token.admin === true ||
-    token.platformAdmin === true ||
-    token.role === 'admin'
-  if (!isAdmin) {
+  if (!(await callerIsPlatformAdmin(auth.uid, auth.token))) {
     throw new HttpsError(
       'permission-denied',
       'Apenas administradores podem testar o Twilio.',
@@ -21,7 +17,7 @@ function requireAdmin(auth: { uid: string; token: Record<string, unknown> } | un
 
 /** Status das credenciais Twilio (sem expor secrets). */
 export const getTwilioStatus = onCall(async (request) => {
-  requireAdmin(request.auth)
+  await requireAdmin(request.auth)
   return getTwilioConfigStatus()
 })
 
@@ -31,7 +27,7 @@ export const getTwilioStatus = onCall(async (request) => {
  * Trial Twilio: o destino precisa estar verificado na conta.
  */
 export const sendTwilioTestMessage = onCall(async (request) => {
-  requireAdmin(request.auth)
+  await requireAdmin(request.auth)
   const to = String(request.data?.to ?? '').trim()
   if (!to) {
     throw new HttpsError('invalid-argument', 'Informe o telefone de destino (to).')

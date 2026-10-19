@@ -144,7 +144,7 @@ export function isNavAllowed(
     return isModuleAllowed(path, mergeModulePermissions(modulePermissions), role, isAdmin)
   }
   if (path === '/empresas' || path.startsWith('/empresas/')) {
-    return isAdmin
+    return isAdmin || role === 'admin'
   }
   if (path === '/usuarios' || path.startsWith('/usuarios/')) {
     return canManageOrgUsers(isAdmin, isOrgAdmin)

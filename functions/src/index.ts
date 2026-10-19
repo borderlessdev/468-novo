@@ -17,6 +17,7 @@ import { setGlobalOptions } from 'firebase-functions/v2'
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import { initializeApp } from 'firebase-admin/app'
+import { callerIsPlatformAdmin } from './platformAdmin'
 import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import { google } from 'googleapis'
 import { randomUUID } from 'node:crypto'
@@ -115,11 +116,11 @@ function calendarFor(auth: OAuthClient) {
 
 type CalendarApi = ReturnType<typeof calendarFor>
 
-function requireCaller(auth: { uid: string; token: Record<string, unknown> } | undefined): Caller {
+async function requireCaller(auth: { uid: string; token: Record<string, unknown> } | undefined): Promise<Caller> {
   if (!auth?.uid) {
     throw new HttpsError('unauthenticated', 'Faça login para usar a integração de calendário.')
   }
-  return { uid: auth.uid, isAdmin: auth.token?.admin === true }
+  return { uid: auth.uid, isAdmin: await callerIsPlatformAdmin(auth.uid, auth.token) }
 }
 
 async function getRole(uid: string): Promise<string> {
@@ -329,7 +330,7 @@ async function syncActivity(caller: Caller, activityId: string): Promise<SyncRes
 }
 
 export const googleCalendarOAuthStart = onCall(async (request) => {
-  const caller = requireCaller(request.auth)
+  const caller = await requireCaller(request.auth)
   await assertNotClient(caller)
   const config = requireConfig()
 
@@ -433,7 +434,7 @@ export const googleCalendarOAuthCallback = onRequest(async (req, res) => {
 })
 
 export const getCalendarStatus = onCall(async (request) => {
-  const caller = requireCaller(request.auth)
+  const caller = await requireCaller(request.auth)
 
   const [secretSnap, connectionSnap] = await Promise.all([
     db.collection(SECRETS_COLLECTION).doc(caller.uid).get(),
@@ -462,7 +463,7 @@ export const getCalendarStatus = onCall(async (request) => {
 })
 
 export const googleCalendarDisconnect = onCall(async (request) => {
-  const caller = requireCaller(request.auth)
+  const caller = await requireCaller(request.auth)
 
   const snap = await db.collection(SECRETS_COLLECTION).doc(caller.uid).get()
   const refreshToken = snap.get('refreshToken')
@@ -482,14 +483,14 @@ export const googleCalendarDisconnect = onCall(async (request) => {
 })
 
 export const syncActivityToGoogle = onCall<{ activityId?: string }>(async (request) => {
-  const caller = requireCaller(request.auth)
+  const caller = await requireCaller(request.auth)
   const activityId = request.data?.activityId
   if (!activityId) throw new HttpsError('invalid-argument', 'Informe o activityId.')
   return syncActivity(caller, activityId)
 })
 
 export const deleteGoogleEvent = onCall<{ activityId?: string }>(async (request) => {
-  const caller = requireCaller(request.auth)
+  const caller = await requireCaller(request.auth)
   const activityId = request.data?.activityId
   if (!activityId) throw new HttpsError('invalid-argument', 'Informe o activityId.')
 
@@ -514,7 +515,7 @@ export const deleteGoogleEvent = onCall<{ activityId?: string }>(async (request)
 })
 
 export const syncVisitActivitiesToGoogle = onCall<{ visitId?: string }>(async (request) => {
-  const caller = requireCaller(request.auth)
+  const caller = await requireCaller(request.auth)
   const visitId = request.data?.visitId
   if (!visitId) throw new HttpsError('invalid-argument', 'Informe o visitId.')
 
@@ -549,7 +550,7 @@ export const syncVisitActivitiesToGoogle = onCall<{ visitId?: string }>(async (r
  * (start → callback → refresh token no Admin SDK → sync de atividades).
  */
 export const outlookCalendarOAuthStart = onCall(async (request) => {
-  requireCaller(request.auth)
+  await requireCaller(request.auth)
   throw new HttpsError(
     'unimplemented',
     'A integração com Outlook ainda não está disponível.',
@@ -576,6 +577,7 @@ export {
 } from './communityRegistrations'
 export { sendInviteEmail } from './inviteEmail'
 export { acceptInvite, getInviteByToken } from './inviteAcceptance'
+export { changeUserAccountType } from './changeAccountType'
 export { publishBudget, decideBudgetItem } from './budget'
 export { dispatchNotificationEmail, sendVisitSummaryEmail } from './notificationEmail'
 export { sendDailyOperationalReminders } from './scheduledReminders'

@@ -6,6 +6,7 @@
  */
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { FieldValue, getFirestore } from 'firebase-admin/firestore'
+import { callerIsPlatformAdmin } from './platformAdmin'
 
 const db = getFirestore()
 
@@ -18,7 +19,7 @@ function lineAmount(quantity: number, unitAmount: number): number {
 }
 
 async function assertOrgStaff(uid: string, orgId: string, token: Record<string, unknown>) {
-  if (token.admin === true || token.platformAdmin === true) return
+  if (await callerIsPlatformAdmin(uid, token)) return
   const member = await db.collection('organizationMembers').doc(`${orgId}_${uid}`).get()
   const role = String(member.get('orgRole') ?? '')
   if (!member.exists || !['org_admin', 'team', 'user'].includes(role)) {

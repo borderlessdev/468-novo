@@ -5,6 +5,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
+import { callerIsPlatformAdmin } from '../platformAdmin'
 
 export type AssistantAudience =
   | 'admin_master'
@@ -163,22 +164,22 @@ export async function resolveAssistantUserContext(
   const auth = getAuth()
   const db = getFirestore()
 
-  let isPlatformAdmin = false
+  let claimSaysMaster = false
   try {
     const user = await auth.getUser(uid)
     const claims = user.customClaims ?? {}
-    isPlatformAdmin = claims.admin === true || claims.platformAdmin === true
+    claimSaysMaster = await callerIsPlatformAdmin(uid, claims)
   } catch {
     // segue com perfil Firestore
-  }
-
-  if (isPlatformAdmin) {
-    return buildContext('admin_master')
   }
 
   const userSnap = await db.collection('users').doc(uid).get()
   const userData = userSnap.data() ?? {}
   const profileRole = asString(userData.role) || 'user'
+
+  if (claimSaysMaster) {
+    return buildContext('admin_master')
+  }
   const profileOrgId = asString(userData.orgId) || undefined
 
   let orgRole = ''

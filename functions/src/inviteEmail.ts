@@ -5,6 +5,7 @@
  * functions/.env: RESEND_API_KEY, RESEND_FROM (opcional), APP_ORIGIN
  */
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
+import { callerIsPlatformAdmin } from './platformAdmin'
 import { getFirestore } from 'firebase-admin/firestore'
 import { escapeEmailHtml, sendResendEmail } from './resendEmail'
 
@@ -31,11 +32,9 @@ export const sendInviteEmail = onCall<{ inviteId?: string; origin?: string }>(
     if (!snap.exists) throw new HttpsError('not-found', 'Convite não encontrado.')
     const invite = snap.data() ?? {}
 
-    const token = request.auth.token ?? {}
     const allowed =
       invite.createdBy === request.auth.uid ||
-      token.admin === true ||
-      token.platformAdmin === true
+      (await callerIsPlatformAdmin(request.auth.uid, request.auth.token))
     if (!allowed) {
       throw new HttpsError('permission-denied', 'Sem permissão para enviar este convite.')
     }

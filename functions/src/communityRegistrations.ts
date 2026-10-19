@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore'
+import { callerIsPlatformAdmin } from './platformAdmin'
 import { getTwilioConfigStatus, sendTwilioMessage } from './twilio'
 import { sendResendEmail } from './resendEmail'
 
@@ -199,8 +200,7 @@ export const submitCommunityRegistration = onCall(async (request) => {
 
 async function requireReviewer(auth: { uid: string; token: Record<string, unknown> } | undefined, visit: FirebaseFirestore.DocumentData) {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Faça login para analisar inscrições.')
-  const token = auth.token ?? {}
-  if (token.admin === true || token.platformAdmin === true || token.role === 'admin') return
+  if (await callerIsPlatformAdmin(auth.uid, auth.token)) return
   const memberId = `${String(visit.orgId)}_${auth.uid}`
   const member = await db.collection('organizationMembers').doc(memberId).get()
   if (member.exists && member.get('orgRole') === 'org_admin') return
