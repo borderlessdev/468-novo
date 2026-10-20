@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { canApproveFinance } from '@/lib/access'
+import { canApproveFinance, canEditVisitModule } from '@/lib/access'
 import { financeItemSchema, type FinanceItemInput } from '@/lib/validations'
 import {
   FINANCE_DEVIATION_WARN_RATIO,
@@ -412,8 +412,8 @@ function FinanceFiles({
 }
 
 export function FinancePage() {
-  const { user, isAdmin, role, canWrite, profile } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { user, isAdmin, role, profile } = useAuth()
+  const { activeOrgId, isOrgAdmin } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [items, setItems] = useState<FinanceItem[]>([])
@@ -439,6 +439,18 @@ export function FinancePage() {
 
   const visitId = searchParams.get('visita') ?? ''
   const selectedVisit = visits.find((v) => v.id === visitId)
+  const canWrite = Boolean(
+    selectedVisit &&
+      user &&
+      canEditVisitModule(
+        selectedVisit,
+        'finance',
+        user.uid,
+        role,
+        isAdmin,
+        isOrgAdmin,
+      ),
+  )
   const canApprove = canApproveFinance(role, isAdmin, selectedVisit, user?.uid ?? '')
 
   const form = useForm<FinanceItemInput>({

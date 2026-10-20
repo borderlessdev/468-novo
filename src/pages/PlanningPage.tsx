@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
+import { canEditVisitModule } from '@/lib/access'
 import { taskSchema, type TaskInput } from '@/lib/validations'
 import { formatDateShort } from '@/lib/utils'
 import { calculateVisitProgress } from '@/lib/utils'
@@ -179,8 +180,8 @@ function KanbanColumn({
 }
 
 export function PlanningPage() {
-  const { user, isAdmin, role, canWrite, profile } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { user, isAdmin, role, profile } = useAuth()
+  const { activeOrgId, isOrgAdmin } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -195,6 +196,18 @@ export function PlanningPage() {
 
   const visitId = searchParams.get('visita') ?? ''
   const selectedVisit = visits.find((v) => v.id === visitId)
+  const canWrite = Boolean(
+    selectedVisit &&
+      user &&
+      canEditVisitModule(
+        selectedVisit,
+        'planning',
+        user.uid,
+        role,
+        isAdmin,
+        isOrgAdmin,
+      ),
+  )
 
   const form = useForm<TaskInput>({
     resolver: zodResolver(taskSchema),

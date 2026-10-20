@@ -17,9 +17,28 @@ import type {
   Visit,
   VisitEventKind,
   VisitEventScope,
+  VisitModuleEditorFlags,
   VisitStatus,
   VisitVipSubtype,
 } from '@/types'
+
+function mapModuleEditors(
+  value: unknown,
+): Record<string, Partial<VisitModuleEditorFlags>> | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const result: Record<string, Partial<VisitModuleEditorFlags>> = {}
+  for (const [uid, flags] of Object.entries(value as Record<string, unknown>)) {
+    if (!uid || !flags || typeof flags !== 'object') continue
+    const raw = flags as Record<string, unknown>
+    result[uid] = {
+      planning: raw.planning === true,
+      agenda: raw.agenda === true,
+      visitors: raw.visitors === true,
+      finance: raw.finance === true,
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
 
 const visitsCol = collection(db, 'visits')
 
@@ -49,6 +68,7 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     clientUserIds: Array.isArray(data.clientUserIds)
       ? (data.clientUserIds as string[])
       : [],
+    moduleEditors: mapModuleEditors(data.moduleEditors),
     isTemplate: data.isTemplate === true,
     hasTicketSales: data.hasTicketSales === true,
     communityDailyCapacity:
@@ -174,6 +194,7 @@ export async function createVisit(
     progress: data.progress ?? 0,
     teamMemberIds: data.teamMemberIds ?? [],
     clientUserIds: data.clientUserIds ?? [],
+    moduleEditors: data.moduleEditors ?? null,
     isTemplate: data.isTemplate === true,
     hasTicketSales: data.hasTicketSales === true,
     communityDailyCapacity: data.communityDailyCapacity ?? null,

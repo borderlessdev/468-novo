@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getVisitChildDocs } from '@/lib/firestore-visit-query'
+import { getTrashExpiresAt } from '@/lib/trash'
 import { softDeleteEntity } from '@/services/trash'
 import type { Activity, PlaybookPhase } from '@/types'
 
@@ -113,6 +114,62 @@ export async function createActivities(
   }
 }
 
+/** Soft-delete em lote (import que substitui a programação). */
+export async function softDeleteActivities(
+  activities: Activity[],
+  deletedBy: string,
+): Promise<void> {
+  if (activities.length === 0) return
+  const CHUNK = 450
+  const expiresAt = getTrashExpiresAt()
+  for (let i = 0; i < activities.length; i += CHUNK) {
+    const chunk = activities.slice(i, i + CHUNK)
+    const batch = writeBatch(db)
+    for (const activity of chunk) {
+      batch.update(doc(col, activity.id), {
+        isDeleted: true,
+        deletedAt: serverTimestamp(),
+        deletedBy,
+        expiresAt,
+        updatedAt: serverTimestamp(),
+      })
+    }
+    await batch.commit()
+  }
+}
+
+/** Soft-delete de todas as atividades ativas da visita. */
+export async function softDeleteActivitiesForVisit(
+  visitId: string,
+  ownerId: string,
+  deletedBy: string,
+  isAdmin: boolean,
+): Promise<Activity[]> {
+  const existing = await listActivities(visitId, ownerId, isAdmin)
+  await softDeleteActivities(existing, deletedBy)
+  return existing
+}
+
+/**
+ * Substitui a programação da visita: remove a atual (lixeira) e grava a nova.
+ * `existing` evita uma segunda leitura quando o chamador já listou as atividades.
+ */
+export async function replaceVisitActivities(
+  ownerId: string,
+  visitId: string,
+  activities: Array<Omit<Activity, 'id' | 'ownerId' | 'createdAt' | 'updatedAt' | 'visitId'>>,
+  deletedBy: string,
+  isAdmin: boolean,
+  existing?: Activity[],
+): Promise<{ removed: Activity[]; created: number }> {
+  const removed =
+    existing ?? (await softDeleteActivitiesForVisit(visitId, ownerId, deletedBy, isAdmin))
+  if (existing) await softDeleteActivities(existing, deletedBy)
+  const payload = activities.map((activity) => ({ ...activity, visitId }))
+  await createActivities(ownerId, payload)
+  return { removed, created: payload.length }
+}
+
 export async function updateActivity(
   id: string,
   data: Partial<Omit<Activity, 'id' | 'ownerId' | 'createdAt'>>,
@@ -121,6 +178,27 @@ export async function updateActivity(
     ...data,
     updatedAt: serverTimestamp(),
   })
+}
+
+/** Atualiza data/horário de várias atividades (cascata da programação). */
+export async function updateActivityTimes(
+  updates: Array<{ id: string; date: string; startTime: string; endTime: string }>,
+): Promise<void> {
+  if (updates.length === 0) return
+  const CHUNK = 450
+  for (let i = 0; i < updates.length; i += CHUNK) {
+    const chunk = updates.slice(i, i + CHUNK)
+    const batch = writeBatch(db)
+    for (const item of chunk) {
+      batch.update(doc(col, item.id), {
+        date: item.date,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        updatedAt: serverTimestamp(),
+      })
+    }
+    await batch.commit()
+  }
 }
 
 export async function deleteActivity(id: string, deletedBy: string): Promise<void> {

@@ -54,7 +54,14 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { canDeleteVisit, canManageVisitAccess, isNavAllowed } from '@/lib/access'
+import {
+  canDeleteVisit,
+  canEditVisitAnyModule,
+  canEditVisitModule,
+  canManageVisitAccess,
+  isNavAllowed,
+} from '@/lib/access'
+import { VisitEditorsPanel } from '@/features/visits/VisitEditorsPanel'
 import { BRAZILIAN_STATES } from '@/lib/constants'
 import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
@@ -163,7 +170,7 @@ function GuestStatusBadge({ link }: { link: VisitGuestLink }) {
 export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user, isAdmin, role, canWrite, profile } = useAuth()
+  const { user, isAdmin, role, profile } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -199,8 +206,6 @@ export function VisitDetailPage() {
   const [guestInviteLabel, setGuestInviteLabel] = useState('')
   const [draftingGuestInvite, setDraftingGuestInvite] = useState(false)
   const [guestInviteLoadingDots, setGuestInviteLoadingDots] = useState(3)
-  const [teamIdsInput, setTeamIdsInput] = useState('')
-  const [clientIdsInput, setClientIdsInput] = useState('')
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
   const [guestLinks, setGuestLinks] = useState<VisitGuestLink[]>([])
   const [feedbacks, setFeedbacks] = useState<VisitFeedback[]>([])
@@ -231,8 +236,6 @@ export function VisitDetailPage() {
         return
       }
       setVisit(visitData)
-      setTeamIdsInput(visitData.teamMemberIds.join(', '))
-      setClientIdsInput(visitData.clientUserIds.join(', '))
       reset({
         title: visitData.title,
         company: visitData.company ?? '',
@@ -324,7 +327,16 @@ export function VisitDetailPage() {
   }, [id, user, isAdmin, navigate, reset])
 
   const ensureVisitorsCatalog = useCallback(async () => {
-    if (!user || !activeOrgId || !canWrite || visitorsCatalogLoaded || loadingVisitorsCatalog) return
+    if (
+      !user ||
+      !activeOrgId ||
+      !visit ||
+      !canEditVisitModule(visit, 'visitors', user.uid, role, isAdmin, isOrgAdmin) ||
+      visitorsCatalogLoaded ||
+      loadingVisitorsCatalog
+    ) {
+      return
+    }
     setLoadingVisitorsCatalog(true)
     try {
       setAllVisitors(await listVisitors(activeOrgId))
@@ -335,7 +347,16 @@ export function VisitDetailPage() {
     } finally {
       setLoadingVisitorsCatalog(false)
     }
-  }, [user, activeOrgId, canWrite, visitorsCatalogLoaded, loadingVisitorsCatalog])
+  }, [
+    user,
+    activeOrgId,
+    visit,
+    role,
+    isAdmin,
+    isOrgAdmin,
+    visitorsCatalogLoaded,
+    loadingVisitorsCatalog,
+  ])
 
   useEffect(() => {
     void load()
@@ -360,14 +381,12 @@ export function VisitDetailPage() {
       .slice(0, 5)
   }, [visitorSearch, allVisitors, linkedVisitors])
 
-  const parseUidList = (value: string) =>
-    value
-      .split(/[,;\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-
   const onSave = form.handleSubmit(async (values) => {
-    if (!id || !visit) return
+    if (!id || !visit || !user) return
+    if (!canEditVisitAnyModule(visit, user.uid, role, isAdmin, isOrgAdmin)) {
+      toast.error('Sem permissão para editar esta visita')
+      return
+    }
     setSaving(true)
     try {
       const payload: Parameters<typeof updateVisit>[1] = {
@@ -386,10 +405,6 @@ export function VisitDetailPage() {
         arrivalInstructions: values.arrivalInstructions || undefined,
         hasTicketSales: values.hasTicketSales === true,
       }
-      if (canManageVisitAccess(role, isAdmin, visit, user!.uid)) {
-        payload.teamMemberIds = parseUidList(teamIdsInput)
-        payload.clientUserIds = parseUidList(clientIdsInput)
-      }
       await updateVisit(id, payload)
       try {
         await writeActivityLog({
@@ -398,7 +413,7 @@ export function VisitDetailPage() {
           visitId: id,
           action: 'updated',
           summary: `Visita "${values.title}" atualizada`,
-          actorId: user!.uid,
+          actorId: user.uid,
           actorName: undefined,
         })
       } catch (error) {
@@ -410,8 +425,6 @@ export function VisitDetailPage() {
           ? {
               ...prev,
               ...payload,
-              teamMemberIds: payload.teamMemberIds ?? prev.teamMemberIds,
-              clientUserIds: payload.clientUserIds ?? prev.clientUserIds,
             }
           : prev,
       )
@@ -484,7 +497,7 @@ export function VisitDetailPage() {
   }
 
   const handleImportVisitors = async (file: File) => {
-    if (!user || !id || !activeOrgId || !canWrite) return
+    if (!user || !id || !activeOrgId || !canEditVisitorsModule) return
     setImportingVisitors(true)
     try {
       const rows = parseVisitorWorkbook(await file.arrayBuffer())
@@ -960,7 +973,7 @@ export function VisitDetailPage() {
   }
 
   const handleToggleChecklistTask = async (task: Task) => {
-    if (!canWrite) return
+    if (!canEditPlanningModule) return
     setTogglingTaskId(task.id)
     const nextStatus = task.status === 'completed' ? 'backlog' : 'completed'
     try {
@@ -1183,8 +1196,28 @@ export function VisitDetailPage() {
     }
   }
 
-  const showDelete = visit && user && canDeleteVisit(role, isAdmin, visit, user.uid)
-  const showAccessFields = visit && user && canManageVisitAccess(role, isAdmin, visit, user.uid)
+  const showDelete =
+    visit && user && canDeleteVisit(role, isAdmin, visit, user.uid, isOrgAdmin)
+  const canManageAccess = Boolean(
+    visit &&
+      user &&
+      canManageVisitAccess(role, isAdmin, visit, user.uid, isOrgAdmin),
+  )
+  const canWrite = Boolean(
+    visit &&
+      user &&
+      canEditVisitAnyModule(visit, user.uid, role, isAdmin, isOrgAdmin),
+  )
+  const canEditVisitorsModule = Boolean(
+    visit &&
+      user &&
+      canEditVisitModule(visit, 'visitors', user.uid, role, isAdmin, isOrgAdmin),
+  )
+  const canEditPlanningModule = Boolean(
+    visit &&
+      user &&
+      canEditVisitModule(visit, 'planning', user.uid, role, isAdmin, isOrgAdmin),
+  )
 
   if (loading) {
     return (
@@ -1384,7 +1417,7 @@ export function VisitDetailPage() {
                     <Checkbox
                       className="mt-0.5"
                       checked={task.status === 'completed'}
-                      disabled={!canWrite || togglingTaskId === task.id}
+                      disabled={!canEditPlanningModule || togglingTaskId === task.id}
                       onCheckedChange={() => void handleToggleChecklistTask(task)}
                     />
                     <div className="min-w-0 flex-1">
@@ -1549,26 +1582,6 @@ export function VisitDetailPage() {
                 />
                 Esta experiência tem venda de ingressos (Gestão de Receitas)
               </label>
-              {showAccessFields ? (
-                <>
-                  <div className="space-y-2">
-                    <Label>UIDs da equipe (vírgula)</Label>
-                    <Input
-                      value={teamIdsInput}
-                      onChange={(e) => setTeamIdsInput(e.target.value)}
-                      placeholder="uid1, uid2"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>UIDs dos clientes (vírgula)</Label>
-                    <Input
-                      value={clientIdsInput}
-                      onChange={(e) => setClientIdsInput(e.target.value)}
-                      placeholder="uid-cliente"
-                    />
-                  </div>
-                </>
-              ) : null}
               <Button type="submit" disabled={saving}>
                 {saving ? 'Salvando...' : 'Salvar alterações'}
               </Button>
@@ -1588,12 +1601,18 @@ export function VisitDetailPage() {
         </Card>
 
         <div className="space-y-6">
+          <VisitEditorsPanel
+            visit={visit}
+            canManage={canManageAccess}
+            onUpdated={(next) => setVisit(next)}
+          />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Visitantes vinculados</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canWrite ? (
+              {canEditVisitorsModule ? (
                 <div className="space-y-1">
                   <div className="flex flex-wrap gap-2">
                     <input
@@ -1633,7 +1652,7 @@ export function VisitDetailPage() {
                   ) : null}
                 </div>
               ) : null}
-              {canWrite && visitorResults.length > 0 ? (
+              {canEditVisitorsModule && visitorResults.length > 0 ? (
                 <div className="space-y-1">
                   {visitorResults.map((visitor) => (
                     <button
@@ -1670,7 +1689,7 @@ export function VisitDetailPage() {
                           {visitor.company || visitor.document}
                         </p>
                       </div>
-                      {canWrite ? (
+                      {canEditVisitorsModule ? (
                         <Button
                           size="icon"
                           variant="ghost"
@@ -1691,7 +1710,7 @@ export function VisitDetailPage() {
               <CardTitle className="text-base">Documentos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canWrite ? (
+              {canEditVisitorsModule ? (
               <>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Select
@@ -1825,7 +1844,7 @@ export function VisitDetailPage() {
         </div>
       </div>
 
-      {canWrite ? (
+      {canEditVisitorsModule ? (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle className="text-base">Portal do visitante</CardTitle>
@@ -1942,7 +1961,7 @@ export function VisitDetailPage() {
                         min="1"
                         defaultValue={visit.communityDailyCapacity?.[date] ?? ''}
                         className="h-8 w-20"
-                        disabled={!canWrite}
+                        disabled={!canEditVisitorsModule}
                         onBlur={(event) => void handleCommunityCapacityUpdate(date, event.target.value)}
                       />
                     </label>

@@ -19,13 +19,26 @@ import { logger } from 'firebase-functions'
 import { initializeApp } from 'firebase-admin/app'
 import { callerIsPlatformAdmin } from './platformAdmin'
 import { FieldValue, getFirestore } from 'firebase-admin/firestore'
-import { google } from 'googleapis'
 import { randomUUID } from 'node:crypto'
 
 setGlobalOptions({ maxInstances: 10 })
 
 initializeApp()
 const db = getFirestore()
+
+/**
+ * googleapis é pesado (~10s+ no require). Carregar no topo estoura o timeout de
+ * discovery do Firebase (10s) e impede o deploy de qualquer function deste arquivo.
+ */
+type GoogleApis = typeof import('googleapis').google
+let googleApi: GoogleApis | null = null
+function google(): GoogleApis {
+  if (!googleApi) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    googleApi = (require('googleapis') as typeof import('googleapis')).google
+  }
+  return googleApi
+}
 
 const SECRETS_COLLECTION = 'calendarSecrets'
 const CONNECTIONS_COLLECTION = 'calendarConnections'
@@ -105,13 +118,13 @@ function appOrigin(): string {
 }
 
 function createOAuthClient(config: GoogleConfig) {
-  return new google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri)
+  return new (google().auth.OAuth2)(config.clientId, config.clientSecret, config.redirectUri)
 }
 
 type OAuthClient = ReturnType<typeof createOAuthClient>
 
 function calendarFor(auth: OAuthClient) {
-  return google.calendar({ version: 'v3', auth })
+  return google().calendar({ version: 'v3', auth })
 }
 
 type CalendarApi = ReturnType<typeof calendarFor>

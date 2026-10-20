@@ -135,6 +135,11 @@ export type VisitVipSubtype =
 
 export type VisitEventScope = 'interno' | 'externo'
 
+/** Módulos que o criador pode liberar para outros organizadores da visita. */
+export type VisitEditableModule = 'planning' | 'agenda' | 'visitors' | 'finance'
+
+export type VisitModuleEditorFlags = Record<VisitEditableModule, boolean>
+
 export interface Visit extends SoftDeletable {
   id: string
   title: string
@@ -158,6 +163,11 @@ export interface Visit extends SoftDeletable {
   progress: number
   teamMemberIds: string[]
   clientUserIds: string[]
+  /**
+   * Quem o criador liberou para editar módulos desta visita (uid → flags).
+   * O dono, admin da empresa e master não precisam constar aqui.
+   */
+  moduleEditors?: Record<string, Partial<VisitModuleEditorFlags>>
   isTemplate?: boolean
   /** Libera lançamentos de venda de ingressos na Gestão de Receitas. */
   hasTicketSales?: boolean

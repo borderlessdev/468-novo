@@ -56,9 +56,28 @@ service cloud.firestore {
       return canAccessOrg(visit.orgId);
     }
 
+    function canManageVisitEditors() {
+      return isPlatformAdmin()
+        || isOrgAdminOf(resource.data.orgId)
+        || resource.data.ownerId == request.auth.uid;
+    }
+
+    function visitEditorFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['moduleEditors', 'teamMemberIds', 'clientUserIds']);
+    }
+
+    // Dono, admin da empresa, master ou membro liberado em teamMemberIds.
     function canWriteVisit(visitId) {
       let visit = visitData(visitId);
-      return canAccessOrg(visit.orgId) && !isClientUser();
+      return canAccessOrg(visit.orgId)
+        && !isClientUser()
+        && (
+          isPlatformAdmin()
+          || isOrgAdminOf(visit.orgId)
+          || visit.ownerId == request.auth.uid
+          || request.auth.uid in memberIds(visit.teamMemberIds)
+        );
     }
 
     function ownsOrAdmin() {
@@ -291,14 +310,46 @@ service cloud.firestore {
         && request.resource.data.endDate is string
         && validVisitStatus(request.resource.data.status);
 
+      // Soft-delete / restore: dono, admin da empresa ou master.
+      // Conteúdo: editores da visita. Liberar módulos: só dono/admin/master.
       allow update: if canAccessOrg(resource.data.orgId)
         && !isClientUser()
         && unchangedOwnerId()
+        && (visitEditorFieldsUnchanged() || canManageVisitEditors())
         && (
-          !isCurrentlyDeleted() || isRestoreUpdate() || canTrashUpdate()
+          (
+            !isCurrentlyDeleted()
+            && (
+              !isSoftDeleteUpdate()
+              || isPlatformAdmin()
+              || isOrgAdminOf(resource.data.orgId)
+              || resource.data.ownerId == request.auth.uid
+            )
+            && (
+              isSoftDeleteUpdate()
+              || isPlatformAdmin()
+              || isOrgAdminOf(resource.data.orgId)
+              || resource.data.ownerId == request.auth.uid
+              || request.auth.uid in memberIds(resource.data.teamMemberIds)
+            )
+          )
+          || (
+            isRestoreUpdate()
+            && (
+              isPlatformAdmin()
+              || isOrgAdminOf(resource.data.orgId)
+              || resource.data.ownerId == request.auth.uid
+            )
+          )
         );
 
-      allow delete: if canAccessOrg(resource.data.orgId) && !isClientUser();
+      allow delete: if canAccessOrg(resource.data.orgId)
+        && !isClientUser()
+        && (
+          isPlatformAdmin()
+          || isOrgAdminOf(resource.data.orgId)
+          || resource.data.ownerId == request.auth.uid
+        );
     }
 
     // get: autenticado (IDs vêm de visitVisitors já protegido).

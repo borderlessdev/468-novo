@@ -1,5 +1,6 @@
+import { getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { FieldValue, getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   decideAccountTypeChange,
@@ -8,7 +9,10 @@ import {
 } from './accountTypePolicy'
 import { callerIsPlatformAdmin } from './platformAdmin'
 
-const db = getFirestore()
+function db(): Firestore {
+  if (getApps().length === 0) initializeApp()
+  return getFirestore()
+}
 
 function asToken(token: unknown): Record<string, unknown> {
   return token && typeof token === 'object' ? (token as Record<string, unknown>) : {}
@@ -46,7 +50,8 @@ export const changeUserAccountType = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Tipo de usuário inválido.')
   }
 
-  const userRef = db.collection('users').doc(targetUid)
+  const firestore = db()
+  const userRef = firestore.collection('users').doc(targetUid)
   const preview = await userRef.get()
   if (!preview.exists) {
     throw new HttpsError('not-found', 'Usuário não encontrado.')
@@ -73,12 +78,12 @@ export const changeUserAccountType = onCall(async (request) => {
 
   const orgId = profileOrgId || requestedOrgId
   const memberRef = orgId
-    ? db.collection('organizationMembers').doc(`${orgId}_${targetUid}`)
+    ? firestore.collection('organizationMembers').doc(`${orgId}_${targetUid}`)
     : null
 
-  const applied = await db.runTransaction(async (transaction) => {
+  const applied = await firestore.runTransaction(async (transaction) => {
     const mastersSnap = await transaction.get(
-      db.collection('users').where('role', '==', 'admin'),
+      firestore.collection('users').where('role', '==', 'admin'),
     )
     const userSnap = await transaction.get(userRef)
     const memberSnap = memberRef ? await transaction.get(memberRef) : null

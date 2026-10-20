@@ -8,10 +8,15 @@ import {
   useDroppable,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { addDays, format, startOfWeek, parseISO } from 'date-fns'
+import { addDays, format, isWithinInterval, startOfWeek, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import type { Activity } from '@/types'
+
+/** `yyyy-MM-dd` → meio-dia local (evita voltar um dia em fusos negativos com parseISO). */
+export function parseDateOnly(date: string): Date {
+  return parseISO(`${date.slice(0, 10)}T12:00:00`)
+}
 
 function timeToMinutes(iso: string): number {
   const d = parseISO(iso)
@@ -192,4 +197,16 @@ export function WeeklyAgenda({
 
 export function getWeekStart(anchor: Date = new Date()): Date {
   return startOfWeek(anchor, { weekStartsOn: 1 })
+}
+
+export function getWeekStartForDate(date: string): Date {
+  return getWeekStart(parseDateOnly(date))
+}
+
+export function isDateInWeek(date: string, weekStart: Date): boolean {
+  const day = parseDateOnly(date)
+  return isWithinInterval(day, {
+    start: weekStart,
+    end: addDays(weekStart, 6),
+  })
 }

@@ -4,11 +4,16 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { toastMovedToTrash } from '@/lib/toast'
-import { addDays, format, parseISO } from 'date-fns'
+import { addDays, format } from 'date-fns'
 import { Calendar, MapPin, Plus, Search, Sparkles, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
-import { WeeklyAgenda, getWeekStart } from '@/components/agenda/WeeklyAgenda'
+import {
+  WeeklyAgenda,
+  getWeekStart,
+  getWeekStartForDate,
+  isDateInWeek,
+} from '@/components/agenda/WeeklyAgenda'
 import { ConfirmDeleteDialog, useConfirmDelete } from '@/components/shared/ConfirmDeleteDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,6 +35,8 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
+import { canEditVisitModule } from '@/lib/access'
+import { planScheduleCascade } from '@/lib/activitySchedule'
 import { activitySchema, type ActivityInput } from '@/lib/validations'
 import { activitiesOverlap, formatDate } from '@/lib/utils'
 import { parseProgrammingWorkbook, workbookToCsvForAi, type ImportedActivity } from '@/lib/programmingImport'
@@ -38,10 +45,11 @@ import { uploadProgrammingSource } from '@/services/documents'
 import { listVisits } from '@/services/visits'
 import {
   createActivity,
-  createActivities,
   deleteActivity,
   listActivities,
+  replaceVisitActivities,
   updateActivity,
+  updateActivityTimes,
 } from '@/services/activities'
 import {
   deleteGoogleEvent,
@@ -52,8 +60,8 @@ import {
 import type { Activity, Visit } from '@/types'
 
 export function AgendaPage() {
-  const { user, isAdmin, role, canWrite } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { user, isAdmin, role, canWrite: canWriteOrg } = useAuth()
+  const { activeOrgId, isOrgAdmin } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
@@ -63,6 +71,8 @@ export function AgendaPage() {
   const [eventSearch, setEventSearch] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'week'>('week')
   const [weekStart, setWeekStart] = useState(() => getWeekStart())
+  const weekSyncedVisitRef = useRef<string | null>(null)
+  const weekSyncedWithActivitiesRef = useRef(false)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
   const [saving, setSaving] = useState(false)
@@ -81,6 +91,19 @@ export function AgendaPage() {
   const [syncingVisit, setSyncingVisit] = useState(false)
 
   const visitId = searchParams.get('visita') ?? ''
+  const selectedVisit = visits.find((v) => v.id === visitId)
+  const canWrite = Boolean(
+    selectedVisit &&
+      user &&
+      canEditVisitModule(
+        selectedVisit,
+        'agenda',
+        user.uid,
+        role,
+        isAdmin,
+        isOrgAdmin,
+      ),
+  )
 
   const form = useForm<ActivityInput>({
     resolver: zodResolver(activitySchema),
@@ -109,12 +132,12 @@ export function AgendaPage() {
   }, [user, activeOrgId, isAdmin, role])
 
   useEffect(() => {
-    if (!user || !canWrite) {
+    if (!user || !canWriteOrg) {
       setGoogleConnected(false)
       return
     }
     void getCalendarStatus().then((status) => setGoogleConnected(status.connected))
-  }, [user, canWrite])
+  }, [user, canWriteOrg])
 
   /**
    * Sync com o Google é sempre fire-and-forget: uma falha lá não desfaz o que já
@@ -216,9 +239,43 @@ export function AgendaPage() {
     )
   }, [activities, eventSearch])
 
+  // Ao abrir/trocar visita (e quando as atividades chegam), posiciona a semana na programação.
+  useEffect(() => {
+    if (!visitId || loadingActivities) return
+    const anchorFromActivities =
+      activities.length > 0
+        ? [...activities].sort(
+            (a, b) =>
+              a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+          )[0].date
+        : null
+    const anchorDate = anchorFromActivities ?? selectedVisit?.startDate
+    if (!anchorDate) return
+
+    if (weekSyncedVisitRef.current !== visitId) {
+      setWeekStart(getWeekStartForDate(anchorDate))
+      weekSyncedVisitRef.current = visitId
+      weekSyncedWithActivitiesRef.current = Boolean(anchorFromActivities)
+      return
+    }
+
+    // Atividades chegaram depois do 1º posicionamento (ex.: só tínhamos a data da visita).
+    if (!weekSyncedWithActivitiesRef.current && anchorFromActivities) {
+      setWeekStart(getWeekStartForDate(anchorFromActivities))
+      weekSyncedWithActivitiesRef.current = true
+    }
+  }, [visitId, activities, loadingActivities, selectedVisit?.startDate])
+
+  useEffect(() => {
+    if (!visitId) {
+      weekSyncedVisitRef.current = null
+      weekSyncedWithActivitiesRef.current = false
+    }
+  }, [visitId])
+
   useEffect(() => {
     if (!eventSearch.trim() || searchedActivities.length === 0) return
-    setWeekStart(getWeekStart(parseISO(searchedActivities[0].date)))
+    setWeekStart(getWeekStartForDate(searchedActivities[0].date))
   }, [eventSearch, searchedActivities])
 
   const filtered = useMemo(() => {
@@ -226,7 +283,22 @@ export function AgendaPage() {
     return searchedActivities.filter((activity) => activity.date === dayFilter)
   }, [searchedActivities, dayFilter])
 
-  const selectedVisit = visits.find((v) => v.id === visitId)
+  const activitiesInWeek = useMemo(
+    () => searchedActivities.filter((activity) => isDateInWeek(activity.date, weekStart)),
+    [searchedActivities, weekStart],
+  )
+
+  const jumpToProgrammingWeek = () => {
+    const anchor =
+      searchedActivities.length > 0
+        ? [...searchedActivities].sort(
+            (a, b) =>
+              a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+          )[0].date
+        : selectedVisit?.startDate
+    if (!anchor) return
+    setWeekStart(getWeekStartForDate(anchor))
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -282,7 +354,6 @@ export function AgendaPage() {
       toast.error('Horário fim deve ser após o início')
       return
     }
-    if (checkConflict(values, editing?.id)) return
 
     setSaving(true)
     const payload = {
@@ -301,10 +372,48 @@ export function AgendaPage() {
     }
     try {
       if (editing) {
+        const cascade = planScheduleCascade(activities, editing.id, {
+          date: values.date,
+          startTime: payload.startTime,
+          endTime: payload.endTime,
+        })
+        const cascadingIds = new Set(cascade.map((item) => item.id))
+        // Conflito só com itens que não serão deslocados junto (ex.: outro dia / fora da cadeia).
+        const conflict = activities.find(
+          (activity) =>
+            !cascadingIds.has(activity.id) &&
+            activitiesOverlap(
+              {
+                date: payload.date,
+                startTime: payload.startTime,
+                endTime: payload.endTime,
+              },
+              {
+                date: activity.date,
+                startTime: activity.startTime,
+                endTime: activity.endTime,
+              },
+            ),
+        )
+        if (conflict) {
+          toast.warning(`Conflito de horário com "${conflict.title}"`)
+          return
+        }
+
         await updateActivity(editing.id, payload)
-        toast.success('Atividade atualizada')
-        syncToGoogle(editing.id)
+        const following = cascade.filter((item) => item.id !== editing.id)
+        if (following.length > 0) {
+          await updateActivityTimes(following)
+        }
+        const shifted = following.length
+        toast.success(
+          shifted > 0
+            ? `Atividade atualizada · ${shifted} horário(s) seguinte(s) ajustado(s)`
+            : 'Atividade atualizada',
+        )
+        for (const item of cascade) syncToGoogle(item.id)
       } else {
+        if (checkConflict(values)) return
         const createdId = await createActivity(user.uid, { visitId, ...payload })
         toast.success('Atividade criada')
         syncToGoogle(createdId)
@@ -325,12 +434,14 @@ export function AgendaPage() {
     activity: Activity,
     next: { date: string; startTime: string; endTime: string },
   ) => {
+    const cascade = planScheduleCascade(activities, activity.id, next)
+    const cascadingIds = new Set(cascade.map((item) => item.id))
     const conflict = activities.find(
-      (a) =>
-        a.id !== activity.id &&
+      (item) =>
+        !cascadingIds.has(item.id) &&
         activitiesOverlap(
           { date: next.date, startTime: next.startTime, endTime: next.endTime },
-          { date: a.date, startTime: a.startTime, endTime: a.endTime },
+          { date: item.date, startTime: item.startTime, endTime: item.endTime },
         ),
     )
     if (conflict) {
@@ -338,9 +449,14 @@ export function AgendaPage() {
       return
     }
     try {
-      await updateActivity(activity.id, next)
-      toast.success('Atividade movida')
-      syncToGoogle(activity.id)
+      await updateActivityTimes(cascade)
+      const shifted = cascade.length - 1
+      toast.success(
+        shifted > 0
+          ? `Atividade movida · ${shifted} horário(s) seguinte(s) ajustado(s)`
+          : 'Atividade movida',
+      )
+      for (const item of cascade) syncToGoogle(item.id)
       await loadActivities()
     } catch (error) {
       console.error(error)
@@ -414,9 +530,23 @@ export function AgendaPage() {
     if (!user || !visitId || importPreview.length === 0) return
     setSavingImport(true)
     try {
-      await createActivities(
+      const ownerIdForQuery = selectedVisit?.ownerId ?? user.uid
+      // Remove a programação atual antes de gravar a nova (substituição, não acumulação).
+      const existing = await listActivities(visitId, ownerIdForQuery, isAdmin)
+      if (googleConnected) {
+        await Promise.all(
+          existing
+            .filter((activity) => activity.googleEventId)
+            .map((activity) => deleteGoogleEvent(activity.id)),
+        )
+      }
+      const { created } = await replaceVisitActivities(
         user.uid,
-        importPreview.map((activity) => ({ visitId, ...activity })),
+        visitId,
+        importPreview,
+        user.uid,
+        isAdmin,
+        existing,
       )
       let storedFile = false
       if (lastImportFile) {
@@ -427,15 +557,15 @@ export function AgendaPage() {
           console.error(error)
           toast.warning(
             error instanceof Error
-              ? `${importPreview.length} atividade(s) salva(s), mas o arquivo não foi armazenado: ${error.message}`
-              : `${importPreview.length} atividade(s) salva(s), mas o arquivo não foi armazenado.`,
+              ? `Programação substituída (${created} atividade(s)), mas o arquivo não foi armazenado: ${error.message}`
+              : `Programação substituída (${created} atividade(s)), mas o arquivo não foi armazenado.`,
           )
         }
       }
       if (storedFile) {
-        toast.success(`${importPreview.length} atividade(s) salva(s) e arquivo armazenado`)
+        toast.success(`Programação substituída: ${created} atividade(s) e arquivo armazenado`)
       } else if (!lastImportFile) {
-        toast.success(`${importPreview.length} atividade(s) salva(s)`)
+        toast.success(`Programação substituída: ${created} atividade(s)`)
       }
       setImportOpen(false)
       setImportPreview([])
@@ -448,7 +578,7 @@ export function AgendaPage() {
       if (googleConnected) await handleSyncVisitToGoogle()
     } catch (error) {
       console.error(error)
-      toast.error('Não foi possível salvar as atividades')
+      toast.error('Não foi possível substituir a programação')
     } finally {
       setSavingImport(false)
     }
@@ -503,15 +633,15 @@ export function AgendaPage() {
           </Button>
         </div>
         {viewMode === 'week' ? (
-          <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 flex-wrap gap-1">
             <Button
               type="button"
               size="sm"
               variant="outline"
-              aria-label="Voltar um dia"
-              onClick={() => setWeekStart((d) => addDays(d, -1))}
+              aria-label="Semana anterior"
+              onClick={() => setWeekStart((d) => addDays(d, -7))}
             >
-              ← Dia
+              ← Semana
             </Button>
             <Button
               type="button"
@@ -525,11 +655,21 @@ export function AgendaPage() {
               type="button"
               size="sm"
               variant="outline"
-              aria-label="Avançar um dia"
-              onClick={() => setWeekStart((d) => addDays(d, 1))}
+              aria-label="Próxima semana"
+              onClick={() => setWeekStart((d) => addDays(d, 7))}
             >
-              Dia →
+              Semana →
             </Button>
+            {searchedActivities.length > 0 && activitiesInWeek.length === 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={jumpToProgrammingWeek}
+              >
+                Ir à programação
+              </Button>
+            ) : null}
           </div>
         ) : (
           <Input
@@ -617,7 +757,11 @@ export function AgendaPage() {
             <EmptyState
               icon={Calendar}
               title={eventSearch ? 'Nenhum evento encontrado' : 'Nenhuma atividade nesta visita'}
-              description={eventSearch ? 'Tente pesquisar por outro título.' : 'Crie a primeira atividade ou mude para a visualização em lista.'}
+              description={
+                eventSearch
+                  ? 'Tente pesquisar por outro título.'
+                  : 'Crie a primeira atividade ou mude para a visualização em lista.'
+              }
               action={
                 canWrite ? (
                   <Button onClick={openCreate}>
@@ -625,6 +769,15 @@ export function AgendaPage() {
                     Nova atividade
                   </Button>
                 ) : undefined
+              }
+            />
+          ) : activitiesInWeek.length === 0 ? (
+            <EmptyState
+              icon={Calendar}
+              title="Nenhuma atividade nesta semana"
+              description={`Há ${searchedActivities.length} atividade(s) nesta visita, mas fora do período exibido. Vá até a semana da programação.`}
+              action={
+                <Button onClick={jumpToProgrammingWeek}>Ir à programação</Button>
               }
             />
           ) : (
@@ -740,8 +893,9 @@ export function AgendaPage() {
             <div className="rounded-lg bg-muted/60 px-4 py-3 text-sm">
               <p className="font-medium">{importFileName}</p>
               <p className="text-muted-foreground">
-                {importPreview.length} atividade(s) encontrada(s). Ao confirmar, o arquivo
-                original fica salvo nos documentos da visita.
+                {importPreview.length} atividade(s) encontrada(s). Ao confirmar, a programação
+                atual desta visita será substituída por esta, e o arquivo original fica salvo
+                nos documentos da visita.
               </p>
             </div>
 
@@ -817,7 +971,7 @@ export function AgendaPage() {
                 disabled={savingImport || importing || importAiBusy || importPreview.length === 0}
                 onClick={() => void saveImportedActivities()}
               >
-                {savingImport ? 'Salvando...' : 'Salvar programação'}
+                {savingImport ? 'Substituindo...' : 'Substituir programação'}
               </Button>
             </div>
           </div>
