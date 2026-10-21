@@ -27,16 +27,20 @@ const callPublishBudget = httpsCallable<{ budgetId: string }, { ok: boolean }>(
   'publishBudget',
 )
 const callDecideBudgetItem = httpsCallable<
-  { budgetItemId: string; decision: 'approved' | 'rejected' },
+  { budgetItemId: string; decision: 'approved' | 'rejected' | 'changes_requested'; note?: string },
   { ok: boolean; financeItemId?: string; integrationStatus: BudgetIntegrationStatus }
 >(functions, 'decideBudgetItem')
+const callReviseBudgetItem = httpsCallable<
+  { budgetItemId: string; description: string; quantity: number; unitAmount: number },
+  { ok: boolean; lineAmount: number }
+>(functions, 'reviseBudgetItem')
 
 function asStatus(value: unknown): BudgetStatus {
   return value === 'published' ? 'published' : 'draft'
 }
 
 function asDecision(value: unknown): BudgetDecision {
-  if (value === 'approved' || value === 'rejected') return value
+  if (value === 'approved' || value === 'rejected' || value === 'changes_requested') return value
   return 'pending'
 }
 
@@ -79,6 +83,7 @@ function mapItem(id: string, data: Record<string, unknown>): BudgetItem {
     decision: asDecision(data.decision),
     decidedBy: data.decidedBy ? String(data.decidedBy) : undefined,
     decidedAt: data.decidedAt ? String(data.decidedAt) : undefined,
+    changeRequestNote: data.changeRequestNote ? String(data.changeRequestNote) : undefined,
     financeItemId: data.financeItemId ? String(data.financeItemId) : undefined,
     integrationStatus: asIntegration(data.integrationStatus),
     createdAt: data.createdAt,
@@ -235,12 +240,24 @@ export async function publishBudget(budgetId: string): Promise<void> {
 
 export async function decideBudgetItem(
   budgetItemId: string,
-  decision: 'approved' | 'rejected',
+  decision: 'approved' | 'rejected' | 'changes_requested',
+  note?: string,
 ): Promise<{ financeItemId?: string; integrationStatus: BudgetIntegrationStatus }> {
   try {
-    const { data } = await callDecideBudgetItem({ budgetItemId, decision })
+    const { data } = await callDecideBudgetItem({ budgetItemId, decision, note })
     return data
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Não foi possível registrar a decisão')
+  }
+}
+
+export async function reviseBudgetItem(
+  budgetItemId: string,
+  input: { description: string; quantity: number; unitAmount: number },
+): Promise<void> {
+  try {
+    await callReviseBudgetItem({ budgetItemId, ...input })
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Não foi possível atualizar o item')
   }
 }

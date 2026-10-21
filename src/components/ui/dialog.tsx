@@ -29,13 +29,15 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-4xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-xl',
+        'fixed left-1/2 top-1/2 z-50 flex w-[calc(100%-2rem)] max-h-[90vh] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-card shadow-xl',
         className,
       )}
       {...props}
     >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 opacity-70 transition hover:opacity-100">
+      <div className="scrollbar-thin grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-6">
+        {children}
+      </div>
+      <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-md bg-card/80 p-1 opacity-70 backdrop-blur-sm transition hover:opacity-100">
         <X className="h-4 w-4" />
         <span className="sr-only">Fechar</span>
       </DialogPrimitive.Close>
@@ -48,7 +50,12 @@ export function DialogHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col gap-1.5 text-left', className)} {...props} />
+  return (
+    <div
+      className={cn('flex flex-col gap-1.5 pr-8 text-left', className)}
+      {...props}
+    />
+  )
 }
 
 export function DialogTitle({

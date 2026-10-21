@@ -591,6 +591,6 @@ export {
 export { sendInviteEmail } from './inviteEmail'
 export { acceptInvite, getInviteByToken } from './inviteAcceptance'
 export { changeUserAccountType } from './changeAccountType'
-export { publishBudget, decideBudgetItem } from './budget'
+export { publishBudget, decideBudgetItem, reviseBudgetItem } from './budget'
 export { dispatchNotificationEmail, sendVisitSummaryEmail } from './notificationEmail'
 export { sendDailyOperationalReminders } from './scheduledReminders'

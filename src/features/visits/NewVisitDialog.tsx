@@ -531,11 +531,13 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
             <div>
               <h3 className="font-semibold">
                 {defaultEventKind === 'evento'
-                  ? 'Visitantes deste evento'
+                  ? 'Convidados deste evento'
                   : 'Visitantes'}
               </h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Busque visitantes existentes ou cadastre um novo rapidamente.
+                {defaultEventKind === 'evento'
+                  ? 'Busque convidados existentes ou cadastre um novo rapidamente.'
+                  : 'Busque visitantes existentes ou cadastre um novo rapidamente.'}
               </p>
             </div>
 

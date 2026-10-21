@@ -159,18 +159,67 @@ body {
   animation-delay: 200ms;
 }
 
-/* Softer scrollbar for sidebar / panels */
+/*
+ * Scrollbars: sem fundo de trilho, sem setas; só o polegar fino.
+ * Usar .scrollbar-thin em painéis/dialogs; o resto do app herda o estilo base.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-foreground) 28%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-foreground) 28%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-foreground) 42%, transparent);
+  background-clip: padding-box;
+}
+
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-sidebar-foreground) 25%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-foreground) 28%, transparent) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track,
+.scrollbar-thin::-webkit-scrollbar-track-piece {
+  background: transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-sidebar-foreground) 25%, transparent);
+  background: color-mix(in srgb, var(--color-foreground) 28%, transparent);
   border-radius: 999px;
 }
 

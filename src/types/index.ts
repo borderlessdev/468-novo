@@ -504,7 +504,7 @@ export interface Notification {
 
 export type BudgetStatus = 'draft' | 'published'
 
-export type BudgetDecision = 'pending' | 'approved' | 'rejected'
+export type BudgetDecision = 'pending' | 'approved' | 'rejected' | 'changes_requested'
 
 export type BudgetIntegrationStatus = 'none' | 'pending' | 'created' | 'failed'
 
@@ -536,6 +536,8 @@ export interface BudgetItem {
   decision: BudgetDecision
   decidedBy?: string
   decidedAt?: string
+  /** Pedido do cliente ao solicitar mudanças nesta linha. */
+  changeRequestNote?: string
   financeItemId?: string
   integrationStatus: BudgetIntegrationStatus
   createdAt?: unknown

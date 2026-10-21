@@ -132,7 +132,13 @@ export function BudgetComparisonReport({
                   <td className="py-2 pr-3">{visits.find((visit) => visit.id === row.item.visitId)?.title ?? 'Visita'}</td>
                   <td className="py-2 pr-3">{row.item.description}</td>
                   <td className="py-2 pr-3">
-                    {row.item.decision === 'approved' ? 'Aprovado' : row.item.decision === 'rejected' ? 'Rejeitado' : 'Pendente'}
+                    {row.item.decision === 'approved'
+                      ? 'Aprovado'
+                      : row.item.decision === 'rejected'
+                        ? 'Rejeitado'
+                        : row.item.decision === 'changes_requested'
+                          ? 'Mudanças solicitadas'
+                          : 'Pendente'}
                   </td>
                   <td className="py-2 pr-3">{textMoney(row.orcado)}</td>
                   <td className="py-2 pr-3">{textMoney(row.aprovado)}</td>

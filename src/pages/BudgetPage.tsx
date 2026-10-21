@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -35,6 +36,7 @@ import {
   listPublishedBudgetItemsForClient,
   listPublishedBudgetsForClient,
   publishBudget,
+  reviseBudgetItem,
   updateBudgetItem,
 } from '@/services/budgets'
 import { listOrganizationMembers } from '@/services/organizations'
@@ -45,11 +47,13 @@ const DECISION_LABEL: Record<BudgetDecision, string> = {
   pending: 'Pendente',
   approved: 'Aprovado',
   rejected: 'Rejeitado',
+  changes_requested: 'Mudanças solicitadas',
 }
 
-function decisionVariant(decision: BudgetDecision): 'secondary' | 'default' | 'destructive' {
+function decisionVariant(decision: BudgetDecision): 'secondary' | 'default' | 'destructive' | 'outline' {
   if (decision === 'approved') return 'default'
   if (decision === 'rejected') return 'destructive'
+  if (decision === 'changes_requested') return 'outline'
   return 'secondary'
 }
 
@@ -75,15 +79,19 @@ export function BudgetPage() {
   const [quantity, setQuantity] = useState('1')
   const [unitAmount, setUnitAmount] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [changeNote, setChangeNote] = useState('')
   const [pendingDecision, setPendingDecision] = useState<{
     item: BudgetItem
-    decision: 'approved' | 'rejected'
+    decision: 'approved' | 'rejected' | 'changes_requested'
   } | null>(null)
 
   const selected = budgets.find((budget) => budget.id === selectedId) ?? null
   const visit = visits.find((item) => item.id === (selected?.visitId ?? visitId))
   const client = clients.find((item) => item.uid === (selected?.clientUserId ?? clientUserId))
   const locked = selected?.status === 'published'
+  const revisingAfterRequest = Boolean(
+    editingId && items.some((item) => item.id === editingId && item.decision === 'changes_requested'),
+  )
   const total = items.reduce((sum, item) => sum + item.lineAmount, 0)
   const approvedTotal = items
     .filter((item) => item.decision === 'approved')
@@ -185,12 +193,20 @@ export function BudgetPage() {
   }
 
   const handleSaveItem = async () => {
-    if (!selected || locked) return
+    if (!selected) return
+    if (locked && !revisingAfterRequest) return
     const parsedQuantity = Number(quantity.replace(',', '.'))
     const parsedUnit = Number(unitAmount.replace(',', '.'))
     setSaving(true)
     try {
-      if (editingId) {
+      if (editingId && revisingAfterRequest) {
+        await reviseBudgetItem(editingId, {
+          description,
+          quantity: parsedQuantity,
+          unitAmount: parsedUnit,
+        })
+        toast.success('Item atualizado — aguardando nova decisão do cliente')
+      } else if (editingId) {
         await updateBudgetItem(editingId, {
           description,
           quantity: parsedQuantity,
@@ -268,17 +284,30 @@ export function BudgetPage() {
 
   const handleConfirmDecision = async () => {
     if (!pendingDecision) return
+    if (pendingDecision.decision === 'changes_requested' && changeNote.trim().length < 3) {
+      toast.error('Descreva a mudança desejada')
+      return
+    }
     setSaving(true)
     try {
-      const result = await decideBudgetItem(pendingDecision.item.id, pendingDecision.decision)
+      const result = await decideBudgetItem(
+        pendingDecision.item.id,
+        pendingDecision.decision,
+        pendingDecision.decision === 'changes_requested' ? changeNote.trim() : undefined,
+      )
       if (pendingDecision.decision === 'approved' && result.integrationStatus !== 'created') {
         toast.error('A decisão foi salva, mas o lançamento financeiro não foi criado. Tente novamente.')
       } else {
         toast.success(
-          pendingDecision.decision === 'approved' ? 'Item aprovado' : 'Item rejeitado',
+          pendingDecision.decision === 'approved'
+            ? 'Item aprovado'
+            : pendingDecision.decision === 'rejected'
+              ? 'Item rejeitado'
+              : 'Pedido de mudança enviado',
         )
       }
       setPendingDecision(null)
+      setChangeNote('')
       await loadItems()
     } catch (error) {
       console.error(error)
@@ -295,7 +324,7 @@ export function BudgetPage() {
         title="Orçamento"
         description={
           isClient
-            ? 'Consulte o orçamento disponibilizado e aprove ou rejeite cada item.'
+            ? 'Consulte o orçamento disponibilizado. Você pode aprovar, rejeitar ou solicitar mudanças em cada item.'
             : 'Monte a estimativa inicial da visita e disponibilize ao cliente. As cotações de fornecedores continuam no Financeiro.'
         }
       />
@@ -423,15 +452,21 @@ export function BudgetPage() {
                       <td className="py-2 pr-3">{money(item.lineAmount)}</td>
                       <td className="py-2 pr-3">
                         <Badge variant={decisionVariant(item.decision)}>{DECISION_LABEL[item.decision]}</Badge>
+                        {item.decision === 'changes_requested' && item.changeRequestNote ? (
+                          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                            Pedido: {item.changeRequestNote}
+                          </p>
+                        ) : null}
                         {item.integrationStatus === 'failed' ? (
                           <p className="mt-1 text-xs text-destructive">Falha ao criar o lançamento financeiro</p>
                         ) : null}
                       </td>
                       <td className="py-2">
                         {isClient && item.decision === 'pending' ? (
-                          <div className="flex gap-2">
-                            <Button size="sm" disabled={saving} onClick={() => setPendingDecision({ item, decision: 'approved' })}>Aprovar</Button>
-                            <Button size="sm" variant="outline" disabled={saving} onClick={() => setPendingDecision({ item, decision: 'rejected' })}>Rejeitar</Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" disabled={saving} onClick={() => { setChangeNote(''); setPendingDecision({ item, decision: 'approved' }) }}>Aprovar</Button>
+                            <Button size="sm" variant="outline" disabled={saving} onClick={() => { setChangeNote(''); setPendingDecision({ item, decision: 'rejected' }) }}>Rejeitar</Button>
+                            <Button size="sm" variant="secondary" disabled={saving} onClick={() => { setChangeNote(''); setPendingDecision({ item, decision: 'changes_requested' }) }}>Solicitar mudanças</Button>
                           </div>
                         ) : null}
                         {isClient && item.decision === 'approved' && item.integrationStatus === 'failed' ? (
@@ -439,7 +474,7 @@ export function BudgetPage() {
                             Tentar novamente
                           </Button>
                         ) : null}
-                        {!isClient && !locked ? (
+                        {!isClient && (!locked || item.decision === 'changes_requested') ? (
                           <div className="flex gap-2">
                             <Button
                               size="sm"
@@ -451,11 +486,13 @@ export function BudgetPage() {
                                 setUnitAmount(String(item.unitAmount))
                               }}
                             >
-                              Editar
+                              {item.decision === 'changes_requested' ? 'Responder pedido' : 'Editar'}
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => void handleDeleteItem(item)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
+                            {!locked ? (
+                              <Button size="sm" variant="ghost" onClick={() => void handleDeleteItem(item)}>
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            ) : null}
                           </div>
                         ) : null}
                       </td>
@@ -465,7 +502,7 @@ export function BudgetPage() {
               </table>
             </div>
 
-            {!isClient && selected && !locked ? (
+            {!isClient && selected && (!locked || revisingAfterRequest) ? (
               <form
                 className="grid gap-3 border-t pt-4 sm:grid-cols-4"
                 onSubmit={(event) => {
@@ -473,6 +510,11 @@ export function BudgetPage() {
                   void handleSaveItem()
                 }}
               >
+                {revisingAfterRequest ? (
+                  <p className="sm:col-span-4 text-sm text-muted-foreground">
+                    Ajuste o item conforme o pedido do cliente. Ao salvar, a linha volta para pendente para nova decisão.
+                  </p>
+                ) : null}
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="budget-description">Descrição</Label>
                   <Input id="budget-description" value={description} onChange={(event) => setDescription(event.target.value)} required />
@@ -491,14 +533,23 @@ export function BudgetPage() {
                 <div className="flex flex-wrap gap-2 sm:col-span-4">
                   <Button type="submit" disabled={saving}>
                     <Plus className="size-4" />
-                    {editingId ? 'Salvar item' : 'Adicionar item'}
+                    {revisingAfterRequest ? 'Enviar revisão ao cliente' : editingId ? 'Salvar item' : 'Adicionar item'}
                   </Button>
-                  <Button type="button" variant="outline" disabled={saving || items.length === 0} onClick={() => void handlePublish()}>
-                    Disponibilizar ao cliente
-                  </Button>
-                  <Button type="button" variant="ghost" disabled={saving} onClick={() => void handleDeleteBudget()}>
-                    Excluir rascunho
-                  </Button>
+                  {revisingAfterRequest ? (
+                    <Button type="button" variant="ghost" disabled={saving} onClick={resetItemForm}>
+                      Cancelar revisão
+                    </Button>
+                  ) : null}
+                  {!locked ? (
+                    <>
+                      <Button type="button" variant="outline" disabled={saving || items.length === 0} onClick={() => void handlePublish()}>
+                        Disponibilizar ao cliente
+                      </Button>
+                      <Button type="button" variant="ghost" disabled={saving} onClick={() => void handleDeleteBudget()}>
+                        Excluir rascunho
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </form>
             ) : null}
@@ -506,22 +557,40 @@ export function BudgetPage() {
         </Card>
       ) : null}
 
-      <Dialog open={Boolean(pendingDecision)} onOpenChange={(open) => { if (!open) setPendingDecision(null) }}>
+      <Dialog open={Boolean(pendingDecision)} onOpenChange={(open) => { if (!open) { setPendingDecision(null); setChangeNote('') } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {pendingDecision?.decision === 'approved' ? 'Aprovar item' : 'Rejeitar item'}
+              {pendingDecision?.decision === 'approved'
+                ? 'Aprovar item'
+                : pendingDecision?.decision === 'rejected'
+                  ? 'Rejeitar item'
+                  : 'Solicitar mudanças'}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {pendingDecision?.item.integrationStatus === 'failed'
               ? `Tentar de novo a criação do lançamento financeiro de "${pendingDecision.item.description}"? A aprovação já está registrada.`
-              : pendingDecision
-                ? `Confirmar ${pendingDecision.decision === 'approved' ? 'a aprovação' : 'a rejeição'} de "${pendingDecision.item.description}"? Essa decisão não poderá ser desfeita.`
-                : null}
+              : pendingDecision?.decision === 'changes_requested'
+                ? `Descreva o que precisa mudar em "${pendingDecision.item.description}". A equipe poderá revisar e devolver a linha para nova decisão.`
+                : pendingDecision
+                  ? `Confirmar ${pendingDecision.decision === 'approved' ? 'a aprovação' : 'a rejeição'} de "${pendingDecision.item.description}"? Essa decisão não poderá ser desfeita.`
+                  : null}
           </p>
+          {pendingDecision?.decision === 'changes_requested' ? (
+            <div className="space-y-2">
+              <Label htmlFor="change-note">O que você gostaria de alterar?</Label>
+              <Textarea
+                id="change-note"
+                value={changeNote}
+                onChange={(event) => setChangeNote(event.target.value)}
+                placeholder="Ex.: reduzir quantidade, trocar descrição, ajustar valor…"
+                rows={3}
+              />
+            </div>
+          ) : null}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setPendingDecision(null)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setPendingDecision(null); setChangeNote('') }}>Cancelar</Button>
             <Button disabled={saving} onClick={() => void handleConfirmDecision()}>
               {saving ? 'Salvando...' : 'Confirmar'}
             </Button>

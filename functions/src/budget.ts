@@ -169,8 +169,14 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.')
   const budgetItemId = String(request.data?.budgetItemId ?? '').trim()
   const decision = request.data?.decision
-  if (!budgetItemId || (decision !== 'approved' && decision !== 'rejected')) {
+  const note = String(request.data?.note ?? '').trim()
+  const validDecision =
+    decision === 'approved' || decision === 'rejected' || decision === 'changes_requested'
+  if (!budgetItemId || !validDecision) {
     throw new HttpsError('invalid-argument', 'Decisão inválida.')
+  }
+  if (decision === 'changes_requested' && note.length < 3) {
+    throw new HttpsError('invalid-argument', 'Descreva a mudança desejada (mínimo 3 caracteres).')
   }
   const uid = request.auth.uid
   const itemRef = db.collection('budgetItems').doc(budgetItemId)
@@ -209,17 +215,23 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
       if (data.decision !== 'pending') {
         throw new HttpsError('failed-precondition', 'Esta linha já teve uma decisão e não pode ser alterada.')
       }
-      transaction.update(itemRef, {
+      const patch: Record<string, unknown> = {
         decision,
         decidedBy: uid,
         decidedAt: new Date().toISOString(),
         integrationStatus: decision === 'approved' ? 'pending' : 'none',
         updatedAt: FieldValue.serverTimestamp(),
-      })
+      }
+      if (decision === 'changes_requested') {
+        patch.changeRequestNote = note
+      } else {
+        patch.changeRequestNote = FieldValue.delete()
+      }
+      transaction.update(itemRef, patch)
     })
   }
 
-  if (decision === 'rejected') {
+  if (decision === 'rejected' || decision === 'changes_requested') {
     return { ok: true, integrationStatus: 'none' as const }
   }
 
@@ -245,4 +257,52 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
       'A aprovação foi registrada, mas o lançamento financeiro não foi criado. Tente novamente.',
     )
   }
+})
+
+/**
+ * Equipe responde a um pedido de mudança: atualiza a linha e volta a decisão para pending.
+ */
+export const reviseBudgetItem = onCall({ cors: true, invoker: 'public' }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.')
+  const budgetItemId = String(request.data?.budgetItemId ?? '').trim()
+  const description = String(request.data?.description ?? '').trim()
+  const quantity = Number(request.data?.quantity)
+  const unitAmount = Number(request.data?.unitAmount)
+  if (!budgetItemId || description.length < 2) {
+    throw new HttpsError('invalid-argument', 'Item e descrição são obrigatórios.')
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitAmount) || unitAmount < 0) {
+    throw new HttpsError('invalid-argument', 'Quantidade ou valor inválidos.')
+  }
+
+  const uid = request.auth.uid
+  const itemRef = db.collection('budgetItems').doc(budgetItemId)
+  const itemSnap = await itemRef.get()
+  if (!itemSnap.exists) throw new HttpsError('not-found', 'Item não encontrado.')
+  const item = itemSnap.data() ?? {}
+  if (item.budgetStatus !== 'published' || item.decision !== 'changes_requested') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Só é possível revisar um item publicado com mudanças solicitadas pelo cliente.',
+    )
+  }
+
+  const orgId = String(item.orgId ?? '')
+  await assertOrgStaff(uid, orgId, request.auth.token as unknown as Record<string, unknown>)
+
+  const amount = lineAmount(quantity, unitAmount)
+  await itemRef.update({
+    description,
+    quantity,
+    unitAmount,
+    lineAmount: amount,
+    decision: 'pending',
+    decidedBy: FieldValue.delete(),
+    decidedAt: FieldValue.delete(),
+    changeRequestNote: FieldValue.delete(),
+    integrationStatus: 'none',
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+
+  return { ok: true, lineAmount: amount }
 })
