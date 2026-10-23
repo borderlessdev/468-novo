@@ -84,12 +84,18 @@ export function RegisterPage() {
     setLoading(true)
     setInviteAcceptError(null)
     void acceptInviteLink(inviteToken)
-      .then(async () => {
+      .then(async (joined) => {
         if (acceptRequestId.current !== requestId) return
         await refreshProfile()
         clearPendingInviteToken()
-        toast.success('Conta vinculada à empresa')
-        navigate('/')
+        toast.success(
+          joined.visitId ? 'Conta vinculada ao evento' : 'Conta vinculada à empresa',
+        )
+        navigate(
+          joined.visitId
+            ? `/planejamento?visita=${encodeURIComponent(joined.visitId)}`
+            : '/',
+        )
       })
       .catch((error) => {
         if (acceptRequestId.current !== requestId) return
@@ -152,13 +158,22 @@ export function RegisterPage() {
     }
     setLoading(true)
     try {
-      await registerUser(values.name, values.email, values.password, {
+      const result = await registerUser(values.name, values.email, values.password, {
         role: invite ? inviteRoleToUserRole(invite.role) : 'user',
         inviteToken: invite ? inviteToken ?? undefined : undefined,
       })
       clearPendingInviteToken()
-      toast.success(invite ? 'Empresa vinculada com sucesso' : 'Conta criada com sucesso')
-      navigate('/')
+      toast.success(
+        invite?.visitId
+          ? 'Conta criada e evento vinculado'
+          : invite
+            ? 'Empresa vinculada com sucesso'
+            : 'Conta criada com sucesso',
+      )
+      const visitId = result?.visitId ?? invite?.visitId
+      navigate(
+        visitId ? `/planejamento?visita=${encodeURIComponent(visitId)}` : '/',
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha no cadastro'
       if (inviteToken && /já tem conta|senha atual|Esqueceu a senha/i.test(message)) {
@@ -265,15 +280,17 @@ export function RegisterPage() {
       title="Criar conta"
       subtitle={
         invite
-          ? `Convite como ${
-              invite.role === 'org_admin'
-                ? 'admin da empresa'
-                : invite.role === 'team'
-                  ? 'equipe'
-                  : invite.role === 'user'
-                    ? 'usuário'
-                    : 'cliente'
-            }. Se este e-mail já tem senha, use-a abaixo — o sistema vincula a empresa automaticamente.`
+          ? invite.role === 'client' && invite.visitId
+            ? 'Convite de cliente para um evento. Crie a senha (ou use a existente) — você já entra vinculado a esse evento.'
+            : `Convite como ${
+                invite.role === 'org_admin'
+                  ? 'admin da empresa'
+                  : invite.role === 'team'
+                    ? 'equipe'
+                    : invite.role === 'user'
+                      ? 'usuário'
+                      : 'cliente'
+              }. Se este e-mail já tem senha, use-a abaixo — o sistema vincula a empresa automaticamente.`
           : 'Cadastre-se para começar a organizar visitas.'
       }
     >

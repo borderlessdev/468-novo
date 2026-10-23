@@ -56,28 +56,50 @@ export const sendInviteEmail = onCall<{ inviteId?: string; origin?: string }>(
       orgName = String(org.data()?.name ?? '')
     }
 
-    const role = ROLE_LABELS[String(invite.role)] ?? 'usuário'
+    const roleKey = String(invite.role ?? '')
+    const role = ROLE_LABELS[roleKey] ?? 'usuário'
     const department = invite.department ? String(invite.department) : ''
+    const visitId = invite.visitId ? String(invite.visitId) : ''
+    let visitTitle = ''
+    if (visitId) {
+      const visit = await db.collection('visits').doc(visitId).get()
+      visitTitle = String(visit.data()?.title ?? '').trim()
+    }
+
+    const isClientEvent = roleKey === 'client' && Boolean(visitTitle || visitId)
+    const subject = isClientEvent
+      ? `Convite para o evento${visitTitle ? `: ${visitTitle}` : ''} — Promover Experience`
+      : 'Convite — Promover Experience'
+    const intro = isClientEvent
+      ? `<p>Você foi convidado como <strong>cliente</strong>${
+          orgName ? ` da empresa <strong>${escapeEmailHtml(orgName)}</strong>` : ''
+        } para o evento <strong>${escapeEmailHtml(visitTitle || 'da visita')}</strong>.</p>`
+      : `<p>Você foi convidado como <strong>${escapeEmailHtml(role)}</strong>${
+          orgName ? ` da empresa <strong>${escapeEmailHtml(orgName)}</strong>` : ''
+        }.</p>`
+
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
         <h2>Convite — Promover Experience</h2>
-        <p>Você foi convidado como <strong>${escapeEmailHtml(role)}</strong>${
-          orgName ? ` da empresa <strong>${escapeEmailHtml(orgName)}</strong>` : ''
-        }.</p>
+        ${intro}
         ${department ? `<p>Setor: ${escapeEmailHtml(department)}</p>` : ''}
         <p><a href="${escapeEmailHtml(link)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;border-radius:6px;text-decoration:none">Aceitar convite</a></p>
         <p style="font-size:13px;color:#555">Se ainda não tem conta, crie uma senha. Este convite expira em 14 dias.<br>Link: ${escapeEmailHtml(link)}</p>
       </div>`
 
+    const text = isClientEvent
+      ? `Você foi convidado para o evento${visitTitle ? ` "${visitTitle}"` : ''} no Promover Experience. Aceite o convite: ${link}`
+      : `Você foi convidado para o Promover Experience. Aceite o convite: ${link}`
+
     try {
       const result = await sendResendEmail({
         to,
-        subject: 'Convite — Promover Experience',
+        subject,
         html,
-        text: `Você foi convidado para o Promover Experience. Aceite o convite: ${link}`,
+        text,
         kind: 'invite',
         createdBy: request.auth.uid,
-        visitId: invite.visitId ? String(invite.visitId) : undefined,
+        visitId: visitId || undefined,
         dedupeKey: `invite:${inviteId}`,
       })
       return { ok: true, id: result.id, to }

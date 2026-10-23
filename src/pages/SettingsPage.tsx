@@ -22,8 +22,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { canInviteClients, canManageOrgUsers, canManageWhitelabel } from '@/lib/access'
-import { ClientInviteCard } from '@/features/invites/ClientInviteCard'
+import { canManageOrgUsers, canManageWhitelabel } from '@/lib/access'
 import { useTheme, type Theme } from '@/contexts/ThemeContext'
 import {
   mergeNotificationPreferences,
@@ -107,7 +106,6 @@ export function SettingsPage() {
     isClient,
     isAdmin,
     isPlatformAdmin,
-    role,
     user,
   } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin, refreshOrg } = useOrg()
@@ -294,10 +292,6 @@ export function SettingsPage() {
         title="Configurações"
         description="Gerencie seu perfil, aparência, notificações e segurança."
       />
-
-      {user && activeOrgId && canInviteClients(isPlatformAdmin, isOrgAdmin, role) && role === 'team' ? (
-        <ClientInviteCard orgId={activeOrgId} org={activeOrg} createdBy={user.uid} />
-      ) : null}
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Card>

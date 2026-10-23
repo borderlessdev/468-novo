@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createInvite, subscribePendingClientInvitesByOrg, cancelInvite } from '@/services/invites'
+import {
+  createInvite,
+  subscribePendingClientInvitesByVisit,
+  cancelInvite,
+} from '@/services/invites'
 import {
   countOrganizationSeats,
   countPendingInvites,
@@ -17,9 +21,18 @@ interface ClientInviteCardProps {
   orgId: string
   org: Organization | null
   createdBy: string
+  /** Convite de cliente só é válido com visita/evento. */
+  visitId: string
+  visitTitle?: string
 }
 
-export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProps) {
+export function ClientInviteCard({
+  orgId,
+  org,
+  createdBy,
+  visitId,
+  visitTitle,
+}: ClientInviteCardProps) {
   const [email, setEmail] = useState('')
   const [department, setDepartment] = useState('')
   const [inviting, setInviting] = useState(false)
@@ -28,6 +41,7 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
   const [seatUsage, setSeatUsage] = useState({ members: 0, pending: 0 })
 
   useEffect(() => {
+    if (!orgId || !visitId) return
     let cancelled = false
     const loadSeats = async () => {
       try {
@@ -45,8 +59,9 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
     }
     void loadSeats()
 
-    const unsubscribe = subscribePendingClientInvitesByOrg(
+    const unsubscribe = subscribePendingClientInvitesByVisit(
       orgId,
+      visitId,
       (invites) => {
         setPending(invites)
         void loadSeats()
@@ -57,12 +72,12 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
       cancelled = true
       unsubscribe()
     }
-  }, [orgId])
+  }, [orgId, visitId])
 
   const atCapacity = org ? seatUsage.members + seatUsage.pending >= org.maxUsers : false
 
   const handleInvite = async () => {
-    if (!email.trim()) return
+    if (!email.trim() || !visitId) return
     setInviting(true)
     try {
       const created = await createInvite({
@@ -70,6 +85,7 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
         role: 'client',
         createdBy,
         orgId,
+        visitId,
         department: department.trim() || undefined,
       })
       setLastInvite({ id: created.id, link: created.link })
@@ -104,13 +120,16 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <UserPlus className="size-5" />
-          Convidar cliente
+          Convidar cliente deste evento
         </CardTitle>
         <CardDescription>
+          {visitTitle
+            ? `O cliente cria a conta pelo link e já entra em “${visitTitle}”.`
+            : 'O cliente cria a conta pelo link e já fica vinculado a este evento.'}{' '}
           {org
             ? `${seatUsage.members + seatUsage.pending}/${org.maxUsers} acessos em uso (${seatUsage.members} ativos, ${seatUsage.pending} pendentes).`
-            : 'Informe o e-mail e envie o convite.'}{' '}
-          O cliente entra nesta empresa e acessa somente Orçamento e Planejamento.
+            : null}{' '}
+          Acesso somente a Orçamento e Planejamento.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -142,7 +161,7 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
               placeholder="Comercial, Eventos..."
             />
           </div>
-          <Button type="submit" disabled={inviting || !email.trim() || atCapacity}>
+          <Button type="submit" disabled={inviting || !email.trim() || !visitId || atCapacity}>
             {inviting ? 'Enviando...' : 'Enviar convite'}
           </Button>
           {atCapacity ? (
@@ -177,7 +196,9 @@ export function ClientInviteCard({ orgId, org, createdBy }: ClientInviteCardProp
 
         {pending.length > 0 ? (
           <div className="space-y-2 border-t pt-4">
-            <p className="text-xs font-medium text-muted-foreground">Convites de cliente pendentes</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              Convites pendentes deste evento
+            </p>
             {pending.map((invite) => (
               <div
                 key={invite.id}

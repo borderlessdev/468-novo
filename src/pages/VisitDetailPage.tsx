@@ -62,6 +62,7 @@ import {
   isNavAllowed,
 } from '@/lib/access'
 import { VisitEditorsPanel } from '@/features/visits/VisitEditorsPanel'
+import { ClientInviteCard } from '@/features/invites/ClientInviteCard'
 import { BRAZILIAN_STATES } from '@/lib/constants'
 import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
@@ -1606,6 +1607,16 @@ export function VisitDetailPage() {
             canManage={canManageAccess}
             onUpdated={(next) => setVisit(next)}
           />
+
+          {canManageAccess && user && activeOrgId ? (
+            <ClientInviteCard
+              orgId={activeOrgId}
+              org={activeOrg}
+              createdBy={user.uid}
+              visitId={visit.id}
+              visitTitle={visit.title}
+            />
+          ) : null}
 
           <Card>
             <CardHeader>

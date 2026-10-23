@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
@@ -40,6 +40,7 @@ export function ProtectedRoute() {
   } = useAuth()
   const { activeOrgId, loading: orgLoading, refreshOrg, isOrgAdmin } = useOrg()
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const deniedPath = useRef<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -118,7 +119,7 @@ export function ProtectedRoute() {
           return
         }
 
-        await acceptInviteLink(inviteFromUrl)
+        const joined = await acceptInviteLink(inviteFromUrl)
         if (cancelled) return
         await refreshProfile()
         await refreshOrg()
@@ -126,11 +127,16 @@ export function ProtectedRoute() {
         toast.success(
           activeOrgId && activeOrgId !== invite.orgId
             ? 'Empresa vinculada — pasta atualizada'
-            : 'Empresa vinculada com sucesso',
+            : joined.visitId
+              ? 'Convite aceito — evento vinculado'
+              : 'Empresa vinculada com sucesso',
         )
         const next = new URLSearchParams(searchParams)
         next.delete('invite')
         setSearchParams(next, { replace: true })
+        if (joined.visitId) {
+          navigate(`/planejamento?visita=${encodeURIComponent(joined.visitId)}`, { replace: true })
+        }
       } catch (error) {
         if (cancelled) return
         const message =
@@ -168,6 +174,7 @@ export function ProtectedRoute() {
     refreshOrg,
     searchParams,
     setSearchParams,
+    navigate,
   ])
 
   const switchToInviteAccount = async () => {
@@ -293,12 +300,17 @@ export function ProtectedRoute() {
           resolveInviteToken(token)
           return
         }
-        await acceptInviteLink(token)
+        const joined = await acceptInviteLink(token)
         await refreshProfile()
         await refreshOrg()
         clearPendingInviteToken()
-        toast.success('Empresa vinculada com sucesso')
+        toast.success(
+          joined.visitId ? 'Convite aceito — evento vinculado' : 'Empresa vinculada com sucesso',
+        )
         setInviteInput('')
+        if (joined.visitId) {
+          navigate(`/planejamento?visita=${encodeURIComponent(joined.visitId)}`, { replace: true })
+        }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Não foi possível vincular')
       } finally {

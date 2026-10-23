@@ -234,7 +234,10 @@ export function VisitEditorsPanel({ visit, canManage, onUpdated }: VisitEditorsP
 
         {clientMembers.length > 0 ? (
           <div className="space-y-2 border-t pt-4">
-            <Label>Clientes com acesso a esta visita</Label>
+            <Label>Clientes já cadastrados com acesso a esta visita</Label>
+            <p className="text-xs text-muted-foreground">
+              Para convidar um novo e-mail, use o card “Convidar cliente deste evento” abaixo.
+            </p>
             <div className="space-y-2">
               {clientMembers.map((member) => (
                 <label key={member.id} className="flex items-center gap-2 text-sm">

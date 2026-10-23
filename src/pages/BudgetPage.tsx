@@ -50,9 +50,9 @@ const DECISION_LABEL: Record<BudgetDecision, string> = {
   changes_requested: 'Mudanças solicitadas',
 }
 
-function decisionVariant(decision: BudgetDecision): 'secondary' | 'default' | 'destructive' | 'outline' {
-  if (decision === 'approved') return 'default'
-  if (decision === 'rejected') return 'destructive'
+function decisionVariant(decision: BudgetDecision): 'secondary' | 'default' | 'warning' | 'outline' | 'success' {
+  if (decision === 'approved') return 'success'
+  if (decision === 'rejected') return 'warning'
   if (decision === 'changes_requested') return 'outline'
   return 'secondary'
 }

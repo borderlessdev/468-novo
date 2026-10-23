@@ -36,7 +36,7 @@ const callGetInviteByToken = httpsCallable<{ token: string }, PublicInvite>(
 )
 const callAcceptInvite = httpsCallable<
   { token: string; name?: string },
-  { orgId: string; inviteId: string }
+  { orgId: string; inviteId: string; visitId?: string }
 >(functions, 'acceptInvite')
 
 function mapInvite(id: string, data: Record<string, unknown>): Invite {
@@ -67,6 +67,10 @@ export async function createInvite(input: {
   createdByName?: string
 }): Promise<Invite & { link: string; emailSent: boolean; emailError?: string }> {
   const email = input.email.trim().toLowerCase()
+  const visitId = input.visitId?.trim() || undefined
+  if (input.role === 'client' && !visitId) {
+    throw new Error('Convite de cliente precisa de um evento/visita')
+  }
 
   // Substitui convites pendentes do mesmo e-mail nesta empresa (evita link antigo
   // "já utilizado" / vários tokens vivos para a mesma pessoa).
@@ -122,7 +126,7 @@ export async function createInvite(input: {
     createdBy: input.createdBy,
     orgId: input.orgId,
     department: input.department?.trim() || null,
-    visitId: input.visitId ?? null,
+    visitId: visitId ?? null,
     expiresAt,
     createdAt: serverTimestamp(),
   })
@@ -136,7 +140,7 @@ export async function createInvite(input: {
     createdBy: input.createdBy,
     orgId: input.orgId,
     department: input.department,
-    visitId: input.visitId,
+    visitId,
     expiresAt,
   }
 
@@ -179,7 +183,7 @@ export async function getInviteByToken(token: string): Promise<PublicInvite | nu
 export async function joinOrganizationFromInvite(input: {
   token: string
   name?: string
-}): Promise<{ orgId: string; inviteId: string }> {
+}): Promise<{ orgId: string; inviteId: string; visitId?: string }> {
   try {
     const { data } = await callAcceptInvite({
       token: input.token.trim(),
@@ -227,6 +231,31 @@ export function subscribePendingClientInvitesByOrg(
     query(
       col,
       where('orgId', '==', orgId),
+      where('status', '==', 'pending'),
+      where('role', '==', 'client'),
+    ),
+    (snap) => {
+      onChange(
+        snap.docs
+          .map((item) => mapInvite(item.id, item.data()))
+          .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt)),
+      )
+    },
+    onError,
+  )
+}
+
+export function subscribePendingClientInvitesByVisit(
+  orgId: string,
+  visitId: string,
+  onChange: (invites: Invite[]) => void,
+  onError: (error: Error) => void,
+): () => void {
+  return onSnapshot(
+    query(
+      col,
+      where('orgId', '==', orgId),
+      where('visitId', '==', visitId),
       where('status', '==', 'pending'),
       where('role', '==', 'client'),
     ),

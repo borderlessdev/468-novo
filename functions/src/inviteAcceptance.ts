@@ -1,5 +1,5 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { FieldValue, getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore, type DocumentReference } from 'firebase-admin/firestore'
 
 const db = getFirestore()
 
@@ -40,8 +40,15 @@ export const getInviteByToken = onCall({ invoker: 'public' }, async (request) =>
   const role = String(invite.role ?? '')
   const email = String(invite.email ?? '').trim().toLowerCase()
   const orgId = String(invite.orgId ?? '')
+  const visitId = invite.visitId ? String(invite.visitId).trim() : undefined
   if (!INVITE_ROLES.has(role) || !email || !orgId) {
     throw new HttpsError('failed-precondition', 'Convite inválido.')
+  }
+  if (role === 'client' && !visitId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Convite de cliente sem evento. Peça um novo convite pela visita.',
+    )
   }
 
   return {
@@ -51,7 +58,7 @@ export const getInviteByToken = onCall({ invoker: 'public' }, async (request) =>
     status: 'pending',
     orgId,
     department: invite.department ? String(invite.department) : undefined,
-    visitId: invite.visitId ? String(invite.visitId) : undefined,
+    visitId,
     expiresAt: String(invite.expiresAt),
   }
 })
@@ -87,10 +94,32 @@ export const acceptInvite = onCall({ cors: true, invoker: 'public' }, async (req
       throw new HttpsError('permission-denied', 'Este convite pertence a outro e-mail.')
     }
 
+    const visitId = invite.visitId ? String(invite.visitId).trim() : ''
+    if (role === 'client') {
+      if (!visitId) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Convite de cliente sem evento. Peça um novo convite pela visita.',
+        )
+      }
+    }
+
     const orgRef = db.collection('organizations').doc(orgId)
     const org = await transaction.get(orgRef)
     if (!org.exists || org.get('status') !== 'active') {
       throw new HttpsError('failed-precondition', 'Esta empresa não está disponível para novos membros.')
+    }
+
+    let visitRef: DocumentReference | null = null
+    if (role === 'client' && visitId) {
+      visitRef = db.collection('visits').doc(visitId)
+      const visitSnap = await transaction.get(visitRef)
+      if (!visitSnap.exists || visitSnap.get('isDeleted') === true) {
+        throw new HttpsError('failed-precondition', 'O evento deste convite não está disponível.')
+      }
+      if (String(visitSnap.get('orgId') ?? '') !== orgId) {
+        throw new HttpsError('failed-precondition', 'O evento não pertence à empresa do convite.')
+      }
     }
 
     const membersSnap = await transaction.get(
@@ -132,12 +161,22 @@ export const acceptInvite = onCall({ cors: true, invoker: 'public' }, async (req
       invitedBy: invite.createdBy ? String(invite.createdBy) : null,
       joinedAt: now,
     }, { merge: true })
+    if (visitRef) {
+      transaction.update(visitRef, {
+        clientUserIds: FieldValue.arrayUnion(uid),
+        updatedAt: now,
+      })
+    }
     transaction.update(inviteRef, {
       status: 'accepted',
       acceptedBy: uid,
       acceptedAt: now,
     })
 
-    return { orgId, inviteId: inviteRef.id }
+    return {
+      orgId,
+      inviteId: inviteRef.id,
+      ...(visitId ? { visitId } : {}),
+    }
   })
 })

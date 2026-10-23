@@ -48,9 +48,9 @@ interface AuthContextValue {
       orgRole?: import('@/types').OrgRole
       department?: string
     },
-  ) => Promise<void>
+  ) => Promise<{ visitId?: string } | void>
   /** Vincula a conta logada a uma empresa a partir do token do convite. */
-  acceptInviteLink: (token: string) => Promise<void>
+  acceptInviteLink: (token: string) => Promise<{ orgId: string; visitId?: string }>
   logout: () => Promise<void>
   resetPassword: (
     email: string,
@@ -172,11 +172,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!firebaseUser) {
         throw new Error('Faça login para aceitar o convite')
       }
-      await joinOrganizationFromInvite({
+      const joined = await joinOrganizationFromInvite({
         token: input.inviteToken,
         name: input.name?.trim() || firebaseUser.displayName || email,
       })
       await loadProfile(firebaseUser)
+      return joined
     },
     [loadProfile],
   )
@@ -204,12 +205,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let role = options?.role ?? 'user'
 
         if (options?.inviteToken) {
-          await joinOrganizationFromInvite({
+          const joined = await joinOrganizationFromInvite({
             token: options.inviteToken,
             name,
           })
+          try {
+            localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, joined.orgId)
+          } catch {
+            // ignore
+          }
           await loadProfile(credential.user)
-          return
+          return { visitId: joined.visitId }
         }
 
         await createUserProfile({
@@ -236,13 +242,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         const code = (error as { code?: string }).code ?? ''
         if (code === 'auth/email-already-in-use' && options?.inviteToken) {
-          await joinExistingAccountWithInvite({
+          const joined = await joinExistingAccountWithInvite({
             email: email.trim().toLowerCase(),
             password,
             inviteToken: options.inviteToken,
             name,
           })
-          return
+          return { visitId: joined?.visitId }
         }
         throw new Error(getAuthErrorMessage(code) || (error instanceof Error ? error.message : 'Falha no cadastro'))
       }
@@ -266,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ignore
       }
       await loadProfile(firebaseUser)
+      return { orgId: joined.orgId, visitId: joined.visitId }
     },
     [loadProfile],
   )

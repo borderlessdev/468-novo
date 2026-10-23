@@ -22,7 +22,6 @@ import { useOrg } from '@/contexts/OrgContext'
 import { canManageOrgUsers, mergeModulePermissions } from '@/lib/access'
 import { resolveDisplayedAccountType } from '@/lib/accountType'
 import { ChangeAccountTypeControl } from '@/features/users/ChangeAccountTypeControl'
-import { ClientInviteCard } from '@/features/invites/ClientInviteCard'
 import { orgRoleLabel } from '@/lib/org'
 import {
   createInvite,
@@ -281,9 +280,11 @@ export function UsersPage() {
                   <SelectContent>
                     <SelectItem value="team">Funcionário</SelectItem>
                     <SelectItem value="user">Usuário operacional</SelectItem>
-                    <SelectItem value="client">Cliente</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Clientes entram pelo convite na tela do evento/visita.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="users-invite-department">Setor (opcional)</Label>
@@ -329,10 +330,6 @@ export function UsersPage() {
           </form>
         </CardContent>
       </Card>
-
-      {user && activeOrgId ? (
-        <ClientInviteCard orgId={activeOrgId} org={activeOrg} createdBy={user.uid} />
-      ) : null}
 
       <Card>
         <CardHeader>

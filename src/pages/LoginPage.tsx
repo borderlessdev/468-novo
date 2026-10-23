@@ -110,9 +110,19 @@ export function LoginPage() {
       await login(email, values.password)
       if (inviteToken) {
         try {
-          await acceptInviteLink(inviteToken)
+          const joined = await acceptInviteLink(inviteToken)
           clearPendingInviteToken()
-          toast.success('Login realizado e empresa vinculada')
+          toast.success(
+            joined.visitId
+              ? 'Login realizado e evento vinculado'
+              : 'Login realizado e empresa vinculada',
+          )
+          navigate(
+            joined.visitId
+              ? `/planejamento?visita=${encodeURIComponent(joined.visitId)}`
+              : '/',
+          )
+          return
         } catch (inviteError) {
           toast.error(
             inviteError instanceof Error

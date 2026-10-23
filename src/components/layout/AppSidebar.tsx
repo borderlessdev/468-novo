@@ -218,76 +218,77 @@ export function AppSidebar({
             .map((item) => {
               const Icon = icons[item.icon]
               return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  onClick={() => {
-                    if (collapsed) onExpand()
-                    onClose()
-                  }}
-                  className={({ isActive }) =>
-                    cn(
-                      'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                      collapsed && 'justify-center px-2',
-                      isActive
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
-                    )
-                  }
-                  title={item.label}
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive ? (
-                        <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
-                      ) : null}
-                      <Icon
-                        className={cn(
-                          'h-4 w-4 shrink-0 transition-colors',
-                          isActive ? 'text-brand' : 'group-hover:text-white/90',
-                        )}
-                      />
-                      {!collapsed ? <span className="truncate">{item.label}</span> : null}
-                    </>
-                  )}
-                </NavLink>
+                <div key={item.to} className="contents">
+                  <NavLink
+                    to={item.to}
+                    end={item.to === '/'}
+                    onClick={() => {
+                      if (collapsed) onExpand()
+                      onClose()
+                    }}
+                    className={({ isActive }) =>
+                      cn(
+                        'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                        collapsed && 'justify-center px-2',
+                        isActive
+                          ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                      )
+                    }
+                    title={item.label}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {isActive ? (
+                          <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                        ) : null}
+                        <Icon
+                          className={cn(
+                            'h-4 w-4 shrink-0 transition-colors',
+                            isActive ? 'text-brand' : 'group-hover:text-white/90',
+                          )}
+                        />
+                        {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                      </>
+                    )}
+                  </NavLink>
+                  {item.to === '/' && showUsersNav && !isClientNav ? (
+                    <NavLink
+                      to="/usuarios"
+                      onClick={() => {
+                        if (collapsed) onExpand()
+                        onClose()
+                      }}
+                      className={({ isActive }) =>
+                        cn(
+                          'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                          collapsed && 'justify-center px-2',
+                          isActive
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                        )
+                      }
+                      title="Usuários"
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive ? (
+                            <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                          ) : null}
+                          <Users
+                            className={cn(
+                              'h-4 w-4 shrink-0 transition-colors',
+                              isActive ? 'text-brand' : 'group-hover:text-white/90',
+                            )}
+                          />
+                          {!collapsed ? <span className="truncate">Usuários</span> : null}
+                        </>
+                      )}
+                    </NavLink>
+                  ) : null}
+                </div>
               )
             })}
-          {showUsersNav && !isClientNav ? (
-            <NavLink
-              to="/usuarios"
-              onClick={() => {
-                if (collapsed) onExpand()
-                onClose()
-              }}
-              className={({ isActive }) =>
-                cn(
-                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                  collapsed && 'justify-center px-2',
-                  isActive
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
-                )
-              }
-              title="Usuários"
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive ? (
-                    <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
-                  ) : null}
-                  <Users
-                    className={cn(
-                      'h-4 w-4 shrink-0 transition-colors',
-                      isActive ? 'text-brand' : 'group-hover:text-white/90',
-                    )}
-                  />
-                  {!collapsed ? <span className="truncate">Usuários</span> : null}
-                </>
-              )}
-            </NavLink>
-          ) : null}
         </nav>
 
         <div className="shrink-0">

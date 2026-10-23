@@ -589,6 +589,17 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.orgId is string
         && (
+          request.resource.data.role != 'client'
+          || (
+            request.resource.data.visitId is string
+            && request.resource.data.visitId.size() > 0
+            && exists(/databases/$(database)/documents/visits/$(request.resource.data.visitId))
+            && get(/databases/$(database)/documents/visits/$(request.resource.data.visitId)).data.orgId
+              == request.resource.data.orgId
+            && get(/databases/$(database)/documents/visits/$(request.resource.data.visitId)).data.isDeleted != true
+          )
+        )
+        && (
           isPlatformAdmin()
           || isOrgAdminOf(request.resource.data.orgId)
           || (
