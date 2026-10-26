@@ -111,6 +111,8 @@ export interface UserProfile {
   role: UserRole
   /** Empresa à qual o usuário pertence (usuários comuns). */
   orgId?: string
+  /** Celular E.164 para matching de aceite via WhatsApp. */
+  phoneE164?: string
   notificationPreferences?: Partial<NotificationPreferences>
   /** Preferências do canal e-mail; independentes da central de notificações. */
   emailNotificationPreferences?: Partial<NotificationPreferences>
@@ -566,7 +568,15 @@ export interface ActivityLog {
 }
 
 export type InviteRole = 'team' | 'client' | 'user' | 'org_admin'
-export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'cancelled'
+export type InviteStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled'
+export type InviteWhatsAppSendStatus =
+  | 'pending'
+  | 'sent'
+  | 'error'
+  | 'skipped_no_provider'
+  | 'skipped_no_phone'
+export type InviteAcceptedVia = 'web' | 'whatsapp'
+export type InviteDeclinedVia = 'whatsapp' | 'web'
 
 export interface Invite {
   id: string
@@ -578,10 +588,21 @@ export interface Invite {
   orgId: string
   department?: string
   visitId?: string
+  /** Celular informado no convite (exibição). */
+  phone?: string
+  /** Celular normalizado E.164 (+55...). */
+  phoneE164?: string
+  whatsappSendStatus?: InviteWhatsAppSendStatus
+  whatsappMessageId?: string
+  whatsappSentAt?: string
+  whatsappError?: string
   expiresAt: string
   createdAt?: unknown
   acceptedAt?: unknown
   acceptedBy?: string
+  acceptedVia?: InviteAcceptedVia
+  declinedAt?: unknown
+  declinedVia?: InviteDeclinedVia
 }
 
 export type EmailLogKind =

@@ -590,6 +590,11 @@ export {
 } from './communityRegistrations'
 export { sendInviteEmail } from './inviteEmail'
 export { acceptInvite, getInviteByToken } from './inviteAcceptance'
+export {
+  getMetaWhatsAppStatus,
+  sendInviteWhatsApp,
+} from './inviteWhatsApp'
+export { whatsappWebhook } from './whatsappWebhook'
 export { changeUserAccountType } from './changeAccountType'
 export { publishBudget, decideBudgetItem, reviseBudgetItem } from './budget'
 export { dispatchNotificationEmail, sendVisitSummaryEmail } from './notificationEmail'

@@ -12,12 +12,21 @@ import {
 } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { inviteRoleToOrgRole } from '@/lib/org'
+import { normalizePhoneE164 } from '@/lib/utils'
 import {
   canAddOrganizationMember,
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import { httpsCallable } from 'firebase/functions'
-import type { Invite, InviteRole, InviteStatus, OrgRole } from '@/types'
+import type {
+  Invite,
+  InviteAcceptedVia,
+  InviteDeclinedVia,
+  InviteRole,
+  InviteStatus,
+  InviteWhatsAppSendStatus,
+  OrgRole,
+} from '@/types'
 
 /** Campos que podem ser devolvidos ao portador de um token de convite. */
 export type PublicInvite = Pick<
@@ -30,6 +39,10 @@ const callSendInviteEmail = httpsCallable<{ inviteId: string; origin: string }, 
   functions,
   'sendInviteEmail',
 )
+const callSendInviteWhatsApp = httpsCallable<
+  { inviteId: string },
+  { status: InviteWhatsAppSendStatus; messageId?: string; detail?: string }
+>(functions, 'sendInviteWhatsApp')
 const callGetInviteByToken = httpsCallable<{ token: string }, PublicInvite>(
   functions,
   'getInviteByToken',
@@ -50,10 +63,19 @@ function mapInvite(id: string, data: Record<string, unknown>): Invite {
     orgId: String(data.orgId ?? ''),
     department: data.department ? String(data.department) : undefined,
     visitId: data.visitId ? String(data.visitId) : undefined,
+    phone: data.phone ? String(data.phone) : undefined,
+    phoneE164: data.phoneE164 ? String(data.phoneE164) : undefined,
+    whatsappSendStatus: data.whatsappSendStatus as InviteWhatsAppSendStatus | undefined,
+    whatsappMessageId: data.whatsappMessageId ? String(data.whatsappMessageId) : undefined,
+    whatsappSentAt: data.whatsappSentAt ? String(data.whatsappSentAt) : undefined,
+    whatsappError: data.whatsappError ? String(data.whatsappError) : undefined,
     expiresAt: String(data.expiresAt ?? ''),
     createdAt: data.createdAt,
     acceptedAt: data.acceptedAt,
     acceptedBy: data.acceptedBy ? String(data.acceptedBy) : undefined,
+    acceptedVia: data.acceptedVia as InviteAcceptedVia | undefined,
+    declinedAt: data.declinedAt,
+    declinedVia: data.declinedVia as InviteDeclinedVia | undefined,
   }
 }
 
@@ -64,12 +86,28 @@ export async function createInvite(input: {
   orgId: string
   department?: string
   visitId?: string
+  /** Celular/WhatsApp — obrigatório para convite de cliente (envio Meta). */
+  phone?: string
   createdByName?: string
-}): Promise<Invite & { link: string; emailSent: boolean; emailError?: string }> {
+}): Promise<
+  Invite & {
+    link: string
+    emailSent: boolean
+    emailError?: string
+    whatsappSent: boolean
+    whatsappStatus?: InviteWhatsAppSendStatus
+    whatsappError?: string
+  }
+> {
   const email = input.email.trim().toLowerCase()
   const visitId = input.visitId?.trim() || undefined
+  const phoneRaw = input.phone?.trim() || ''
+  const phoneE164 = phoneRaw ? normalizePhoneE164(phoneRaw) : null
   if (input.role === 'client' && !visitId) {
     throw new Error('Convite de cliente precisa de um evento/visita')
+  }
+  if (input.role === 'client' && !phoneE164) {
+    throw new Error('Informe um WhatsApp/celular válido para o convite de cliente')
   }
 
   // Substitui convites pendentes do mesmo e-mail nesta empresa (evita link antigo
@@ -127,6 +165,9 @@ export async function createInvite(input: {
     orgId: input.orgId,
     department: input.department?.trim() || null,
     visitId: visitId ?? null,
+    phone: phoneRaw || null,
+    phoneE164: phoneE164 ?? null,
+    whatsappSendStatus: phoneE164 ? 'pending' : null,
     expiresAt,
     createdAt: serverTimestamp(),
   })
@@ -141,6 +182,9 @@ export async function createInvite(input: {
     orgId: input.orgId,
     department: input.department,
     visitId,
+    phone: phoneRaw || undefined,
+    phoneE164: phoneE164 ?? undefined,
+    whatsappSendStatus: phoneE164 ? 'pending' : undefined,
     expiresAt,
   }
 
@@ -155,7 +199,34 @@ export async function createInvite(input: {
     console.error('Falha ao enviar e-mail de convite', error)
     emailError = error instanceof Error ? error.message : 'Falha ao enviar e-mail'
   }
-  return { ...invite, link, emailSent, emailError }
+
+  let whatsappSent = false
+  let whatsappStatus: InviteWhatsAppSendStatus | undefined
+  let whatsappError: string | undefined
+  if (phoneE164 && input.role === 'client') {
+    try {
+      const { data } = await callSendInviteWhatsApp({ inviteId: invite.id })
+      whatsappStatus = data.status
+      whatsappSent = data.status === 'sent'
+      if (!whatsappSent) {
+        whatsappError = data.detail || data.status
+      }
+    } catch (error) {
+      console.error('Falha ao enviar WhatsApp de convite', error)
+      whatsappStatus = 'error'
+      whatsappError = error instanceof Error ? error.message : 'Falha ao enviar WhatsApp'
+    }
+  }
+
+  return {
+    ...invite,
+    link,
+    emailSent,
+    emailError,
+    whatsappSent,
+    whatsappStatus,
+    whatsappError,
+  }
 }
 
 export async function getInviteById(inviteId: string): Promise<Invite | null> {

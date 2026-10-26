@@ -26,6 +26,24 @@ interface ClientInviteCardProps {
   visitTitle?: string
 }
 
+function whatsappStatusLabel(invite: Invite): string {
+  if (invite.status === 'declined') return 'Recusado'
+  switch (invite.whatsappSendStatus) {
+    case 'sent':
+      return 'WhatsApp enviado'
+    case 'pending':
+      return 'WhatsApp pendente'
+    case 'skipped_no_provider':
+      return 'WhatsApp não configurado'
+    case 'skipped_no_phone':
+      return 'Sem telefone'
+    case 'error':
+      return 'Falha no WhatsApp'
+    default:
+      return 'Aguardando aceite'
+  }
+}
+
 export function ClientInviteCard({
   orgId,
   org,
@@ -34,6 +52,7 @@ export function ClientInviteCard({
   visitTitle,
 }: ClientInviteCardProps) {
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [department, setDepartment] = useState('')
   const [inviting, setInviting] = useState(false)
   const [lastInvite, setLastInvite] = useState<{ id: string; link: string } | null>(null)
@@ -77,11 +96,12 @@ export function ClientInviteCard({
   const atCapacity = org ? seatUsage.members + seatUsage.pending >= org.maxUsers : false
 
   const handleInvite = async () => {
-    if (!email.trim() || !visitId) return
+    if (!email.trim() || !phone.trim() || !visitId) return
     setInviting(true)
     try {
       const created = await createInvite({
         email,
+        phone,
         role: 'client',
         createdBy,
         orgId,
@@ -89,12 +109,28 @@ export function ClientInviteCard({
         department: department.trim() || undefined,
       })
       setLastInvite({ id: created.id, link: created.link })
-      toast.success(
-        created.emailSent
-          ? `Convite enviado para ${created.email}`
-          : 'Convite criado, mas o e-mail não foi enviado — copie o link abaixo',
-      )
+
+      const channels: string[] = []
+      if (created.emailSent) channels.push('e-mail')
+      if (created.whatsappSent) channels.push('WhatsApp')
+      if (channels.length > 0) {
+        toast.success(`Convite enviado por ${channels.join(' e ')} para ${created.email}`)
+      } else {
+        toast.message('Convite criado', {
+          description: [
+            created.emailError ? `E-mail: ${created.emailError}` : null,
+            created.whatsappError
+              ? `WhatsApp: ${created.whatsappError}`
+              : created.whatsappStatus === 'skipped_no_provider'
+                ? 'WhatsApp Meta ainda não configurado — use o link abaixo'
+                : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Copie o link abaixo',
+        })
+      }
       setEmail('')
+      setPhone('')
       setDepartment('')
     } catch (error) {
       console.error(error)
@@ -124,8 +160,8 @@ export function ClientInviteCard({
         </CardTitle>
         <CardDescription>
           {visitTitle
-            ? `O cliente cria a conta pelo link e já entra em “${visitTitle}”.`
-            : 'O cliente cria a conta pelo link e já fica vinculado a este evento.'}{' '}
+            ? `Enviamos e-mail e WhatsApp. O cliente aceita pelo chat ou cria a conta pelo link e entra em “${visitTitle}”.`
+            : 'Enviamos e-mail e WhatsApp. O cliente aceita pelo chat ou cria a conta pelo link e fica vinculado a este evento.'}{' '}
           {org
             ? `${seatUsage.members + seatUsage.pending}/${org.maxUsers} acessos em uso (${seatUsage.members} ativos, ${seatUsage.pending} pendentes).`
             : null}{' '}
@@ -153,6 +189,18 @@ export function ClientInviteCard({
             />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="client-invite-phone">WhatsApp *</Label>
+            <Input
+              id="client-invite-phone"
+              type="tel"
+              required
+              autoComplete="tel"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="(11) 98765-4321"
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="client-invite-department">Setor (opcional)</Label>
             <Input
               id="client-invite-department"
@@ -161,7 +209,10 @@ export function ClientInviteCard({
               placeholder="Comercial, Eventos..."
             />
           </div>
-          <Button type="submit" disabled={inviting || !email.trim() || !visitId || atCapacity}>
+          <Button
+            type="submit"
+            disabled={inviting || !email.trim() || !phone.trim() || !visitId || atCapacity}
+          >
             {inviting ? 'Enviando...' : 'Enviar convite'}
           </Button>
           {atCapacity ? (
@@ -206,7 +257,10 @@ export function ClientInviteCard({
               >
                 <div>
                   <p className="text-sm font-medium">{invite.email}</p>
-                  <p className="text-xs text-muted-foreground">Cliente · aguardando aceite</p>
+                  <p className="text-xs text-muted-foreground">
+                    Cliente · {whatsappStatusLabel(invite)}
+                    {invite.phone ? ` · ${invite.phone}` : ''}
+                  </p>
                 </div>
                 <Button
                   type="button"

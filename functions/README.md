@@ -105,6 +105,48 @@ Para usar OpenAI em vez de Claude, veja os comentários em `functions/.env.examp
 O evento é criado no calendário de **quem está logado**. Ao sincronizar uma atividade de
 outra pessoa da equipe, o evento aparece na agenda Google de quem disparou o sync.
 
+## WhatsApp Cloud API (Meta) — convite de cliente do evento
+
+Envio dual (e-mail Resend + WhatsApp Meta) ao criar convite `role: client` com telefone.
+Respostas Aceitar/Recusar entram pelo webhook e atualizam o convite / `visits.clientUserIds`.
+
+### Checklist dos 6 pontos (`functions/.env`)
+
+| # | Variável | Onde pegar |
+|---|----------|------------|
+| 1 | `META_WA_PHONE_NUMBER_ID` | Meta Developers → WhatsApp → API Setup |
+| 2 | `META_WA_BUSINESS_ACCOUNT_ID` | WhatsApp Business Account (WABA) |
+| 3 | `META_WA_ACCESS_TOKEN` | Token permanente (System User) |
+| 4 | `META_WA_APP_ID` | App → Settings → Basic |
+| 5 | `META_WA_APP_SECRET` | App → Settings → Basic |
+| 6 | `META_WA_VERIFY_TOKEN` | String secreta que **você escolhe** e cola no webhook |
+
+Opcionais: `META_WA_API_VERSION`, `META_WA_INVITE_TEMPLATE_NAME` (default `convite_evento_cliente`), `META_WA_INVITE_TEMPLATE_LANG` (default `pt_BR`).
+
+Sem phone id/token, `sendInviteWhatsApp` grava `whatsappSendStatus: skipped_no_provider` e o e-mail segue normalmente.
+
+### Template na Meta
+
+1. Business Manager → Message templates → criar `convite_evento_cliente` (`pt_BR`).
+2. Corpo com variável `{{1}}` (título do evento).
+3. Quick replies: **Aceitar** (payload `ACCEPT_INVITE`) e **Recusar** (payload `DECLINE_INVITE`).
+4. Aguardar aprovação.
+
+### Webhook
+
+1. Deploy: `npm --prefix functions run deploy` (ou só `functions:whatsappWebhook,functions:sendInviteWhatsApp,functions:getMetaWhatsAppStatus`).
+2. Callback URL: `https://us-central1-<PROJECT_ID>.cloudfunctions.net/whatsappWebhook`
+3. Verify token = valor de `META_WA_VERIFY_TOKEN`
+4. Inscrever o campo `messages`
+
+### Funções
+
+- `getMetaWhatsAppStatus` (callable, platform admin) — status sem expor secrets
+- `sendInviteWhatsApp` (callable) — envia template do convite
+- `whatsappWebhook` (HTTPS) — GET verify + POST Aceitar/Recusar
+
+Fluxo Aceitar: se já existir Auth com o e-mail do convite → aceita e vincula à visita; senão → responde no chat com link `/cadastro?invite=…`.
+
 ## Reautenticação
 
 Se o Google devolver `invalid_grant`, a função apaga a conexão e responde
