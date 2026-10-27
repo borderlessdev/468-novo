@@ -451,7 +451,13 @@ export function FinancePage() {
         isOrgAdmin,
       ),
   )
-  const canApprove = canApproveFinance(role, isAdmin, selectedVisit, user?.uid ?? '')
+  const canApprove = canApproveFinance(
+    role,
+    isAdmin,
+    selectedVisit,
+    user?.uid ?? '',
+    isOrgAdmin,
+  )
 
   const form = useForm<FinanceItemInput>({
     resolver: zodResolver(financeItemSchema),

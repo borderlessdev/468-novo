@@ -7,8 +7,11 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import { callerIsPlatformAdmin } from './platformAdmin'
+import { escapeEmailHtml, sendResendEmail } from './resendEmail'
 
 const db = getFirestore()
+
+type BudgetDecision = 'approved' | 'rejected' | 'changes_requested'
 
 function financeDocId(budgetItemId: string): string {
   return `budget_${budgetItemId}`
@@ -16,6 +19,142 @@ function financeDocId(budgetItemId: string): string {
 
 function lineAmount(quantity: number, unitAmount: number): number {
   return Math.round(quantity * unitAmount * 100) / 100
+}
+
+function decisionLabel(decision: BudgetDecision): string {
+  if (decision === 'approved') return 'aprovado'
+  if (decision === 'rejected') return 'rejeitado'
+  return 'com mudanças solicitadas'
+}
+
+function formatMoney(value: number): string {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/**
+ * Comprovante para o cliente + aviso para quem criou o orçamento.
+ * Falha de e-mail não reverte a decisão (caller deve .catch).
+ */
+async function sendBudgetDecisionEmails(input: {
+  budgetItemId: string
+  decision: BudgetDecision
+  note?: string
+  clientUid: string
+  budgetCreatedBy: string
+  visitId: string
+  visitTitle: string
+  description: string
+  quantity: number
+  unitAmount: number
+  lineAmount: number
+}): Promise<void> {
+  const [clientSnap, creatorSnap] = await Promise.all([
+    db.collection('users').doc(input.clientUid).get(),
+    input.budgetCreatedBy && input.budgetCreatedBy !== input.clientUid
+      ? db.collection('users').doc(input.budgetCreatedBy).get()
+      : Promise.resolve(null),
+  ])
+
+  const clientEmail = String(clientSnap.get('email') ?? '').trim()
+  const clientName = String(clientSnap.get('name') ?? '').trim() || 'Cliente'
+  const status = decisionLabel(input.decision)
+  const amount = formatMoney(input.lineAmount)
+  const origin = (process.env.APP_ORIGIN?.trim() || 'https://app.promoverexperience.com.br').replace(
+    /\/+$/,
+    '',
+  )
+  const orcamentoUrl = `${origin}/orcamento`
+  const noteLine =
+    input.decision === 'changes_requested' && input.note
+      ? `\nPedido de mudança: ${input.note}`
+      : ''
+
+  const detailText = [
+    `Visita: ${input.visitTitle}`,
+    `Item: ${input.description}`,
+    `Quantidade: ${input.quantity}`,
+    `Valor unitário: ${formatMoney(input.unitAmount)}`,
+    `Total: ${amount}`,
+    `Decisão: ${status}`,
+  ].join('\n')
+
+  if (clientEmail) {
+    const subject =
+      input.decision === 'approved'
+        ? `Confirmação do orçamento — ${input.visitTitle}`
+        : `Atualização do orçamento — ${input.visitTitle}`
+    const greeting = `Olá ${clientName},`
+    const body =
+      input.decision === 'approved'
+        ? `${greeting}\n\nRegistramos a confirmação do item abaixo no orçamento.\n\n${detailText}\n\nAcompanhe em: ${orcamentoUrl}`
+        : `${greeting}\n\nSua decisão sobre o item abaixo foi registrada (${status}).\n\n${detailText}${noteLine}\n\nAcompanhe em: ${orcamentoUrl}`
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">
+      <h2>${escapeEmailHtml(subject)}</h2>
+      <p>${escapeEmailHtml(greeting)}</p>
+      <p>${
+        input.decision === 'approved'
+          ? 'Registramos a confirmação do item abaixo no orçamento.'
+          : `Sua decisão sobre o item abaixo foi registrada (${escapeEmailHtml(status)}).`
+      }</p>
+      <ul>
+        <li><strong>Visita:</strong> ${escapeEmailHtml(input.visitTitle)}</li>
+        <li><strong>Item:</strong> ${escapeEmailHtml(input.description)}</li>
+        <li><strong>Quantidade:</strong> ${input.quantity}</li>
+        <li><strong>Valor unitário:</strong> ${escapeEmailHtml(formatMoney(input.unitAmount))}</li>
+        <li><strong>Total:</strong> ${escapeEmailHtml(amount)}</li>
+        <li><strong>Decisão:</strong> ${escapeEmailHtml(status)}</li>
+      </ul>
+      ${
+        input.decision === 'changes_requested' && input.note
+          ? `<p><strong>Pedido de mudança:</strong> ${escapeEmailHtml(input.note)}</p>`
+          : ''
+      }
+      <p><a href="${escapeEmailHtml(orcamentoUrl)}" style="display:inline-block;padding:12px 18px;background:#003d3a;color:#fff;border-radius:6px;text-decoration:none">Abrir orçamento</a></p>
+    </div>`
+    await sendResendEmail({
+      to: clientEmail,
+      subject,
+      text: body,
+      html,
+      kind: 'budget_decision',
+      createdBy: input.clientUid,
+      visitId: input.visitId,
+      dedupeKey: `budget-decision:${input.budgetItemId}:${input.decision}:${clientEmail}`,
+    })
+  }
+
+  const creatorEmail = creatorSnap ? String(creatorSnap.get('email') ?? '').trim() : ''
+  if (creatorEmail && creatorEmail.toLowerCase() !== clientEmail.toLowerCase()) {
+    const creatorName = String(creatorSnap?.get('name') ?? '').trim() || 'Equipe'
+    const subject = `Cliente ${status} item do orçamento — ${input.visitTitle}`
+    const text = `Olá ${creatorName},\n\n${clientName} registrou a decisão "${status}" no orçamento.\n\n${detailText}${noteLine}\n\nAbrir: ${orcamentoUrl}`
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">
+      <h2>${escapeEmailHtml(subject)}</h2>
+      <p>Olá ${escapeEmailHtml(creatorName)},</p>
+      <p><strong>${escapeEmailHtml(clientName)}</strong> registrou a decisão “${escapeEmailHtml(status)}” no orçamento.</p>
+      <ul>
+        <li><strong>Visita:</strong> ${escapeEmailHtml(input.visitTitle)}</li>
+        <li><strong>Item:</strong> ${escapeEmailHtml(input.description)}</li>
+        <li><strong>Total:</strong> ${escapeEmailHtml(amount)}</li>
+      </ul>
+      ${
+        input.decision === 'changes_requested' && input.note
+          ? `<p><strong>Pedido de mudança:</strong> ${escapeEmailHtml(input.note)}</p>`
+          : ''
+      }
+      <p><a href="${escapeEmailHtml(orcamentoUrl)}" style="display:inline-block;padding:12px 18px;background:#003d3a;color:#fff;border-radius:6px;text-decoration:none">Abrir orçamento</a></p>
+    </div>`
+    await sendResendEmail({
+      to: creatorEmail,
+      subject,
+      text,
+      html,
+      kind: 'budget_decision',
+      createdBy: input.clientUid,
+      visitId: input.visitId,
+      dedupeKey: `budget-decision:${input.budgetItemId}:${input.decision}:${creatorEmail}`,
+    })
+  }
 }
 
 async function assertOrgStaff(uid: string, orgId: string, token: Record<string, unknown>) {
@@ -168,7 +307,7 @@ async function linkFinanceItem(budgetItemId: string, uid: string) {
 export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.')
   const budgetItemId = String(request.data?.budgetItemId ?? '').trim()
-  const decision = request.data?.decision
+  const decision = request.data?.decision as BudgetDecision
   const note = String(request.data?.note ?? '').trim()
   const validDecision =
     decision === 'approved' || decision === 'rejected' || decision === 'changes_requested'
@@ -194,9 +333,14 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
     throw new HttpsError('failed-precondition', 'Esta linha já teve uma decisão e não pode ser alterada.')
   }
 
-  if (current.decision === 'pending') {
+  const wasPending = current.decision === 'pending'
+  let budgetCreatedBy = ''
+  let visitTitle = 'sua visita'
+  const visitId = String(current.visitId ?? '')
+
+  if (wasPending) {
     const budgetSnap = await db.collection('budgets').doc(String(current.budgetId)).get()
-    const visitSnap = await db.collection('visits').doc(String(current.visitId)).get()
+    const visitSnap = await db.collection('visits').doc(visitId).get()
     if (!budgetSnap.exists || budgetSnap.get('status') !== 'published' || budgetSnap.get('clientUserId') !== uid) {
       throw new HttpsError('failed-precondition', 'Orçamento não disponível para este cliente.')
     }
@@ -207,6 +351,8 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
     if (profile.get('orgId') !== current.orgId || profile.get('role') !== 'client') {
       throw new HttpsError('permission-denied', 'Somente o cliente desta empresa pode decidir.')
     }
+    budgetCreatedBy = String(budgetSnap.get('createdBy') ?? '')
+    visitTitle = String(visitSnap.get('title') ?? '').trim() || visitTitle
 
     await db.runTransaction(async (transaction) => {
       const fresh = await transaction.get(itemRef)
@@ -231,11 +377,30 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
     })
   }
 
+  const notifyIfFirstDecision = async () => {
+    if (!wasPending) return
+    await sendBudgetDecisionEmails({
+      budgetItemId,
+      decision,
+      note: decision === 'changes_requested' ? note : undefined,
+      clientUid: uid,
+      budgetCreatedBy,
+      visitId,
+      visitTitle,
+      description: String(current.description ?? ''),
+      quantity: Number(current.quantity) || 0,
+      unitAmount: Number(current.unitAmount) || 0,
+      lineAmount: Number(current.lineAmount) || 0,
+    }).catch(() => undefined)
+  }
+
   if (decision === 'rejected' || decision === 'changes_requested') {
+    await notifyIfFirstDecision()
     return { ok: true, integrationStatus: 'none' as const }
   }
 
   if (current.integrationStatus === 'created' && current.financeItemId) {
+    await notifyIfFirstDecision()
     return {
       ok: true,
       financeItemId: String(current.financeItemId),
@@ -245,12 +410,15 @@ export const decideBudgetItem = onCall({ cors: true, invoker: 'public' }, async 
 
   try {
     const financeItemId = await linkFinanceItem(budgetItemId, uid)
+    await notifyIfFirstDecision()
     return { ok: true, financeItemId, integrationStatus: 'created' as const }
   } catch (error) {
     await itemRef.set({
       integrationStatus: 'failed',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
+    // Decisão já gravada: ainda envia o comprovante.
+    await notifyIfFirstDecision()
     if (error instanceof HttpsError) throw error
     throw new HttpsError(
       'internal',

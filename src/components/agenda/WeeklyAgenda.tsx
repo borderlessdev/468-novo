@@ -18,6 +18,17 @@ export function parseDateOnly(date: string): Date {
   return parseISO(`${date.slice(0, 10)}T12:00:00`)
 }
 
+/** Data canônica da atividade (`date` ou prefixo de `startTime`). */
+export function activityDateKey(
+  activity: Pick<Activity, 'date' | 'startTime'>,
+): string {
+  const fromDate = String(activity.date ?? '').slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) return fromDate
+  const fromStart = String(activity.startTime ?? '').slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fromStart)) return fromStart
+  return fromDate
+}
+
 function timeToMinutes(iso: string): number {
   const d = parseISO(iso)
   if (Number.isNaN(d.getTime())) return 0
@@ -132,7 +143,7 @@ export function WeeklyAgenda({
       map.set(format(day, 'yyyy-MM-dd'), [])
     }
     for (const activity of activities) {
-      const list = map.get(activity.date)
+      const list = map.get(activityDateKey(activity))
       if (list) list.push(activity)
     }
     return map
@@ -204,6 +215,7 @@ export function getWeekStartForDate(date: string): Date {
 }
 
 export function isDateInWeek(date: string, weekStart: Date): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date.slice(0, 10))) return false
   const day = parseDateOnly(date)
   return isWithinInterval(day, {
     start: weekStart,

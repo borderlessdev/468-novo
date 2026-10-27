@@ -12,6 +12,7 @@ export type ResendEmailKind =
   | 'visitor_registration_owner'
   | 'notification'
   | 'community_registration'
+  | 'budget_decision'
 
 export interface ResendEmailInput {
   to: string | string[]

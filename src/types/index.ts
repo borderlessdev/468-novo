@@ -612,6 +612,7 @@ export type EmailLogKind =
   | 'visitor_registration_owner'
   | 'notification'
   | 'community_registration'
+  | 'budget_decision'
 export type EmailLogStatus = 'queued' | 'mailto' | 'sent' | 'failed'
 
 export interface EmailLog {

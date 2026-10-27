@@ -231,17 +231,17 @@ export function VisitsPage() {
         ))}
       </div>
 
-      <Card>
+      <Card className="mx-auto w-full max-w-5xl">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <CardTitle className="flex items-center justify-center gap-2 text-base font-semibold">
             <Filter className="h-4 w-4" />
             Filtros
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4 pt-0 lg:flex-row lg:items-end lg:gap-3">
+        <CardContent className="flex flex-col items-center gap-4 pt-0 lg:flex-row lg:flex-wrap lg:items-end lg:justify-center lg:gap-3">
           <div
             className={cn(
-              'grid flex-1 gap-3 sm:grid-cols-2',
+              'grid w-full gap-3 sm:grid-cols-2',
               experienceTab === 'periodo' ? 'xl:grid-cols-6' : 'xl:grid-cols-5',
             )}
           >
@@ -333,7 +333,7 @@ export function VisitsPage() {
             ) : null}
           </div>
           <div
-            className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1 lg:ml-auto"
+            className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-muted/25 p-1"
             aria-label="Modo de visualização"
           >
             {([

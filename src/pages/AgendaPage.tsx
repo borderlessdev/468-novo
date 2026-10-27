@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import {
   WeeklyAgenda,
+  activityDateKey,
   getWeekStart,
   getWeekStartForDate,
   isDateInWeek,
@@ -246,10 +247,13 @@ export function AgendaPage() {
       activities.length > 0
         ? [...activities].sort(
             (a, b) =>
-              a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
-          )[0].date
+              activityDateKey(a).localeCompare(activityDateKey(b)) ||
+              a.startTime.localeCompare(b.startTime),
+          )[0]
         : null
-    const anchorDate = anchorFromActivities ?? selectedVisit?.startDate
+    const anchorDate = anchorFromActivities
+      ? activityDateKey(anchorFromActivities)
+      : selectedVisit?.startDate
     if (!anchorDate) return
 
     if (weekSyncedVisitRef.current !== visitId) {
@@ -261,7 +265,7 @@ export function AgendaPage() {
 
     // Atividades chegaram depois do 1º posicionamento (ex.: só tínhamos a data da visita).
     if (!weekSyncedWithActivitiesRef.current && anchorFromActivities) {
-      setWeekStart(getWeekStartForDate(anchorFromActivities))
+      setWeekStart(getWeekStartForDate(anchorDate))
       weekSyncedWithActivitiesRef.current = true
     }
   }, [visitId, activities, loadingActivities, selectedVisit?.startDate])
@@ -280,21 +284,27 @@ export function AgendaPage() {
 
   const filtered = useMemo(() => {
     if (!dayFilter) return searchedActivities
-    return searchedActivities.filter((activity) => activity.date === dayFilter)
+    return searchedActivities.filter((activity) => activityDateKey(activity) === dayFilter)
   }, [searchedActivities, dayFilter])
 
   const activitiesInWeek = useMemo(
-    () => searchedActivities.filter((activity) => isDateInWeek(activity.date, weekStart)),
+    () =>
+      searchedActivities.filter((activity) =>
+        isDateInWeek(activityDateKey(activity), weekStart),
+      ),
     [searchedActivities, weekStart],
   )
 
   const jumpToProgrammingWeek = () => {
     const anchor =
       searchedActivities.length > 0
-        ? [...searchedActivities].sort(
-            (a, b) =>
-              a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
-          )[0].date
+        ? activityDateKey(
+            [...searchedActivities].sort(
+              (a, b) =>
+                activityDateKey(a).localeCompare(activityDateKey(b)) ||
+                a.startTime.localeCompare(b.startTime),
+            )[0],
+          )
         : selectedVisit?.startDate
     if (!anchor) return
     setWeekStart(getWeekStartForDate(anchor))
@@ -567,12 +577,20 @@ export function AgendaPage() {
       } else if (!lastImportFile) {
         toast.success(`Programação substituída: ${created} atividade(s)`)
       }
+      const importAnchor = [...importPreview].sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+      )[0]?.date
       setImportOpen(false)
       setImportPreview([])
       setImportWarnings([])
       setImportFileName('')
       setLastImportWorkbook(null)
       setLastImportFile(null)
+      if (importAnchor) {
+        setWeekStart(getWeekStartForDate(importAnchor))
+        weekSyncedWithActivitiesRef.current = true
+      }
       await loadActivities()
       // A criação em lote não devolve os ids: reenviamos a programação inteira da visita.
       if (googleConnected) await handleSyncVisitToGoogle()

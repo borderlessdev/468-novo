@@ -105,7 +105,6 @@ export function SettingsPage() {
     resetPassword,
     isClient,
     isAdmin,
-    isPlatformAdmin,
     user,
   } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin, refreshOrg } = useOrg()

@@ -94,7 +94,7 @@ export function canCreateOrganization(isPlatformAdmin: boolean): boolean {
 }
 
 /**
- * Aprovação financeira (1 nível): owner da visita, admin, ou role user dono.
+ * Aprovação financeira (1 nível): owner da visita, admin master, admin da empresa.
  * Equipe (team) e cliente NÃO aprovam.
  * Trade-off: rules do financeItem não distinguem team vs owner com precisão;
  * a validação fica na UI + service.
@@ -104,8 +104,9 @@ export function canApproveFinance(
   isAdmin: boolean,
   visit: Visit | null | undefined,
   uid: string,
+  isOrgAdmin = false,
 ): boolean {
-  if (isAdmin) return true
+  if (isAdmin || isOrgAdmin) return true
   if (role === 'client' || role === 'team') return false
   if (!visit) return false
   return visit.ownerId === uid

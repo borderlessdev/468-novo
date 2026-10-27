@@ -33,7 +33,18 @@ const aliases = {
 } as const
 
 function toDate(value: unknown): string {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return format(value, 'yyyy-MM-dd')
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    // Datas-serial Excel viram Date; anos < 1970 são só horário.
+    if (value.getFullYear() < 1970) return ''
+    return format(value, 'yyyy-MM-dd')
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value)
+    if (parsed && parsed.y >= 1970) {
+      return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+    }
+    return ''
+  }
   const text = String(value ?? '').trim()
   const br = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
   if (br) return `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`
@@ -94,13 +105,50 @@ const months: Record<string, number> = {
 }
 
 function headingDate(value: unknown, year: number): string {
+  if (value instanceof Date || typeof value === 'number') {
+    const fromValue = toDate(value)
+    if (fromValue) return fromValue
+  }
   const text = normalize(value)
-  const english = text.match(/([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?/)
-  const portuguese = text.match(/(\d{1,2})\s+de\s+([a-z]+)/)
-  const month = english ? months[english[1]] : portuguese ? months[portuguese[2]] : undefined
-  const day = Number(english?.[2] ?? portuguese?.[1])
-  if (!month || !day) return ''
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  if (!text) return ''
+
+  // Intervalo tipo "12 a 14 de agosto" / "august 12th to 14th" — não é cabeçalho de um dia.
+  if (/\b\d{1,2}\s*(a|to|ate|-|–)\s*\d{1,2}\b/.test(text) && !/\(\s*[a-z]/.test(text)) {
+    return ''
+  }
+
+  const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/)
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
+
+  const br = text.match(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/)
+  if (br) return `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`
+
+  const portuguese = text.match(/\b(\d{1,2})\s+de\s+([a-z]+)\b/)
+  if (portuguese && months[portuguese[2]]) {
+    const day = Number(portuguese[1])
+    if (day >= 1 && day <= 31) {
+      return `${year}-${String(months[portuguese[2]]).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+  }
+
+  // "August 12th", "august, 12", "wednesday august 13th"
+  const english = text.match(/\b([a-z]+),?\s+(\d{1,2})(?:st|nd|rd|th)?\b/)
+  if (english && months[english[1]]) {
+    const day = Number(english[2])
+    if (day >= 1 && day <= 31) {
+      return `${year}-${String(months[english[1]]).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+  }
+
+  return ''
+}
+
+function rowHeadingDate(row: unknown[], year: number): string {
+  for (let i = 0; i < Math.min(row.length, 8); i += 1) {
+    const found = headingDate(row[i], year)
+    if (found) return found
+  }
+  return ''
 }
 
 function parseProgramSheet(sheet: XLSX.WorkSheet, fallbackYear: number): ImportedActivity[] {
@@ -117,11 +165,14 @@ function parseProgramSheet(sheet: XLSX.WorkSheet, fallbackYear: number): Importe
     const columnC = row[2]
     const columnF = row[5]
     const columnG = String(row[6] ?? '').trim()
-    const nextDate = headingDate(columnC, year)
+    const nextDate = rowHeadingDate(row, year)
     if (nextDate) {
-      date = nextDate
-      dayDescription = ''
-      group = ''
+      // Só troca o dia corrente quando o cabeçalho traz uma data nova.
+      if (nextDate !== date) {
+        date = nextDate
+        dayDescription = ''
+        group = ''
+      }
       continue
     }
     if (!date) continue

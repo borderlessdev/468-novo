@@ -162,9 +162,18 @@ async function assertCanWriteVisit(caller: Caller, visitId: string): Promise<voi
   const ownerId = snap.get('ownerId')
   const teamMemberIds = snap.get('teamMemberIds')
   const isMember = Array.isArray(teamMemberIds) && teamMemberIds.includes(caller.uid)
-  if (ownerId !== caller.uid && !isMember) {
-    throw new HttpsError('permission-denied', 'Você não tem acesso de escrita nesta visita.')
+  if (ownerId === caller.uid || isMember) return
+
+  const orgId = snap.get('orgId')
+  if (typeof orgId === 'string' && orgId) {
+    const member = await db
+      .collection('organizationMembers')
+      .doc(`${orgId}_${caller.uid}`)
+      .get()
+    if (member.exists && member.get('orgRole') === 'org_admin') return
   }
+
+  throw new HttpsError('permission-denied', 'Você não tem acesso de escrita nesta visita.')
 }
 
 /** A googleapis expõe o status ora em `code`, ora em `response.status`. */
