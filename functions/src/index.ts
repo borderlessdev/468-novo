@@ -605,6 +605,7 @@ export {
 } from './inviteWhatsApp'
 export { whatsappWebhook } from './whatsappWebhook'
 export { changeUserAccountType } from './changeAccountType'
+export { changeEmployeeCargo } from './changeEmployeeCargo'
 export { publishBudget, decideBudgetItem, reviseBudgetItem } from './budget'
 export { dispatchNotificationEmail, sendVisitSummaryEmail } from './notificationEmail'
 export { sendDailyOperationalReminders } from './scheduledReminders'

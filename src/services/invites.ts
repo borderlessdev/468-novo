@@ -18,7 +18,10 @@ import {
   mapInviteRoleToOrgRole,
 } from '@/services/organizations'
 import { httpsCallable } from 'firebase/functions'
+import { isCargoRegion, isEmployeeCargo } from '@/lib/cargo'
 import type {
+  CargoRegion,
+  EmployeeCargo,
   Invite,
   InviteAcceptedVia,
   InviteDeclinedVia,
@@ -31,7 +34,16 @@ import type {
 /** Campos que podem ser devolvidos ao portador de um token de convite. */
 export type PublicInvite = Pick<
   Invite,
-  'id' | 'email' | 'role' | 'status' | 'orgId' | 'department' | 'visitId' | 'expiresAt'
+  | 'id'
+  | 'email'
+  | 'role'
+  | 'status'
+  | 'orgId'
+  | 'cargo'
+  | 'cargoRegion'
+  | 'department'
+  | 'visitId'
+  | 'expiresAt'
 >
 
 const col = collection(db, 'invites')
@@ -53,6 +65,7 @@ const callAcceptInvite = httpsCallable<
 >(functions, 'acceptInvite')
 
 function mapInvite(id: string, data: Record<string, unknown>): Invite {
+  const cargo = isEmployeeCargo(data.cargo) ? data.cargo : undefined
   return {
     id,
     email: String(data.email ?? ''),
@@ -61,6 +74,9 @@ function mapInvite(id: string, data: Record<string, unknown>): Invite {
     status: (data.status as InviteStatus) ?? 'pending',
     createdBy: String(data.createdBy ?? ''),
     orgId: String(data.orgId ?? ''),
+    cargo,
+    cargoRegion:
+      cargo === 'analista' && isCargoRegion(data.cargoRegion) ? data.cargoRegion : undefined,
     department: data.department ? String(data.department) : undefined,
     visitId: data.visitId ? String(data.visitId) : undefined,
     phone: data.phone ? String(data.phone) : undefined,
@@ -84,6 +100,8 @@ export async function createInvite(input: {
   role: InviteRole
   createdBy: string
   orgId: string
+  cargo?: EmployeeCargo
+  cargoRegion?: CargoRegion
   department?: string
   visitId?: string
   /** Celular/WhatsApp — obrigatório para convite de cliente (envio Meta). */
@@ -156,6 +174,10 @@ export async function createInvite(input: {
   expires.setDate(expires.getDate() + 14)
   const expiresAt = expires.toISOString()
 
+  const cargo = isEmployeeCargo(input.cargo) ? input.cargo : undefined
+  const cargoRegion =
+    cargo === 'analista' && isCargoRegion(input.cargoRegion) ? input.cargoRegion : undefined
+
   const ref = await addDoc(col, {
     email,
     role: input.role,
@@ -163,6 +185,8 @@ export async function createInvite(input: {
     status: 'pending',
     createdBy: input.createdBy,
     orgId: input.orgId,
+    cargo: cargo ?? null,
+    cargoRegion: cargoRegion ?? null,
     department: input.department?.trim() || null,
     visitId: visitId ?? null,
     phone: phoneRaw || null,
@@ -180,6 +204,8 @@ export async function createInvite(input: {
     status: 'pending',
     createdBy: input.createdBy,
     orgId: input.orgId,
+    cargo,
+    cargoRegion,
     department: input.department,
     visitId,
     phone: phoneRaw || undefined,

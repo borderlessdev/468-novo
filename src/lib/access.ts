@@ -72,13 +72,17 @@ export function canManageOrgUsers(
   return isPlatformAdmin || isOrgAdmin
 }
 
-/** Convite de cliente: admin da plataforma, admin da empresa ou funcionário (equipe). */
+/**
+ * Convite de cliente: master, admin da empresa ou qualquer funcionário
+ * (team / user operacional). Cliente não convida.
+ */
 export function canInviteClients(
   isPlatformAdmin: boolean,
   isOrgAdmin: boolean,
   role: UserRole,
 ): boolean {
-  return canManageOrgUsers(isPlatformAdmin, isOrgAdmin) || role === 'team'
+  if (canManageOrgUsers(isPlatformAdmin, isOrgAdmin)) return true
+  return role === 'team' || role === 'user'
 }
 
 /** Whitelabel (logo da pasta): Admin Master e Admin da empresa. Funcionários só herdam. */

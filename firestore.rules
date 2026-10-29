@@ -578,7 +578,7 @@ service cloud.firestore {
           || (
             resource.data.orgId is string
             && resource.data.role == 'client'
-            && isOrgTeamOf(resource.data.orgId)
+            && isOrgOperatorOf(resource.data.orgId)
           )
         );
       allow create: if isSignedIn()
@@ -604,7 +604,7 @@ service cloud.firestore {
           || isOrgAdminOf(request.resource.data.orgId)
           || (
             request.resource.data.role == 'client'
-            && isOrgTeamOf(request.resource.data.orgId)
+            && isOrgOperatorOf(request.resource.data.orgId)
           )
         );
       allow update: if isSignedIn()
@@ -629,7 +629,7 @@ service cloud.firestore {
           || (
             resource.data.role == 'client'
             && resource.data.orgId is string
-            && isOrgTeamOf(resource.data.orgId)
+            && isOrgOperatorOf(resource.data.orgId)
           )
         );
     }

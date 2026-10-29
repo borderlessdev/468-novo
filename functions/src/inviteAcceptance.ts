@@ -6,6 +6,7 @@ import {
   type DocumentReference,
   type Transaction,
 } from 'firebase-admin/firestore'
+import { readCargoFields } from './cargo'
 
 const db = getFirestore()
 
@@ -131,6 +132,7 @@ export async function applyInviteAcceptanceInTransaction(
     },
     { merge: true },
   )
+  const { cargo, cargoRegion } = readCargoFields(invite)
   transaction.set(
     db.collection('organizationMembers').doc(`${orgId}_${uid}`),
     {
@@ -139,6 +141,8 @@ export async function applyInviteAcceptanceInTransaction(
       email,
       name,
       orgRole: role,
+      cargo,
+      cargoRegion,
       department: invite.department ? String(invite.department) : null,
       invitedBy: invite.createdBy ? String(invite.createdBy) : null,
       joinedAt: now,
@@ -251,12 +255,15 @@ export const getInviteByToken = onCall({ invoker: 'public' }, async (request) =>
     )
   }
 
+  const { cargo, cargoRegion } = readCargoFields(invite)
   return {
     id: doc.id,
     email,
     role,
     status: 'pending',
     orgId,
+    cargo: cargo ?? undefined,
+    cargoRegion: cargoRegion ?? undefined,
     department: invite.department ? String(invite.department) : undefined,
     visitId,
     expiresAt: String(invite.expiresAt),

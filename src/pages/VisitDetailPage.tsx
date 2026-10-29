@@ -58,6 +58,7 @@ import {
   canDeleteVisit,
   canEditVisitAnyModule,
   canEditVisitModule,
+  canInviteClients,
   canManageVisitAccess,
   isNavAllowed,
 } from '@/lib/access'
@@ -171,7 +172,7 @@ function GuestStatusBadge({ link }: { link: VisitGuestLink }) {
 export function VisitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user, isAdmin, role, profile } = useAuth()
+  const { user, isAdmin, isPlatformAdmin, role, profile } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1209,6 +1210,9 @@ export function VisitDetailPage() {
       user &&
       canEditVisitAnyModule(visit, user.uid, role, isAdmin, isOrgAdmin),
   )
+  const canInviteClientUsers = Boolean(
+    user && canInviteClients(isPlatformAdmin, isOrgAdmin, role) && canWrite,
+  )
   const canEditVisitorsModule = Boolean(
     visit &&
       user &&
@@ -1608,7 +1612,7 @@ export function VisitDetailPage() {
             onUpdated={(next) => setVisit(next)}
           />
 
-          {canManageAccess && user && activeOrgId ? (
+          {canInviteClientUsers && user && activeOrgId ? (
             <ClientInviteCard
               orgId={activeOrgId}
               org={activeOrg}

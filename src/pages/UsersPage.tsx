@@ -21,7 +21,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canManageOrgUsers, mergeModulePermissions } from '@/lib/access'
 import { resolveDisplayedAccountType } from '@/lib/accountType'
+import {
+  CARGO_REGION_OPTIONS,
+  EMPLOYEE_CARGO_OPTIONS,
+  formatMemberCargo,
+  normalizeCargoInput,
+} from '@/lib/cargo'
 import { ChangeAccountTypeControl } from '@/features/users/ChangeAccountTypeControl'
+import { ChangeCargoControl } from '@/features/users/ChangeCargoControl'
 import { orgRoleLabel } from '@/lib/org'
 import {
   createInvite,
@@ -38,6 +45,8 @@ import {
 } from '@/services/organizations'
 import { listUsers, updateUserModulePermissions } from '@/services/users'
 import type {
+  CargoRegion,
+  EmployeeCargo,
   Invite,
   InviteRole,
   ModulePermissions,
@@ -68,8 +77,8 @@ export function UsersPage() {
   const [seatUsage, setSeatUsage] = useState({ members: 0, pending: 0 })
   const [users, setUsers] = useState<UserProfile[]>([])
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<InviteRole>('team')
-  const [inviteDepartment, setInviteDepartment] = useState('')
+  const [inviteCargo, setInviteCargo] = useState<EmployeeCargo | ''>('')
+  const [inviteCargoRegion, setInviteCargoRegion] = useState<CargoRegion | ''>('')
   const [inviting, setInviting] = useState(false)
   const [lastInvite, setLastInvite] = useState<{ id: string; link: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -137,14 +146,20 @@ export function UsersPage() {
 
   const handleInvite = async () => {
     if (!user || !activeOrgId || !inviteEmail.trim()) return
+    const cargoResult = normalizeCargoInput(inviteCargo, inviteCargoRegion)
+    if ('error' in cargoResult) {
+      toast.error(cargoResult.error)
+      return
+    }
     setInviting(true)
     try {
       const created = await createInvite({
         email: inviteEmail,
-        role: inviteRole,
+        role: 'team',
         createdBy: user.uid,
         orgId: activeOrgId,
-        department: inviteDepartment.trim() || undefined,
+        cargo: cargoResult.cargo,
+        cargoRegion: cargoResult.cargoRegion ?? undefined,
       })
       setLastInvite({ id: created.id, link: created.link })
       toast.success(
@@ -153,7 +168,8 @@ export function UsersPage() {
           : 'Convite criado, mas o e-mail não foi enviado — copie o link abaixo',
       )
       setInviteEmail('')
-      setInviteDepartment('')
+      setInviteCargo('')
+      setInviteCargoRegion('')
       await reload()
     } catch (error) {
       console.error(error)
@@ -161,6 +177,13 @@ export function UsersPage() {
     } finally {
       setInviting(false)
     }
+  }
+
+  const canChangeCargo = (member: OrganizationMember) => {
+    if (isPlatformAdmin) return true
+    if (!isOrgAdmin) return false
+    if (member.orgRole === 'org_admin' && member.uid !== user?.uid) return false
+    return true
   }
 
   const handleCancelInvite = async (inviteId: string) => {
@@ -228,8 +251,8 @@ export function UsersPage() {
         title="Usuários"
         description={
           isPlatformAdmin
-            ? 'Convide funcionários e altere o tipo de cada membro. A confirmação salva o novo perfil e as permissões correspondentes.'
-            : 'Convide funcionários da empresa por e-mail. Também pode copiar o link do convite e enviar por outro canal.'
+            ? 'Convide funcionários com cargo do organograma, altere cargos e o tipo de cada membro.'
+            : 'Convide funcionários com cargo do organograma. Só o admin da empresa altera cargos e exclui membros.'
         }
       />
 
@@ -269,34 +292,60 @@ export function UsersPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="users-invite-role">Perfil</Label>
+                <Label htmlFor="users-invite-cargo">Cargo *</Label>
                 <Select
-                  value={inviteRole}
-                  onValueChange={(v) => setInviteRole(v as InviteRole)}
+                  value={inviteCargo || undefined}
+                  onValueChange={(v) => {
+                    setInviteCargo(v as EmployeeCargo)
+                    if (v !== 'analista') setInviteCargoRegion('')
+                  }}
                 >
-                  <SelectTrigger id="users-invite-role">
-                    <SelectValue />
+                  <SelectTrigger id="users-invite-cargo">
+                    <SelectValue placeholder="Selecione o cargo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="team">Funcionário</SelectItem>
-                    <SelectItem value="user">Usuário operacional</SelectItem>
+                    {EMPLOYEE_CARGO_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Clientes entram pelo convite na tela do evento/visita.
+                  Perfil fixo: funcionário. Clientes entram pelo convite na visita.
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="users-invite-department">Setor (opcional)</Label>
-                <Input
-                  id="users-invite-department"
-                  value={inviteDepartment}
-                  onChange={(e) => setInviteDepartment(e.target.value)}
-                  placeholder="Comercial, Eventos..."
-                />
-              </div>
+              {inviteCargo === 'analista' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="users-invite-region">Região *</Label>
+                  <Select
+                    value={inviteCargoRegion || undefined}
+                    onValueChange={(v) => setInviteCargoRegion(v as CargoRegion)}
+                  >
+                    <SelectTrigger id="users-invite-region">
+                      <SelectValue placeholder="MA/PA, MG ou RS" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CARGO_REGION_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
-            <Button type="submit" disabled={inviting || !inviteEmail.trim() || atCapacity}>
+            <Button
+              type="submit"
+              disabled={
+                inviting ||
+                !inviteEmail.trim() ||
+                !inviteCargo ||
+                (inviteCargo === 'analista' && !inviteCargoRegion) ||
+                atCapacity
+              }
+            >
               {inviting ? 'Enviando...' : 'Enviar convite'}
             </Button>
             {atCapacity ? (
@@ -376,9 +425,23 @@ export function UsersPage() {
                             : orgRoleLabel(member.orgRole)}
                         </span>
                       )}
-                      {member.department ? (
-                        <span className="text-xs text-muted-foreground">{member.department}</span>
-                      ) : null}
+                      {canChangeCargo(member) ? (
+                        <ChangeCargoControl
+                          uid={member.uid}
+                          name={member.name}
+                          orgId={member.orgId}
+                          currentCargo={member.cargo}
+                          currentRegion={member.cargoRegion}
+                          onChanged={() => void reload()}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {formatMemberCargo(member.cargo, member.cargoRegion)}
+                          {!member.cargo && member.department
+                            ? ` · ${member.department}`
+                            : ''}
+                        </span>
+                      )}
                       {isSelf ? (
                         <Badge variant="secondary">Você</Badge>
                       ) : showDelete ? (
@@ -415,7 +478,11 @@ export function UsersPage() {
                   <div>
                     <p className="text-sm font-medium">{invite.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      {inviteRoleLabel(invite.role)} · aguardando aceite
+                      {inviteRoleLabel(invite.role)}
+                      {invite.cargo
+                        ? ` · ${formatMemberCargo(invite.cargo, invite.cargoRegion)}`
+                        : ''}{' '}
+                      · aguardando aceite
                     </p>
                   </div>
                   <Button

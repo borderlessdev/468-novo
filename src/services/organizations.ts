@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { organizationMemberId } from '@/lib/org'
+import { isCargoRegion, isEmployeeCargo } from '@/lib/cargo'
 import type { InviteRole, Organization, OrganizationMember, OrgRole } from '@/types'
 
 const organizationsCol = collection(db, 'organizations')
@@ -35,6 +36,7 @@ function mapOrganization(id: string, data: Record<string, unknown>): Organizatio
 }
 
 function mapMember(id: string, data: Record<string, unknown>): OrganizationMember {
+  const cargo = isEmployeeCargo(data.cargo) ? data.cargo : undefined
   return {
     id,
     orgId: String(data.orgId ?? ''),
@@ -42,6 +44,9 @@ function mapMember(id: string, data: Record<string, unknown>): OrganizationMembe
     email: String(data.email ?? ''),
     name: String(data.name ?? ''),
     orgRole: (data.orgRole as OrgRole) ?? 'user',
+    cargo,
+    cargoRegion:
+      cargo === 'analista' && isCargoRegion(data.cargoRegion) ? data.cargoRegion : undefined,
     department: data.department ? String(data.department) : undefined,
     invitedBy: data.invitedBy ? String(data.invitedBy) : undefined,
     joinedAt: data.joinedAt,

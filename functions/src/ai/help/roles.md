@@ -9,19 +9,27 @@ Use este guia para saber o que cada tipo de usuário pode fazer no app.
 - Entra no sistema de qualquer pasta com “Entrar no sistema do cliente”.
 
 ## Admin da empresa (org_admin)
-- Gerencia a própria pasta.
-- Convida funcionários/equipe/clientes em **Usuários** (`/usuarios`); remove acessos.
+- Gerencia a própria pasta (dono da empresa).
+- Convida funcionários em **Usuários** (`/usuarios`) com um **cargo** do organograma; remove/exclui funcionários.
+- **Altera o cargo** dos funcionários (e o próprio). Não altera o tipo de conta de outro admin da empresa — isso é do Master.
 - Define **Whitelabel** (logo) da própria empresa em Configurações — funcionários herdam automaticamente.
 - Opera visitas, portal, financeiro, relatórios e playbooks da pasta.
+- Também cria convites de cliente na visita e convites de portal/convidados.
+
+## Cargo (organograma)
+- Metadado do funcionário (CEO, Gestão de Eventos, Criativos, Coordenadora, ADM, NACT, FINAN, Analista + região, etc.).
+- **Não muda permissões** de módulo. Serve para identificação no organograma.
+- Definido no convite e alterável depois só pelo Admin da empresa (ou Master).
 
 ## Usuário operacional (user)
 - Cria e gerencia visitas (escrita operacional).
-- Não convida usuários nem altera whitelabel.
-- Se perguntar como convidar alguém ou mudar a logo: orientar a pedir ao **Admin da empresa** (menu **Usuários** para convites, ou Admin Master).
+- Pode criar/editar convites de cliente na visita e convites de portal.
+- Não convida funcionários nem altera cargo/whitelabel; não exclui membros.
+- Se perguntar como convidar funcionário, mudar cargo ou logo: orientar a pedir ao **Admin da empresa**.
 
 ## Equipe / funcionário (team)
-- Opera o dia a dia conforme permissões de módulos.
-- Não aprova financeiro; não gerencia usuários; não altera whitelabel; não cria pastas.
+- Opera o dia a dia conforme permissões de módulos (visitas, criação/edição de convites de visita/evento e de cliente).
+- Não aprova financeiro; não gerencia usuários; não altera cargo de outros; não altera whitelabel; não cria pastas; não exclui funcionários.
 - Se perguntar como fazer algo exclusivo de Admin/Master: responder que só o Admin da empresa ou Admin Master pode fazer aquilo.
 
 ## Cliente (client)

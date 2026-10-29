@@ -29,6 +29,23 @@ export type OrganizationStatus = 'active' | 'suspended'
 
 export type OrgRole = 'org_admin' | 'user' | 'team' | 'client'
 
+/** Cargos do organograma Promover (metadado; não altera permissões). */
+export type EmployeeCargo =
+  | 'ceo'
+  | 'gestao_eventos'
+  | 'gestao_midias'
+  | 'criativos'
+  | 'gestao_pessoas'
+  | 'coordenadora_visitas'
+  | 'co_coordenadora_visitas'
+  | 'adm'
+  | 'nact'
+  | 'finan'
+  | 'analista'
+
+/** Região dos analistas no organograma. */
+export type CargoRegion = 'ma_pa' | 'mg' | 'rs'
+
 export interface Organization {
   id: string
   name: string
@@ -49,6 +66,11 @@ export interface OrganizationMember {
   email: string
   name: string
   orgRole: OrgRole
+  /** Cargo do organograma (funcionários). */
+  cargo?: EmployeeCargo
+  /** Região quando cargo === analista. */
+  cargoRegion?: CargoRegion
+  /** Legado: setor livre no convite antigo. Preferir `cargo`. */
   department?: string
   invitedBy?: string
   joinedAt?: unknown
@@ -586,6 +608,10 @@ export interface Invite {
   status: InviteStatus
   createdBy: string
   orgId: string
+  /** Cargo do organograma no convite de funcionário. */
+  cargo?: EmployeeCargo
+  cargoRegion?: CargoRegion
+  /** Legado: setor livre. Preferir `cargo`. */
   department?: string
   visitId?: string
   /** Celular informado no convite (exibição). */
