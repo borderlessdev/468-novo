@@ -136,10 +136,10 @@ export function AppSidebar({
               onClose()
             }}
             className={cn(
-              'flex shrink-0 items-center transition-opacity hover:opacity-90',
+              'inline-flex shrink-0 items-center overflow-hidden rounded-lg transition-opacity hover:opacity-90',
               collapsed
-                ? 'h-9 w-9 justify-center overflow-hidden rounded-lg'
-                : 'min-w-0 flex-1 px-3',
+                ? 'h-9 w-9 justify-center'
+                : 'h-12 max-w-[calc(100%-2.75rem)]',
             )}
             aria-label="Ir para a página inicial"
             title="Página inicial"
@@ -153,11 +153,8 @@ export function AppSidebar({
               }
               alt=""
               className={cn(
-                'object-contain',
-                collapsed ? 'h-9 w-9' : 'h-12 w-auto max-w-[180px] object-left',
-                // Logos enviadas pelos clientes costumam trazer margem transparente no arquivo.
-                // Escalamos somente nesse caso para o símbolo ter presença visual no topo.
-                !collapsed && activeOrg?.logoUrl && 'origin-left scale-[1.65]',
+                'block rounded-lg object-contain',
+                collapsed ? 'h-9 w-9' : 'h-12 w-auto max-h-12 max-w-full',
               )}
             />
           </Link>
