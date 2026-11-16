@@ -27,6 +27,9 @@ export type UserRole = 'user' | 'team' | 'client' | 'admin'
 
 export type OrganizationStatus = 'active' | 'suspended'
 
+/** Variante de UI/dashboard por pasta de cliente. */
+export type DashboardVariant = 'default' | 'vale'
+
 export type OrgRole = 'org_admin' | 'user' | 'team' | 'client'
 
 /** Cargos do organograma Promover (metadado; não altera permissões). */
@@ -55,6 +58,11 @@ export interface Organization {
   /** Whitelabel: logo da pasta. Definida por Master/Admin; funcionários herdam via activeOrg. */
   logoUrl?: string
   logoStoragePath?: string
+  /**
+   * Dashboard/UI específica do cliente.
+   * `vale` = layout/branding do Programa de Visitas Vale.
+   */
+  dashboardVariant?: DashboardVariant
   createdAt?: unknown
   updatedAt?: unknown
 }

@@ -37,6 +37,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canCreateOrganization } from '@/lib/access'
 import { resolveDisplayedAccountType } from '@/lib/accountType'
+import { usesValeDashboard } from '@/lib/orgDashboard'
 import { ChangeAccountTypeControl } from '@/features/users/ChangeAccountTypeControl'
 import { listUsers } from '@/services/users'
 import { generatePassword } from '@/lib/password'
@@ -480,6 +481,11 @@ export function OrganizationDetailPage() {
         description="Configure a pasta do cliente, crie o admin da empresa e entre no sistema de visitas e eventos."
         actions={
           <div className="flex flex-wrap gap-2">
+            {usesValeDashboard(org) ? (
+              <Badge variant="secondary" className="h-9 px-3">
+                Dashboard Vale
+              </Badge>
+            ) : null}
             <Button onClick={enterSystem} disabled={org.status !== 'active'}>
               <LogIn className="h-4 w-4" />
               Entrar no sistema do cliente

@@ -74,12 +74,15 @@ function sortPendingTasks(tasks: Task[]): Task[] {
   })
 }
 
+export type PendingTasksAssigneeFilter = 'me' | 'all'
+
 export async function listPendingTasks(
   orgId: string,
   userId: string,
   isPlatformAdmin: boolean,
   role: UserRole = 'user',
   visits?: Visit[],
+  options?: { assigneeFilter?: PendingTasksAssigneeFilter },
 ): Promise<Task[]> {
   const visitList = visits ?? (await listVisits(orgId, userId, isPlatformAdmin, role))
   if (visitList.length === 0) return []
@@ -88,10 +91,15 @@ export async function listPendingTasks(
     visitList.map((visit) => listTasks(visit.id, visit.ownerId, isPlatformAdmin)),
   )
 
+  const assigneeFilter = options?.assigneeFilter ?? 'me'
+
   return sortPendingTasks(
     tasksPerVisit
       .flat()
-      .filter((task) => task.status === 'backlog' || task.status === 'in_progress'),
+      .filter((task) => task.status === 'backlog' || task.status === 'in_progress')
+      .filter((task) =>
+        assigneeFilter === 'all' ? true : task.assigneeId === userId,
+      ),
   )
 }
 

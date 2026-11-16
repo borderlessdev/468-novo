@@ -97,7 +97,9 @@ export async function scanDueReminders(
 
     const [tasks, financeItems, preferences, knownDedupeKeys, pendingDocs] =
       await Promise.all([
-        listPendingTasks(orgId, userId, isPlatformAdmin, role, visits),
+        listPendingTasks(orgId, userId, isPlatformAdmin, role, visits, {
+          assigneeFilter: 'me',
+        }),
         isClient
           ? Promise.resolve([])
           : listFinanceItemsByOwner(orgId, userId, isPlatformAdmin, role, visits),

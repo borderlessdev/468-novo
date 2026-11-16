@@ -30,6 +30,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canCreateOrganization } from '@/lib/access'
+import { usesValeDashboard } from '@/lib/orgDashboard'
 import {
   countOrganizationSeats,
   countPendingInvites,
@@ -445,6 +446,9 @@ export function OrganizationsPage() {
                             <Badge variant={org.status === 'active' ? 'success' : 'muted'}>
                               {org.status === 'active' ? 'Ativa' : 'Suspensa'}
                             </Badge>
+                            {usesValeDashboard(org) ? (
+                              <Badge variant="secondary">Dashboard Vale</Badge>
+                            ) : null}
                             {atLimit ? <Badge variant="warning">Limite atingido</Badge> : null}
                           </div>
                         </div>

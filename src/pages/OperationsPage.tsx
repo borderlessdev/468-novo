@@ -46,7 +46,8 @@ type FinancePendingRow = {
 
 export function OperationsPage() {
   const { user, isPlatformAdmin, role, isClient } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, isOrgAdmin } = useOrg()
+  const canViewAllPendingTasks = isPlatformAdmin || isOrgAdmin || role === 'admin'
   const [loading, setLoading] = useState(true)
   const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
   const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([])
@@ -61,7 +62,9 @@ export function OperationsPage() {
       const today = todayIso()
       const visits = await listVisits(activeOrgId, user.uid, isPlatformAdmin, role)
       const [tasks, finance] = await Promise.all([
-        listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visits),
+        listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visits, {
+          assigneeFilter: canViewAllPendingTasks ? 'all' : 'me',
+        }),
         isClient
           ? Promise.resolve([] as FinanceItem[])
           : listFinanceItemsByOwner(activeOrgId, user.uid, isPlatformAdmin, role, visits),
@@ -85,7 +88,7 @@ export function OperationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, activeOrgId, isPlatformAdmin, role, isClient])
+  }, [user, activeOrgId, isPlatformAdmin, role, isClient, canViewAllPendingTasks])
 
   useEffect(() => {
     void load()

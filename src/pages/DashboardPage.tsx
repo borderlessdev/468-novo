@@ -15,10 +15,14 @@ import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ListRowLink, SectionCardHeader } from '@/components/shared/ListRow'
 import { VisitStatusBadge, TaskStatusBadge } from '@/components/shared/StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
+import { ValeCostOverviewPanel } from '@/components/vale/ValeCostOverviewPanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
+import { usesValeDashboard } from '@/lib/orgDashboard'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   VISIT_EVENT_KINDS,
@@ -83,7 +87,8 @@ function KpiValue({
 
 export function DashboardPage() {
   const { user, isPlatformAdmin, role, isClient } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
+  const isValeDash = usesValeDashboard(activeOrg)
   const {
     cycleLabel,
     isDefaultCycle,
@@ -94,9 +99,11 @@ export function DashboardPage() {
     setCycleEnd,
     resetCycle,
   } = useCyclePeriod({ notify: true })
+  const canViewAllPendingTasks = isPlatformAdmin || isOrgAdmin || role === 'admin'
   const [loading, setLoading] = useState(true)
   const [visits, setVisits] = useState<Visit[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [allPendingTasks, setAllPendingTasks] = useState<Task[]>([])
+  const [showAllPendingTasks, setShowAllPendingTasks] = useState(true)
   const [financeItems, setFinanceItems] = useState<FinanceItem[]>([])
   const [visitorCount, setVisitorCount] = useState(0)
   const [newVisitorsInCycle, setNewVisitorsInCycle] = useState(0)
@@ -107,13 +114,16 @@ export function DashboardPage() {
     setLoading(true)
     try {
       const visitsData = await listVisits(activeOrgId, user.uid, isPlatformAdmin, role)
+      const assigneeFilter = canViewAllPendingTasks ? 'all' : 'me'
       const [tasksData, financeData, visitorsData] = await Promise.all([
-        listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
+        listPendingTasks(activeOrgId, user.uid, isPlatformAdmin, role, visitsData, {
+          assigneeFilter,
+        }),
         listFinanceItemsByOwner(activeOrgId, user.uid, isPlatformAdmin, role, visitsData),
         listVisitors(activeOrgId),
       ])
       setVisits(visitsData)
-      setTasks(tasksData.slice(0, 8))
+      setAllPendingTasks(tasksData)
       setFinanceItems(financeData)
       setNewVisitorsInCycle(
         visitorsData.filter((visitor) => {
@@ -128,7 +138,24 @@ export function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, activeOrgId, isPlatformAdmin, role, range.startIso, range.endIso])
+  }, [
+    user,
+    activeOrgId,
+    isPlatformAdmin,
+    role,
+    canViewAllPendingTasks,
+    range.startIso,
+    range.endIso,
+  ])
+
+  const tasks = useMemo(() => {
+    if (!user) return []
+    const scoped =
+      canViewAllPendingTasks && showAllPendingTasks
+        ? allPendingTasks
+        : allPendingTasks.filter((task) => task.assigneeId === user.uid)
+    return scoped.slice(0, 8)
+  }, [allPendingTasks, canViewAllPendingTasks, showAllPendingTasks, user])
 
   useEffect(() => {
     void load()
@@ -206,27 +233,44 @@ export function DashboardPage() {
       })
     : upcoming
 
-  const eventKindTone: Record<VisitEventKind, string> = {
-    visita_vip: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
-    comunidade_prioritaria: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-    visita_comunidade: 'bg-teal-500/10 text-teal-700 dark:text-teal-400',
-    evento: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
-  }
+  const eventKindTone: Record<VisitEventKind, string> = isValeDash
+    ? {
+        visita_vip: 'bg-[#ECB11F]/15 text-[#8A6500]',
+        comunidade_prioritaria: 'bg-[#007E7A]/12 text-[#005F5B]',
+        visita_comunidade: 'bg-[#007E7A]/10 text-[#007E7A]',
+        evento: 'bg-[#003D3A]/10 text-[#003D3A]',
+      }
+    : {
+        visita_vip: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
+        comunidade_prioritaria: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+        visita_comunidade: 'bg-teal-500/10 text-teal-700 dark:text-teal-400',
+        evento: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
+      }
 
   const kpis = [
     {
-      label: 'Experiências do ciclo',
+      label: isValeDash ? 'Total de Visitas do Ciclo' : 'Experiências do ciclo',
       value: String(cycleVisits.length),
       records: toKpiRecords(cycleVisits),
-      hint: `Todas as experiências · ciclo ${cycleLabel}`,
+      hint: isValeDash
+        ? `Todas as visitas · ciclo ${cycleLabel}`
+        : `Todas as experiências · ciclo ${cycleLabel}`,
       icon: CalendarDays,
-      tone: 'bg-brand/15 text-brand-foreground dark:text-brand',
+      tone: isValeDash
+        ? 'bg-[#007E7A]/15 text-[#005F5B]'
+        : 'bg-brand/15 text-brand-foreground dark:text-brand',
     },
     ...VISIT_EVENT_KINDS.map((kind) => ({
-      label: visitEventKindLabel(kind),
+      label:
+        isValeDash && kind === 'evento'
+          ? 'Total do Evento do Ciclo'
+          : visitEventKindLabel(kind),
       value: String(eventKindCounts[kind].length),
       records: toKpiRecords(eventKindCounts[kind]),
-      hint: `Tipo de experiência · ciclo ${cycleLabel}`,
+      hint:
+        isValeDash && kind === 'evento'
+          ? `Eventos · ciclo ${cycleLabel}`
+          : `Tipo de experiência · ciclo ${cycleLabel}`,
       icon: CalendarDays,
       tone: eventKindTone[kind],
     })),
@@ -236,65 +280,91 @@ export function DashboardPage() {
       records: toKpiRecords(vipCommercialVisits),
       hint: `Subtipo Comercial · ciclo ${cycleLabel}`,
       icon: TrendingUp,
-      tone: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+      tone: isValeDash
+        ? 'bg-[#ECB11F]/15 text-[#8A6500]'
+        : 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
     },
     {
       label: 'Em planejamento',
       value: String(planningVisits.length),
       records: toKpiRecords(planningVisits),
       icon: Clock3,
-      tone: 'bg-warning/10 text-warning',
+      tone: isValeDash ? 'bg-[#ECB11F]/12 text-[#8A6500]' : 'bg-warning/10 text-warning',
     },
     {
       label: 'Em andamento',
       value: String(ongoingVisits.length),
       records: toKpiRecords(ongoingVisits),
       icon: TrendingUp,
-      tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
+      tone: isValeDash
+        ? 'bg-[#007E7A]/12 text-[#007E7A]'
+        : 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
     },
     {
       label: 'Total de visitantes',
       value: String(visitorCount),
       hint: `Vinculados às visitas do ciclo ${cycleLabel}`,
       icon: Users,
-      tone: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+      tone: isValeDash
+        ? 'bg-[#003D3A]/10 text-[#003D3A]'
+        : 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
     },
     {
       label: 'Novos no CRM',
       value: String(newVisitorsInCycle),
       hint: `Cadastrados no ciclo ${cycleLabel}`,
       icon: Users,
-      tone: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400',
+      tone: isValeDash
+        ? 'bg-[#007E7A]/10 text-[#005F5B]'
+        : 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400',
     },
     ...(!isClient
       ? [
           {
-            label: 'Gastos do ciclo',
+            label: isValeDash ? 'Total de gastos do ciclo' : 'Gastos do ciclo',
             value: formatCurrency(cycleSpend),
             hint: `Ciclo ${cycleLabel}`,
             icon: DollarSign,
-            tone: 'bg-brand/15 text-brand-foreground dark:text-brand',
+            tone: isValeDash
+              ? 'bg-[#007E7A]/15 text-[#005F5B]'
+              : 'bg-brand/15 text-brand-foreground dark:text-brand',
           },
         ]
       : []),
   ]
 
+  const cycleActions = (
+    <CyclePeriodFields
+      className="sm:w-auto sm:items-end"
+      cycleStart={cycleStart}
+      cycleEnd={cycleEnd}
+      isDefaultCycle={isDefaultCycle}
+      onStartChange={setCycleStart}
+      onEndChange={setCycleEnd}
+      onReset={resetCycle}
+    />
+  )
+
   return (
     <div className="animate-fade-in space-y-6">
+      {isValeDash ? (
+        <ValeCostOverviewPanel
+          stats={{
+            totalVisits: cycleVisits.length,
+            totalEvents: eventKindCounts.evento.length,
+            vipVisits: eventKindCounts.visita_vip.length,
+            communityVisits:
+              eventKindCounts.comunidade_prioritaria.length +
+              eventKindCounts.visita_comunidade.length,
+            cycleLabel,
+          }}
+        />
+      ) : null}
+
       <PageHeader
-        title="Dashboard"
+        title={isValeDash ? 'Operações' : 'Dashboard'}
         description={`Visão geral das operações · Ciclo ${cycleLabel}`}
-        actions={
-          <CyclePeriodFields
-            className="sm:w-auto sm:items-end"
-            cycleStart={cycleStart}
-            cycleEnd={cycleEnd}
-            isDefaultCycle={isDefaultCycle}
-            onStartChange={setCycleStart}
-            onEndChange={setCycleEnd}
-            onReset={resetCycle}
-          />
-        }
+        actions={cycleActions}
       />
 
       {loading ? (
@@ -389,6 +459,28 @@ export function DashboardPage() {
             title="Tarefas pendentes"
             icon={AlertTriangle}
             count={loading ? undefined : tasks.length}
+            action={
+              canViewAllPendingTasks ? (
+                <div className="flex items-center gap-2">
+                  <Label
+                    htmlFor="dashboard-pending-tasks-scope"
+                    className="cursor-pointer text-xs font-medium text-muted-foreground"
+                  >
+                    {showAllPendingTasks ? 'Todas' : 'Minhas'}
+                  </Label>
+                  <Switch
+                    id="dashboard-pending-tasks-scope"
+                    checked={showAllPendingTasks}
+                    onCheckedChange={setShowAllPendingTasks}
+                    aria-label={
+                      showAllPendingTasks
+                        ? 'Mostrando todas as tarefas. Alternar para só as minhas.'
+                        : 'Mostrando só as minhas tarefas. Alternar para todas.'
+                    }
+                  />
+                </div>
+              ) : undefined
+            }
           />
           <CardContent className="space-y-2">
             {loading ? (
@@ -400,7 +492,11 @@ export function DashboardPage() {
                 compact
                 icon={Clock3}
                 title="Nenhuma tarefa pendente"
-                description="As tarefas do planejamento aparecerão aqui."
+                description={
+                  canViewAllPendingTasks && !showAllPendingTasks
+                    ? 'Você não tem tarefas atribuídas no momento.'
+                    : 'As tarefas do planejamento aparecerão aqui.'
+                }
               />
             ) : (
               tasks.map((task) => {
@@ -410,7 +506,17 @@ export function DashboardPage() {
                     key={task.id}
                     to={`/planejamento?visita=${task.visitId}`}
                     title={task.title}
-                    meta={`${visit ? `${visit.title} · ` : ''}Prazo: ${task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}`}
+                    meta={[
+                      visit?.title,
+                      task.assigneeName &&
+                      canViewAllPendingTasks &&
+                      showAllPendingTasks
+                        ? task.assigneeName
+                        : null,
+                      `Prazo: ${task.dueDate ? formatDate(task.dueDate) : 'Sem prazo'}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                     trailing={<TaskStatusBadge status={task.status} />}
                   />
                 )
