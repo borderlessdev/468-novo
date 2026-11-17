@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -24,13 +26,21 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useVisitDialog } from '@/contexts/VisitDialogContext'
 import { BRAZILIAN_STATES, DEFAULT_CHECKLIST } from '@/lib/constants'
+import { VALE_VPS } from '@/lib/valeVp'
+import { usesValeDashboard } from '@/lib/orgDashboard'
 import {
   quickVisitorSchema,
   visitSchema,
   type QuickVisitorInput,
   type VisitInput,
 } from '@/lib/validations'
-import { createVisit, getVisit, listVisitTemplates } from '@/services/visits'
+import {
+  createVisit,
+  getSuggestedPvNumber,
+  getVisit,
+  listOrgPvNumbers,
+  listVisitTemplates,
+} from '@/services/visits'
 import { createVisitFromTemplate } from '@/services/visitClone'
 import { applyPlaybookToVisit } from '@/services/playbookApply'
 import { listPlaybooks } from '@/services/playbooks'
@@ -41,7 +51,12 @@ import { notifyVisitStakeholders } from '@/services/notifications'
 import type { Playbook, Visit, Visitor } from '@/types'
 import { Search, UserPlus, X } from 'lucide-react'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
+import {
+  PvDuplicateSubmitDialog,
+  PvNumberField,
+} from '@/features/visits/PvNumberField'
 import { kindsForExperienceTab } from '@/lib/visitEvent'
+import { normalizePvNumber, pvNumberExists } from '@/lib/pvNumber'
 
 function datesBetween(startDate: string, endDate: string): string[] {
   if (!startDate || !endDate || endDate < startDate) return []
@@ -62,7 +77,8 @@ interface NewVisitDialogProps {
 export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const { open, setOpen, defaultEventKind } = useVisitDialog()
   const { user, isAdmin, profile } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, activeOrg } = useOrg()
+  const isValeOrg = usesValeDashboard(activeOrg)
   const [saving, setSaving] = useState(false)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [selectedVisitors, setSelectedVisitors] = useState<Visitor[]>([])
@@ -70,6 +86,10 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const [searchResults, setSearchResults] = useState<Visitor[]>([])
   const [templates, setTemplates] = useState<Visit[]>([])
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
+  const [existingPvNumbers, setExistingPvNumbers] = useState<string[]>([])
+  const [suggestedPvNumber, setSuggestedPvNumber] = useState('1')
+  const [allowDuplicatePv, setAllowDuplicatePv] = useState(false)
+  const [pendingDuplicatePv, setPendingDuplicatePv] = useState<string | null>(null)
 
   const form = useForm<VisitInput>({
     resolver: zodResolver(visitSchema),
@@ -78,6 +98,12 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       company: '',
       state: '',
       city: '',
+      vp: '',
+      vipAudience: '',
+      visitorCountry: '',
+      hasPlanting: false,
+      planterName: '',
+      postVisitInfo: '',
       startDate: '',
       endDate: '',
       status: 'planejamento',
@@ -105,33 +131,45 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     void listVisitors(activeOrgId).then(setVisitors)
     void listVisitTemplates(activeOrgId, user.uid, isAdmin).then(setTemplates)
     void listPlaybooks(activeOrgId).then(setPlaybooks)
-  }, [open, user, activeOrgId, isAdmin])
-
-  useEffect(() => {
-    if (!open) return
-    form.reset({
-      title: '',
-      company: '',
-      state: '',
-      city: '',
-      startDate: '',
-      endDate: '',
-      status: 'planejamento',
-      eventKind: defaultEventKind,
-      vipSubtype: undefined,
-      eventScope: undefined,
-      objective: '',
-      language: '',
-      pvNumber: '',
-      templateId: '',
-      playbookId: '',
-      startWithChecklist: true,
-      hasTicketSales: false,
-      communityDailyCapacity: {},
-    })
+    void (async () => {
+      const [existing, suggested] = await Promise.all([
+        listOrgPvNumbers(activeOrgId),
+        getSuggestedPvNumber(activeOrgId),
+      ])
+      setExistingPvNumbers(existing)
+      setSuggestedPvNumber(suggested)
+      setAllowDuplicatePv(false)
+      setPendingDuplicatePv(null)
+      form.reset({
+        title: '',
+        company: '',
+        state: '',
+        city: '',
+        vp: '',
+        vipAudience: '',
+        visitorCountry: '',
+        hasPlanting: false,
+        planterName: '',
+        postVisitInfo: '',
+        startDate: '',
+        endDate: '',
+        status: 'planejamento',
+        eventKind: defaultEventKind,
+        vipSubtype: undefined,
+        eventScope: undefined,
+        objective: '',
+        language: '',
+        pvNumber: suggested,
+        templateId: '',
+        playbookId: '',
+        startWithChecklist: true,
+        hasTicketSales: false,
+        communityDailyCapacity: {},
+      })
+    })()
     // form.reset is stable from RHF; avoid listing `form` (new ref each render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultEventKind])
+  }, [open, user, activeOrgId, isAdmin, defaultEventKind])
 
   const handleSearch = () => {
     const term = search.trim().toLowerCase()
@@ -188,10 +226,11 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     }
   })
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const createVisitWithValues = async (values: VisitInput) => {
     if (!user || !activeOrgId) return
     setSaving(true)
     try {
+      const pvNumber = normalizePvNumber(values.pvNumber)
       let visitId: string
       if (values.templateId) {
         visitId = await createVisitFromTemplate(values.templateId, user.uid, {
@@ -199,11 +238,17 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           company: values.company,
           state: values.state,
           city: values.city,
+          vp: values.vp,
+          vipAudience: values.vipAudience,
+          visitorCountry: values.visitorCountry,
+          hasPlanting: values.hasPlanting === true,
+          planterName: values.planterName,
+          postVisitInfo: values.postVisitInfo,
           startDate: values.startDate,
           endDate: values.endDate,
           objective: values.objective,
           language: values.language,
-          pvNumber: values.pvNumber,
+          pvNumber,
           eventKind: values.eventKind,
           vipSubtype: values.vipSubtype,
           eventScope: values.eventScope,
@@ -214,6 +259,12 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           company: values.company,
           state: values.state,
           city: values.city,
+          vp: values.vp,
+          vipAudience: values.eventKind === 'visita_vip' ? values.vipAudience : undefined,
+          visitorCountry: values.visitorCountry,
+          hasPlanting: values.hasPlanting === true,
+          planterName: values.hasPlanting ? values.planterName : undefined,
+          postVisitInfo: values.postVisitInfo,
           startDate: values.startDate,
           endDate: values.endDate,
           status: values.status,
@@ -222,7 +273,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           eventScope: values.eventScope,
           objective: values.objective,
           language: values.language,
-          pvNumber: values.pvNumber,
+          pvNumber,
            hasTicketSales: values.hasTicketSales === true,
            communityDailyCapacity:
              values.eventKind === 'visita_comunidade' || values.eventKind === 'comunidade_prioritaria'
@@ -276,6 +327,8 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       setSelectedVisitors([])
       setSearch('')
       setSearchResults([])
+      setAllowDuplicatePv(false)
+      setPendingDuplicatePv(null)
       setOpen(false)
       onCreated?.()
     } catch (error) {
@@ -289,9 +342,23 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
     } finally {
       setSaving(false)
     }
+  }
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    const pvNumber = normalizePvNumber(values.pvNumber)
+    if (
+      pvNumber &&
+      pvNumberExists(pvNumber, existingPvNumbers) &&
+      !allowDuplicatePv
+    ) {
+      setPendingDuplicatePv(pvNumber)
+      return
+    }
+    await createVisitWithValues({ ...values, pvNumber })
   })
 
   return (
+    <>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
@@ -396,19 +463,17 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
               <Label htmlFor="company">Empresa</Label>
               <Input id="company" {...form.register('company')} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pvNumber">Número da PV *</Label>
-              <Input
-                id="pvNumber"
-                placeholder="Informe o número da PV"
-                {...form.register('pvNumber')}
-              />
-              {form.formState.errors.pvNumber ? (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.pvNumber.message}
-                </p>
-              ) : null}
-            </div>
+            <PvNumberField
+              value={form.watch('pvNumber') ?? ''}
+              suggestedNext={suggestedPvNumber}
+              existingNumbers={existingPvNumbers}
+              error={form.formState.errors.pvNumber?.message}
+              onChange={(next) => {
+                form.setValue('pvNumber', next, { shouldValidate: true })
+                setAllowDuplicatePv(false)
+              }}
+              onDuplicateConfirmed={() => setAllowDuplicatePv(true)}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Estado</Label>
@@ -436,6 +501,82 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                 <Input id="city" {...form.register('city')} />
               </div>
             </div>
+            {isValeOrg && form.watch('eventKind') === 'visita_vip' ? (
+              <div className="space-y-2">
+                <Label htmlFor="vipAudience">Público</Label>
+                <Input
+                  id="vipAudience"
+                  placeholder="Público a ser preenchido"
+                  {...form.register('vipAudience')}
+                />
+              </div>
+            ) : null}
+            {isValeOrg ? (
+              <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                <div className="space-y-2">
+                  <Label htmlFor="visitorCountry">País do visitante</Label>
+                  <Input
+                    id="visitorCountry"
+                    placeholder="Ex.: Brasil, Chile, China..."
+                    {...form.register('visitorCountry')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>VP solicitante da visita</Label>
+                  <Select
+                    value={form.watch('vp') || '_unset'}
+                    onValueChange={(value) =>
+                      form.setValue('vp', value === '_unset' ? '' : value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a VP / área" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_unset">Sem VP</SelectItem>
+                      {VALE_VPS.map((vp) => (
+                        <SelectItem key={vp} value={vp}>
+                          {vp}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label htmlFor="hasPlanting">Vai ter plantio?</Label>
+                    <p className="text-xs text-muted-foreground">Sim ou não</p>
+                  </div>
+                  <Switch
+                    id="hasPlanting"
+                    checked={form.watch('hasPlanting') === true}
+                    onCheckedChange={(checked) => {
+                      form.setValue('hasPlanting', checked)
+                      if (!checked) form.setValue('planterName', '')
+                    }}
+                  />
+                </div>
+                {form.watch('hasPlanting') ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="planterName">Quem vai plantar?</Label>
+                    <Input
+                      id="planterName"
+                      placeholder="Nome de quem vai plantar"
+                      {...form.register('planterName')}
+                    />
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <Label htmlFor="postVisitInfo">Informações essenciais pós visita</Label>
+                  <Textarea
+                    id="postVisitInfo"
+                    rows={3}
+                    placeholder="Anotações essenciais após a visita"
+                    {...form.register('postVisitInfo')}
+                  />
+                </div>
+              </div>
+            ) : null}
             {['visita_comunidade', 'comunidade_prioritaria'].includes(form.watch('eventKind') ?? '') ? (
               <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
                 <Label>Vagas por dia *</Label>
@@ -619,5 +760,31 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
         </form>
       </DialogContent>
     </Dialog>
+
+    <PvDuplicateSubmitDialog
+      open={pendingDuplicatePv != null}
+      existingPv={pendingDuplicatePv ?? ''}
+      suggestedNext={suggestedPvNumber}
+      onOpenChange={(next) => {
+        if (!next) setPendingDuplicatePv(null)
+      }}
+      onUseNew={() => {
+        form.setValue('pvNumber', suggestedPvNumber, { shouldValidate: true })
+        setAllowDuplicatePv(false)
+        setPendingDuplicatePv(null)
+      }}
+      onDuplicate={() => {
+        if (!pendingDuplicatePv) return
+        const pv = pendingDuplicatePv
+        form.setValue('pvNumber', pv, { shouldValidate: true })
+        setAllowDuplicatePv(true)
+        setPendingDuplicatePv(null)
+        void createVisitWithValues({
+          ...form.getValues(),
+          pvNumber: pv,
+        })
+      }}
+    />
+    </>
   )
 }

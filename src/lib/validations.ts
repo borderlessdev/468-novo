@@ -50,10 +50,16 @@ const visitBaseSchema = z.object({
   eventKind: visitEventKindSchema,
   vipSubtype: visitVipSubtypeSchema.optional(),
   eventScope: visitEventScopeSchema.optional(),
+  vp: z.string().optional(),
+  vipAudience: z.string().optional(),
+  visitorCountry: z.string().optional(),
+  hasPlanting: z.boolean().optional(),
+  planterName: z.string().optional(),
+  postVisitInfo: z.string().optional(),
   objective: z.string().optional(),
   language: z.string().optional(),
   arrivalInstructions: z.string().optional(),
-  pvNumber: z.string().trim().min(1, 'Número da PV obrigatório').optional(),
+  pvNumber: z.string().trim().min(1, 'Número da PV obrigatório'),
   hasTicketSales: z.boolean().optional(),
   communityDailyCapacity: z.record(z.string(), z.number().int().min(1)).optional(),
   templateId: z.string().optional(),
@@ -98,6 +104,10 @@ export const visitEditSchema = visitBaseSchema
     startWithChecklist: true,
     templateId: true,
     playbookId: true,
+    pvNumber: true,
+  })
+  .extend({
+    pvNumber: z.string().trim().optional(),
   })
   .refine(
     (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,

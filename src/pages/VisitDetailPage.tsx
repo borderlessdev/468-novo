@@ -37,6 +37,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
@@ -65,6 +66,8 @@ import {
 import { VisitEditorsPanel } from '@/features/visits/VisitEditorsPanel'
 import { ClientInviteCard } from '@/features/invites/ClientInviteCard'
 import { BRAZILIAN_STATES } from '@/lib/constants'
+import { usesValeDashboard } from '@/lib/orgDashboard'
+import { VALE_VPS, valeVpLabel } from '@/lib/valeVp'
 import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
@@ -174,6 +177,7 @@ export function VisitDetailPage() {
   const navigate = useNavigate()
   const { user, isAdmin, isPlatformAdmin, role, profile } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
+  const isValeOrg = usesValeDashboard(activeOrg)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
@@ -243,6 +247,12 @@ export function VisitDetailPage() {
         company: visitData.company ?? '',
         state: visitData.state ?? '',
         city: visitData.city ?? '',
+        vp: visitData.vp ?? '',
+        vipAudience: visitData.vipAudience ?? '',
+        visitorCountry: visitData.visitorCountry ?? '',
+        hasPlanting: visitData.hasPlanting === true,
+        planterName: visitData.planterName ?? '',
+        postVisitInfo: visitData.postVisitInfo ?? '',
         startDate: visitData.startDate,
         endDate: visitData.endDate,
         status: visitData.status,
@@ -396,6 +406,13 @@ export function VisitDetailPage() {
         company: values.company || undefined,
         state: values.state || undefined,
         city: values.city || undefined,
+        vp: values.vp || undefined,
+        vipAudience:
+          values.eventKind === 'visita_vip' ? values.vipAudience || undefined : undefined,
+        visitorCountry: values.visitorCountry || undefined,
+        hasPlanting: values.hasPlanting === true,
+        planterName: values.hasPlanting ? values.planterName || undefined : undefined,
+        postVisitInfo: values.postVisitInfo || undefined,
         startDate: values.startDate,
         endDate: values.endDate,
         status: values.status,
@@ -1530,6 +1547,82 @@ export function VisitDetailPage() {
                   <Input {...form.register('city')} />
                 </div>
               </div>
+              {isValeOrg && form.watch('eventKind') === 'visita_vip' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="vipAudience">Público</Label>
+                  <Input
+                    id="vipAudience"
+                    placeholder="Público a ser preenchido"
+                    {...form.register('vipAudience')}
+                  />
+                </div>
+              ) : null}
+              {isValeOrg ? (
+                <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="visitorCountry">País do visitante</Label>
+                    <Input
+                      id="visitorCountry"
+                      placeholder="Ex.: Brasil, Chile, China..."
+                      {...form.register('visitorCountry')}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>VP solicitante da visita</Label>
+                    <Select
+                      value={form.watch('vp') || '_unset'}
+                      onValueChange={(value) =>
+                        form.setValue('vp', value === '_unset' ? '' : value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a VP / área" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_unset">Sem VP</SelectItem>
+                        {VALE_VPS.map((vp) => (
+                          <SelectItem key={vp} value={vp}>
+                            {vp}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label htmlFor="hasPlanting">Vai ter plantio?</Label>
+                      <p className="text-xs text-muted-foreground">Sim ou não</p>
+                    </div>
+                    <Switch
+                      id="hasPlanting"
+                      checked={form.watch('hasPlanting') === true}
+                      onCheckedChange={(checked) => {
+                        form.setValue('hasPlanting', checked)
+                        if (!checked) form.setValue('planterName', '')
+                      }}
+                    />
+                  </div>
+                  {form.watch('hasPlanting') ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="planterName">Quem vai plantar?</Label>
+                      <Input
+                        id="planterName"
+                        placeholder="Nome de quem vai plantar"
+                        {...form.register('planterName')}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="space-y-2">
+                    <Label htmlFor="postVisitInfo">Informações essenciais pós visita</Label>
+                    <Textarea
+                      id="postVisitInfo"
+                      rows={3}
+                      placeholder="Anotações essenciais após a visita"
+                      {...form.register('postVisitInfo')}
+                    />
+                  </div>
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Data início</Label>
@@ -1595,6 +1688,20 @@ export function VisitDetailPage() {
               <dl className="space-y-2 text-sm">
                 <div><dt className="text-muted-foreground">Tipo de experiência</dt><dd>{visitEventLabel(visit)}</dd></div>
                 <div><dt className="text-muted-foreground">Empresa</dt><dd>{visit.company || '—'}</dd></div>
+                {isValeOrg && visit.eventKind === 'visita_vip' ? (
+                  <div><dt className="text-muted-foreground">Público</dt><dd>{visit.vipAudience || '—'}</dd></div>
+                ) : null}
+                {isValeOrg ? (
+                  <>
+                    <div><dt className="text-muted-foreground">País do visitante</dt><dd>{visit.visitorCountry || '—'}</dd></div>
+                    <div><dt className="text-muted-foreground">VP solicitante da visita</dt><dd>{valeVpLabel(visit.vp)}</dd></div>
+                    <div><dt className="text-muted-foreground">Vai ter plantio?</dt><dd>{visit.hasPlanting ? 'Sim' : 'Não'}</dd></div>
+                    {visit.hasPlanting ? (
+                      <div><dt className="text-muted-foreground">Quem vai plantar?</dt><dd>{visit.planterName || '—'}</dd></div>
+                    ) : null}
+                    <div><dt className="text-muted-foreground">Informações essenciais pós visita</dt><dd className="whitespace-pre-line">{visit.postVisitInfo || '—'}</dd></div>
+                  </>
+                ) : null}
                 <div><dt className="text-muted-foreground">Local</dt><dd>{visit.city || '—'}{visit.state ? `, ${visit.state}` : ''}</dd></div>
                 <div><dt className="text-muted-foreground">Período</dt><dd>{formatDate(visit.startDate)} — {formatDate(visit.endDate)}</dd></div>
                 <div><dt className="text-muted-foreground">Objetivo</dt><dd>{visit.objective || '—'}</dd></div>

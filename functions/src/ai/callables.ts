@@ -212,7 +212,9 @@ function mockHelpAnswer(
     .join('\n')
 }
 
-export const getAiStatus = onCall({ timeoutSeconds: 60 }, async (request) => {
+export const getAiStatus = onCall(
+  { cors: true, invoker: 'public', timeoutSeconds: 60 },
+  async (request) => {
   requireUid(request.auth)
 
   const provider = readAiProvider()
@@ -228,7 +230,9 @@ export const getAiStatus = onCall({ timeoutSeconds: 60 }, async (request) => {
   }
 })
 
-export const askHelpAssistant = onCall({ timeoutSeconds: 60 }, async (request) => {
+export const askHelpAssistant = onCall(
+  { cors: true, invoker: 'public', timeoutSeconds: 60 },
+  async (request) => {
   const uid = requireUid(request.auth)
   enforceRateLimit(uid)
 
@@ -413,7 +417,7 @@ Regras:
 - Não invente atividades sem base no CSV.`
 
 export const mapProgrammingImport = onCall(
-  { timeoutSeconds: 120 },
+  { cors: true, invoker: 'public', timeoutSeconds: 120 },
   async (request) => {
     const uid = requireUid(request.auth)
     enforceRateLimit(uid)
@@ -558,7 +562,9 @@ Responda APENAS JSON: {"subject":"...","body":"..."} (subject opcional para gues
 Tom profissional e objetivo. Não invente dados que não estejam no contexto.
 Para guest_invite, inclua a URL do portal se fornecida. Não invente URLs.`
 
-export const draftCommunication = onCall({ timeoutSeconds: 60 }, async (request) => {
+export const draftCommunication = onCall(
+  { cors: true, invoker: 'public', timeoutSeconds: 60 },
+  async (request) => {
   const uid = requireUid(request.auth)
   enforceRateLimit(uid)
 

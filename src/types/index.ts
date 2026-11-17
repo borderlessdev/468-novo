@@ -187,6 +187,18 @@ export interface Visit extends SoftDeletable {
   vipSubtype?: VisitVipSubtype
   /** Obrigatório quando eventKind === 'evento'. */
   eventScope?: VisitEventScope
+  /** VP / área solicitante (dashboard Vale — Visitas por VP). */
+  vp?: string
+  /** Público da visita VIP (texto livre). */
+  vipAudience?: string
+  /** País do visitante (cadastro Vale). */
+  visitorCountry?: string
+  /** Haverá plantio nesta visita. */
+  hasPlanting?: boolean
+  /** Quem vai plantar (nome aberto). */
+  planterName?: string
+  /** Informações essenciais pós visita. */
+  postVisitInfo?: string
   objective?: string
   language?: string
   pvNumber?: string

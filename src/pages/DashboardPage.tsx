@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import ReactECharts from 'echarts-for-react'
+import type { EChartsOption } from 'echarts'
 import {
   CalendarDays,
   Clock3,
@@ -14,7 +16,7 @@ import { CyclePeriodFields } from '@/components/shared/CyclePeriodFields'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ListRowLink, SectionCardHeader } from '@/components/shared/ListRow'
 import { VisitStatusBadge, TaskStatusBadge } from '@/components/shared/StatusBadge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
@@ -23,6 +25,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
 import { usesValeDashboard } from '@/lib/orgDashboard'
+import { sumContracted, sumRealized } from '@/lib/financeMetrics'
+import { VALE_BRAND } from '@/lib/valeBrand'
+import { VALE_VPS, valeVpLabel } from '@/lib/valeVp'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   VISIT_EVENT_KINDS,
@@ -165,15 +170,40 @@ export function DashboardPage() {
     return visits.filter((v) => visitOverlapsPeriod(v, range.startIso, range.endIso))
   }, [visits, range.endIso, range.startIso])
 
-  const cycleSpend = useMemo(() => {
+  /** Realizadas = concluídas. A realizar = planejamento + em andamento. Canceladas fora. */
+  const realizedVisits = useMemo(
+    () => cycleVisits.filter((v) => v.status === 'concluida'),
+    [cycleVisits],
+  )
+  const pendingVisits = useMemo(
+    () =>
+      cycleVisits.filter(
+        (v) => v.status === 'planejamento' || v.status === 'em_andamento',
+      ),
+    [cycleVisits],
+  )
+  const operationalCycleVisits = useMemo(
+    () => [...realizedVisits, ...pendingVisits],
+    [realizedVisits, pendingVisits],
+  )
+
+  const cycleFinanceItems = useMemo(() => {
     const ids = new Set(cycleVisits.map((v) => v.id))
-    return financeItems
-      .filter((item) => ids.has(item.visitId))
-      .reduce((sum, item) => sum + (item.serviceValue ?? 0), 0)
+    return financeItems.filter((item) => ids.has(item.visitId))
   }, [cycleVisits, financeItems])
 
+  const cycleContractTotal = useMemo(
+    () => sumContracted(cycleFinanceItems),
+    [cycleFinanceItems],
+  )
+
+  /** Gasto do ciclo: realizado (pago / NF). Fallback visual: contratado se ainda sem realizado. */
+  const cycleSpend = useMemo(() => sumRealized(cycleFinanceItems), [cycleFinanceItems])
+
+  const visitorSourceVisits = isValeDash ? operationalCycleVisits : cycleVisits
+
   useEffect(() => {
-    if (!user || cycleVisits.length === 0) {
+    if (!user || visitorSourceVisits.length === 0) {
       setVisitorCount(0)
       return
     }
@@ -181,7 +211,9 @@ export function DashboardPage() {
     void (async () => {
       try {
         const links = await Promise.all(
-          cycleVisits.map((v) => listVisitVisitors(v.id, user.uid, isPlatformAdmin)),
+          visitorSourceVisits.map((v) =>
+            listVisitVisitors(v.id, user.uid, isPlatformAdmin),
+          ),
         )
         if (!cancelled) {
           setVisitorCount(new Set(links.flat().map((l) => l.visitorId)).size)
@@ -194,13 +226,47 @@ export function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [cycleVisits, user, isPlatformAdmin])
+  }, [visitorSourceVisits, user, isPlatformAdmin])
 
   const planningVisits = cycleVisits.filter((v) => v.status === 'planejamento')
   const ongoingVisits = cycleVisits.filter((v) => v.status === 'em_andamento')
   const vipCommercialVisits = cycleVisits.filter(
     (v) => v.eventKind === 'visita_vip' && v.vipSubtype === 'comercial',
   )
+
+  const visitsByState = useMemo(() => {
+    const map = new Map<string, Visit[]>()
+    for (const visit of operationalCycleVisits) {
+      const key = visit.state?.trim() || 'Sem estado'
+      const list = map.get(key) ?? []
+      list.push(visit)
+      map.set(key, list)
+    }
+    return [...map.entries()]
+      .map(([label, items]) => ({ label, items, count: items.length }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'))
+  }, [operationalCycleVisits])
+
+  const visitsByVp = useMemo(() => {
+    const map = new Map<string, Visit[]>()
+    for (const vp of VALE_VPS) map.set(vp, [])
+    map.set('Sem VP', [])
+    for (const visit of operationalCycleVisits) {
+      const raw = visit.vp?.trim() ?? ''
+      const key =
+        raw && (VALE_VPS as readonly string[]).includes(raw) ? raw : valeVpLabel(visit.vp)
+      const list = map.get(key) ?? []
+      list.push(visit)
+      map.set(key, list)
+    }
+    return [...map.entries()]
+      .map(([label, items]) => ({ label, items, count: items.length }))
+      .filter(
+        (row) =>
+          row.count > 0 || (VALE_VPS as readonly string[]).includes(row.label),
+      )
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'))
+  }, [operationalCycleVisits])
 
   const eventKindCounts = useMemo(() => {
     const counts = Object.fromEntries(
@@ -247,30 +313,57 @@ export function DashboardPage() {
         evento: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
       }
 
-  const kpis = [
+  const valeKpis = [
     {
-      label: isValeDash ? 'Total de Visitas do Ciclo' : 'Experiências do ciclo',
+      label: 'Visitas realizadas do ciclo',
+      value: String(realizedVisits.length),
+      records: toKpiRecords(realizedVisits),
+      hint: `Status concluída · ciclo ${cycleLabel}`,
+      icon: CalendarDays,
+      tone: 'bg-[#007E7A]/15 text-[#005F5B]',
+    },
+    {
+      label: 'Visitas a realizar',
+      value: String(pendingVisits.length),
+      records: toKpiRecords(pendingVisits),
+      hint: `Planejamento + em andamento · ciclo ${cycleLabel}`,
+      icon: Clock3,
+      tone: 'bg-[#ECB11F]/15 text-[#8A6500]',
+    },
+    {
+      label: 'Visitantes do ciclo',
+      value: String(visitorCount),
+      hint: `Realizadas + a realizar · ciclo ${cycleLabel}`,
+      icon: Users,
+      tone: 'bg-[#003D3A]/10 text-[#003D3A]',
+    },
+    ...(!isClient
+      ? [
+          {
+            label: 'Total de gastos do ciclo',
+            value: formatCurrency(cycleSpend),
+            hint: `Ciclo ${cycleLabel}`,
+            icon: DollarSign,
+            tone: 'bg-[#007E7A]/15 text-[#005F5B]',
+          },
+        ]
+      : []),
+  ]
+
+  const defaultKpis = [
+    {
+      label: 'Experiências do ciclo',
       value: String(cycleVisits.length),
       records: toKpiRecords(cycleVisits),
-      hint: isValeDash
-        ? `Todas as visitas · ciclo ${cycleLabel}`
-        : `Todas as experiências · ciclo ${cycleLabel}`,
+      hint: `Todas as experiências · ciclo ${cycleLabel}`,
       icon: CalendarDays,
-      tone: isValeDash
-        ? 'bg-[#007E7A]/15 text-[#005F5B]'
-        : 'bg-brand/15 text-brand-foreground dark:text-brand',
+      tone: 'bg-brand/15 text-brand-foreground dark:text-brand',
     },
     ...VISIT_EVENT_KINDS.map((kind) => ({
-      label:
-        isValeDash && kind === 'evento'
-          ? 'Total do Evento do Ciclo'
-          : visitEventKindLabel(kind),
+      label: visitEventKindLabel(kind),
       value: String(eventKindCounts[kind].length),
       records: toKpiRecords(eventKindCounts[kind]),
-      hint:
-        isValeDash && kind === 'evento'
-          ? `Eventos · ciclo ${cycleLabel}`
-          : `Tipo de experiência · ciclo ${cycleLabel}`,
+      hint: `Tipo de experiência · ciclo ${cycleLabel}`,
       icon: CalendarDays,
       tone: eventKindTone[kind],
     })),
@@ -280,58 +373,190 @@ export function DashboardPage() {
       records: toKpiRecords(vipCommercialVisits),
       hint: `Subtipo Comercial · ciclo ${cycleLabel}`,
       icon: TrendingUp,
-      tone: isValeDash
-        ? 'bg-[#ECB11F]/15 text-[#8A6500]'
-        : 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+      tone: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
     },
     {
       label: 'Em planejamento',
       value: String(planningVisits.length),
       records: toKpiRecords(planningVisits),
       icon: Clock3,
-      tone: isValeDash ? 'bg-[#ECB11F]/12 text-[#8A6500]' : 'bg-warning/10 text-warning',
+      tone: 'bg-warning/10 text-warning',
     },
     {
       label: 'Em andamento',
       value: String(ongoingVisits.length),
       records: toKpiRecords(ongoingVisits),
       icon: TrendingUp,
-      tone: isValeDash
-        ? 'bg-[#007E7A]/12 text-[#007E7A]'
-        : 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
+      tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
     },
     {
       label: 'Total de visitantes',
       value: String(visitorCount),
       hint: `Vinculados às visitas do ciclo ${cycleLabel}`,
       icon: Users,
-      tone: isValeDash
-        ? 'bg-[#003D3A]/10 text-[#003D3A]'
-        : 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+      tone: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
     },
     {
       label: 'Novos no CRM',
       value: String(newVisitorsInCycle),
       hint: `Cadastrados no ciclo ${cycleLabel}`,
       icon: Users,
-      tone: isValeDash
-        ? 'bg-[#007E7A]/10 text-[#005F5B]'
-        : 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400',
+      tone: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400',
     },
     ...(!isClient
       ? [
           {
-            label: isValeDash ? 'Total de gastos do ciclo' : 'Gastos do ciclo',
+            label: 'Gastos do ciclo',
             value: formatCurrency(cycleSpend),
             hint: `Ciclo ${cycleLabel}`,
             icon: DollarSign,
-            tone: isValeDash
-              ? 'bg-[#007E7A]/15 text-[#005F5B]'
-              : 'bg-brand/15 text-brand-foreground dark:text-brand',
+            tone: 'bg-brand/15 text-brand-foreground dark:text-brand',
           },
         ]
       : []),
   ]
+
+  const kpis = isValeDash ? valeKpis : defaultKpis
+
+  const statusDonutOption = useMemo<EChartsOption>(() => {
+    const data = [
+      {
+        name: 'Realizadas',
+        value: realizedVisits.length,
+        itemStyle: { color: VALE_BRAND.green },
+      },
+      {
+        name: 'A realizar',
+        value: pendingVisits.length,
+        itemStyle: { color: VALE_BRAND.yellow },
+      },
+    ].filter((item) => item.value > 0)
+
+    return {
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      legend: { bottom: 0, textStyle: { color: '#747678' } },
+      series: [
+        {
+          type: 'pie',
+          radius: ['48%', '72%'],
+          center: ['50%', '46%'],
+          avoidLabelOverlap: true,
+          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          label: { formatter: '{b}\n{c}', color: '#003D3A' },
+          data:
+            data.length > 0
+              ? data
+              : [{ name: 'Sem visitas', value: 1, itemStyle: { color: '#D4D4D4' } }],
+        },
+      ],
+    }
+  }, [realizedVisits.length, pendingVisits.length])
+
+  const stateBarOption = useMemo<EChartsOption>(() => {
+    const rows = [...visitsByState].reverse()
+    const total = visitsByState.reduce((sum, row) => sum + row.count, 0)
+    return {
+      title: {
+        text: 'Total de visitas por estado',
+        subtext: `${total} visita(s) no ciclo`,
+        left: 0,
+        textStyle: { color: '#003D3A', fontSize: 14, fontWeight: 600 },
+        subtextStyle: { color: '#747678', fontSize: 12 },
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const row = Array.isArray(params) ? params[0] : null
+          if (!row || typeof row !== 'object') return ''
+          const item = row as { name?: string; value?: number }
+          return `${item.name ?? ''}<br/>Visitas: <b>${item.value ?? 0}</b>`
+        },
+      },
+      grid: { left: 48, right: 36, top: 56, bottom: 28 },
+      xAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: '#747678' },
+        splitLine: { lineStyle: { color: '#E8E8E8' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: rows.map((row) => row.label),
+        axisLabel: { color: '#003D3A' },
+        axisTick: { show: false },
+        axisLine: { show: false },
+      },
+      series: [
+        {
+          name: 'Total de visitas por estado',
+          type: 'bar',
+          data: rows.map((row) => row.count),
+          barMaxWidth: 22,
+          itemStyle: {
+            color: VALE_BRAND.green,
+            borderRadius: [0, 6, 6, 0],
+          },
+          label: { show: true, position: 'right', color: '#005F5B' },
+        },
+      ],
+    }
+  }, [visitsByState])
+
+  const vpBarOption = useMemo<EChartsOption>(() => {
+    const rows = [...visitsByVp].reverse()
+    const total = visitsByVp.reduce((sum, row) => sum + row.count, 0)
+    return {
+      title: {
+        text: 'Visitas por VP',
+        subtext: `${total} visita(s) no ciclo`,
+        left: 0,
+        textStyle: { color: '#003D3A', fontSize: 14, fontWeight: 600 },
+        subtextStyle: { color: '#747678', fontSize: 12 },
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const row = Array.isArray(params) ? params[0] : null
+          if (!row || typeof row !== 'object') return ''
+          const item = row as { name?: string; value?: number }
+          return `${item.name ?? ''}<br/>Visitas: <b>${item.value ?? 0}</b>`
+        },
+      },
+      grid: { left: 130, right: 36, top: 56, bottom: 28 },
+      xAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: '#747678' },
+        splitLine: { lineStyle: { color: '#E8E8E8' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: rows.map((row) => row.label),
+        axisLabel: {
+          color: '#003D3A',
+          width: 118,
+          overflow: 'truncate',
+        },
+        axisTick: { show: false },
+        axisLine: { show: false },
+      },
+      series: [
+        {
+          name: 'Visitas por VP',
+          type: 'bar',
+          data: rows.map((row) => row.count),
+          barMaxWidth: 22,
+          itemStyle: {
+            color: VALE_BRAND.yellow,
+            borderRadius: [0, 6, 6, 0],
+          },
+          label: { show: true, position: 'right', color: '#8A6500' },
+        },
+      ],
+    }
+  }, [visitsByVp])
 
   const cycleActions = (
     <CyclePeriodFields
@@ -350,18 +575,23 @@ export function DashboardPage() {
       {isValeDash ? (
         <ValeCostOverviewPanel
           stats={{
-            totalVisits: cycleVisits.length,
-            totalEvents: eventKindCounts.evento.length,
-            vipVisits: eventKindCounts.visita_vip.length,
-            communityVisits:
-              eventKindCounts.comunidade_prioritaria.length +
-              eventKindCounts.visita_comunidade.length,
+            totalVisits: operationalCycleVisits.length,
             cycleLabel,
+            realizedVisits: realizedVisits.length,
+            pendingVisits: pendingVisits.length,
+            visitorCount,
+            contractTotal: cycleContractTotal,
+            spendTotal: cycleSpend,
           }}
+          vpRows={visitsByVp.map((row) => ({
+            label: row.label,
+            count: row.count,
+          }))}
         />
       ) : null}
 
       <PageHeader
+        className="sm:items-start"
         title={isValeDash ? 'Operações' : 'Dashboard'}
         description={`Visão geral das operações · Ciclo ${cycleLabel}`}
         actions={cycleActions}
@@ -369,7 +599,9 @@ export function DashboardPage() {
 
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: isClient ? 9 : 10 }).map((_, i) => (
+          {Array.from({
+            length: isValeDash ? (isClient ? 3 : 4) : isClient ? 9 : 10,
+          }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
         </div>
@@ -406,10 +638,100 @@ export function DashboardPage() {
         </div>
       )}
 
+      {isValeDash && !loading ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Realizadas × a realizar</CardTitle>
+              <CardDescription>Distribuição operacional do ciclo {cycleLabel}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {operationalCycleVisits.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon={CalendarDays}
+                  title="Nenhuma visita no ciclo"
+                  description="Cadastre ou ajuste o período para ver o gráfico."
+                />
+              ) : (
+                <ReactECharts
+                  option={statusDonutOption}
+                  style={{ height: 280 }}
+                  opts={{ renderer: 'svg' }}
+                />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Total de visitas por estado</CardTitle>
+              <CardDescription>
+                {visitsByState.reduce((sum, row) => sum + row.count, 0)} visita(s) · ciclo{' '}
+                {cycleLabel}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {visitsByState.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon={MapPin}
+                  title="Nenhuma visita no ciclo"
+                  description="Cadastre visitas com UF para ver o total por estado."
+                />
+              ) : (
+                <ReactECharts
+                  option={stateBarOption}
+                  style={{
+                    height: Math.max(280, visitsByState.length * 36 + 72),
+                  }}
+                  opts={{ renderer: 'svg' }}
+                  onEvents={{
+                    click: (params: { name?: string }) => {
+                      const row = visitsByState.find((item) => item.label === params.name)
+                      if (row) setPreviewRecordIds(row.items.map((visit) => visit.id))
+                    },
+                  }}
+                />
+              )}
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">Visitas por VP</CardTitle>
+              <CardDescription>
+                {visitsByVp.reduce((sum, row) => sum + row.count, 0)} visita(s) por
+                vice-presidência · ciclo {cycleLabel}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ReactECharts
+                option={vpBarOption}
+                style={{
+                  height: Math.max(320, visitsByVp.length * 40 + 72),
+                }}
+                opts={{ renderer: 'svg' }}
+                onEvents={{
+                  click: (params: { name?: string }) => {
+                    const row = visitsByVp.find((item) => item.label === params.name)
+                    if (row) setPreviewRecordIds(row.items.map((visit) => visit.id))
+                  },
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <SectionCardHeader
-            title={previewRecordIds ? 'Eventos selecionados' : 'Experiências do ciclo'}
+            title={
+              previewRecordIds
+                ? 'Eventos selecionados'
+                : isValeDash
+                  ? 'Visitas do ciclo'
+                  : 'Experiências do ciclo'
+            }
             icon={MapPin}
             count={loading ? undefined : displayedVisits.length}
             action={

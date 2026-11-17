@@ -72,6 +72,12 @@ export async function saveVisitAsTemplate(
     company: source.company,
     state: source.state,
     city: source.city,
+    vp: source.vp,
+    vipAudience: source.vipAudience,
+    visitorCountry: source.visitorCountry,
+    hasPlanting: source.hasPlanting === true,
+    planterName: source.hasPlanting ? source.planterName : undefined,
+    postVisitInfo: source.postVisitInfo,
     startDate: source.startDate,
     endDate: source.endDate,
     status: 'planejamento',
@@ -107,6 +113,12 @@ export async function duplicateVisit(
     company: source.company,
     state: source.state,
     city: source.city,
+    vp: source.vp,
+    vipAudience: source.vipAudience,
+    visitorCountry: source.visitorCountry,
+    hasPlanting: source.hasPlanting === true,
+    planterName: source.hasPlanting ? source.planterName : undefined,
+    postVisitInfo: source.postVisitInfo,
     startDate,
     endDate,
     status: 'planejamento',
@@ -139,6 +151,12 @@ export async function createVisitFromTemplate(
         | 'company'
         | 'state'
         | 'city'
+        | 'vp'
+        | 'vipAudience'
+        | 'visitorCountry'
+        | 'hasPlanting'
+        | 'planterName'
+        | 'postVisitInfo'
         | 'objective'
         | 'language'
         | 'pvNumber'
@@ -152,11 +170,23 @@ export async function createVisitFromTemplate(
   if (!template || !template.isTemplate) throw new Error('Template não encontrado')
 
   const eventKind = overrides.eventKind ?? template.eventKind
+  const hasPlanting = overrides.hasPlanting ?? template.hasPlanting === true
   const newId = await createVisit(ownerId, template.orgId, {
     title: overrides.title,
     company: overrides.company ?? template.company,
     state: overrides.state ?? template.state,
     city: overrides.city ?? template.city,
+    vp: overrides.vp ?? template.vp,
+    vipAudience:
+      eventKind === 'visita_vip'
+        ? (overrides.vipAudience ?? template.vipAudience)
+        : undefined,
+    visitorCountry: overrides.visitorCountry ?? template.visitorCountry,
+    hasPlanting,
+    planterName: hasPlanting
+      ? (overrides.planterName ?? template.planterName)
+      : undefined,
+    postVisitInfo: overrides.postVisitInfo ?? template.postVisitInfo,
     startDate: overrides.startDate,
     endDate: overrides.endDate,
     status: 'planejamento',
