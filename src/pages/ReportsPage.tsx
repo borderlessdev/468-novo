@@ -51,6 +51,15 @@ import {
   getExportFormatLabel,
   type TableExportFormat,
 } from '@/lib/export'
+import { usesValeDashboard } from '@/lib/orgDashboard'
+import {
+  VALE_EXPORT_HEADERS,
+  operationalVisitsInCycle,
+  valeExportColumns,
+  visitsByState,
+  visitsByVp,
+  type DistributionRow,
+} from '@/lib/visitReports'
 import { listVisits } from '@/services/visits'
 import { listVisitors } from '@/services/visitors'
 import { listFinanceItemsByOwner } from '@/services/finance'
@@ -76,7 +85,10 @@ function visitorCreatedIso(visitor: Visitor): string | null {
 
 export function ReportsPage() {
   const { user, isPlatformAdmin, role } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, activeOrg } = useOrg()
+  const isValeOrg = usesValeDashboard(activeOrg)
+  const valeHeaders: string[] = isValeOrg ? [...VALE_EXPORT_HEADERS] : []
+  const valeColumns = (visit: Visit): string[] => (isValeOrg ? valeExportColumns(visit) : [])
   const {
     cycleLabel,
     isDefaultCycle,
@@ -311,7 +323,16 @@ export function ReportsPage() {
       doc.save('visitas-do-ciclo.pdf')
     } else {
       downloadCsv('visitas-do-ciclo.csv', [
-        ['Título', 'Tipo de experiência', 'Início', 'Fim', 'Local', 'Estado', 'Status'],
+        [
+          'Título',
+          'Tipo de experiência',
+          'Início',
+          'Fim',
+          'Local',
+          'Estado',
+          'Status',
+          ...valeHeaders,
+        ],
         ...rows.map((v) => [
           v.title,
           visitEventLabel(v),
@@ -320,6 +341,7 @@ export function ReportsPage() {
           v.city ?? '',
           v.state ?? '',
           v.status,
+          ...valeColumns(v),
         ]),
       ])
     }
@@ -376,7 +398,7 @@ export function ReportsPage() {
       doc.save(`${filenameBase}.pdf`)
     } else {
       downloadCsv(`${filenameBase}.csv`, [
-        ['Título', extraHeader, 'Início', 'Fim', 'Local', 'Estado', 'Status'],
+        ['Título', extraHeader, 'Início', 'Fim', 'Local', 'Estado', 'Status', ...valeHeaders],
         ...rows.map((v) => [
           v.title,
           extraValue(v),
@@ -385,6 +407,7 @@ export function ReportsPage() {
           v.city ?? '',
           v.state ?? '',
           v.status,
+          ...valeColumns(v),
         ]),
       ])
     }
@@ -393,6 +416,116 @@ export function ReportsPage() {
         ? `PDF exportado (${rows.length} experiência${rows.length === 1 ? '' : 's'})`
         : `CSV exportado (${rows.length} experiência${rows.length === 1 ? '' : 's'})`,
     )
+  }
+
+  const cycleOperationalVisits = useMemo(
+    () => operationalVisitsInCycle(visits, range.startIso, range.endIso),
+    [visits, range.startIso, range.endIso],
+  )
+
+  const exportDistribution = (
+    options: {
+      title: string
+      filenameBase: string
+      firstHeader: string
+      rows: DistributionRow[]
+    },
+    asPdf: boolean,
+  ) => {
+    const { title, filenameBase, firstHeader, rows } = options
+    const total = rows.reduce((sum, row) => sum + row.total, 0)
+    if (asPdf) {
+      const doc = new jsPDF()
+      doc.setFontSize(14)
+      doc.text(`${title} (${cycleLabel})`, 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Total: ${total} visita(s)`, 14, 28)
+      rows.forEach((row, index) => {
+        doc.text(
+          `${row.label}: ${row.total} (realizadas ${row.realized} · a realizar ${row.pending})`,
+          14,
+          38 + index * 8,
+        )
+      })
+      doc.save(`${filenameBase}.pdf`)
+    } else {
+      downloadCsv(`${filenameBase}.csv`, [
+        [firstHeader, 'Visitas', 'Realizadas', 'A realizar'],
+        ...rows.map((row) => [
+          row.label,
+          String(row.total),
+          String(row.realized),
+          String(row.pending),
+        ]),
+        ['Total', String(total), String(rows.reduce((s, r) => s + r.realized, 0)), String(rows.reduce((s, r) => s + r.pending, 0))],
+      ])
+    }
+    toast.success(asPdf ? 'PDF exportado' : 'CSV exportado')
+  }
+
+  const exportVisitorsPerVisit = async (asPdf = false) => {
+    if (!user) return
+    try {
+      const nameById = new Map(visitors.map((visitor) => [visitor.id, visitor.name]))
+      const rows = await Promise.all(
+        cycleOperationalVisits.map(async (visit) => {
+          const links = await listVisitVisitors(visit.id, user.uid, isPlatformAdmin)
+          const ids = [...new Set(links.map((link) => link.visitorId))]
+          return {
+            visit,
+            count: ids.length,
+            names: ids.map((id) => nameById.get(id) ?? 'Visitante removido'),
+          }
+        }),
+      )
+      rows.sort((a, b) => a.visit.startDate.localeCompare(b.visit.startDate))
+      const totalVisitors = rows.reduce((sum, row) => sum + row.count, 0)
+
+      if (asPdf) {
+        const doc = new jsPDF()
+        doc.setFontSize(14)
+        doc.text(`Visitantes por visita (${cycleLabel})`, 14, 20)
+        doc.setFontSize(10)
+        doc.text(`${rows.length} visita(s) · ${totalVisitors} vínculo(s) de visitante`, 14, 28)
+        rows.forEach((row, index) => {
+          doc.text(
+            `${row.visit.title} | ${formatDate(row.visit.startDate)} | ${row.count} visitante(s)`,
+            14,
+            38 + index * 8,
+          )
+        })
+        doc.save('visitantes-por-visita.pdf')
+      } else {
+        downloadCsv('visitantes-por-visita.csv', [
+          [
+            'Visita',
+            'Tipo de experiência',
+            'Início',
+            'Fim',
+            'Estado',
+            'Status',
+            ...valeHeaders,
+            'Qtd. visitantes',
+            'Visitantes',
+          ],
+          ...rows.map((row) => [
+            row.visit.title,
+            visitEventLabel(row.visit),
+            formatDate(row.visit.startDate),
+            formatDate(row.visit.endDate),
+            row.visit.state ?? '',
+            row.visit.status,
+            ...valeColumns(row.visit),
+            String(row.count),
+            row.names.join('; '),
+          ]),
+        ])
+      }
+      toast.success(asPdf ? 'PDF exportado' : 'CSV exportado')
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível gerar o relatório de visitantes por visita')
+    }
   }
 
   const exportRecurringVisitors = async (asPdf = false) => {
@@ -751,6 +884,73 @@ export function ReportsPage() {
           onCsv={() => exportKindVisits('evento', false)}
           onPdf={() => exportKindVisits('evento', true)}
         />
+        {isValeOrg ? (
+        <ReportCard
+          icon={MapPin}
+          title="Visitas por Estado"
+          description={`Quantidade de visitas por UF no ciclo ${cycleLabel} (sem canceladas).`}
+          onCsv={() =>
+            exportDistribution(
+              {
+                title: 'Visitas por estado',
+                filenameBase: 'visitas-por-estado',
+                firstHeader: 'Estado',
+                rows: visitsByState(cycleOperationalVisits),
+              },
+              false,
+            )
+          }
+          onPdf={() =>
+            exportDistribution(
+              {
+                title: 'Visitas por estado',
+                filenameBase: 'visitas-por-estado',
+                firstHeader: 'Estado',
+                rows: visitsByState(cycleOperationalVisits),
+              },
+              true,
+            )
+          }
+        />
+        ) : null}
+        {isValeOrg ? (
+          <ReportCard
+            icon={BarChart3}
+            title="Visitas por VP / Demandante"
+            description={`Quantas visitas cada área solicitou no ciclo ${cycleLabel}.`}
+            onCsv={() =>
+              exportDistribution(
+                {
+                  title: 'Visitas por VP / demandante',
+                  filenameBase: 'visitas-por-vp',
+                  firstHeader: 'VP / área solicitante',
+                  rows: visitsByVp(cycleOperationalVisits),
+                },
+                false,
+              )
+            }
+            onPdf={() =>
+              exportDistribution(
+                {
+                  title: 'Visitas por VP / demandante',
+                  filenameBase: 'visitas-por-vp',
+                  firstHeader: 'VP / área solicitante',
+                  rows: visitsByVp(cycleOperationalVisits),
+                },
+                true,
+              )
+            }
+          />
+        ) : null}
+        {isValeOrg ? (
+        <ReportCard
+          icon={Users}
+          title="Visitantes por Visita"
+          description={`Quantidade e nomes dos visitantes de cada visita no ciclo ${cycleLabel}.`}
+          onCsv={() => void exportVisitorsPerVisit(false)}
+          onPdf={() => void exportVisitorsPerVisit(true)}
+        />
+        ) : null}
         <ReportCard
           icon={Users}
           title="Visitantes Recorrentes"

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { VALE_BRAND } from '@/lib/valeBrand'
 import { VALE_VPS } from '@/lib/valeVp'
 
@@ -24,10 +24,6 @@ export type ValeCostOverviewStats = {
   realizedVisits: number
   pendingVisits: number
   visitorCount: number
-  /** Soma dos valores contratados (serviceValue) no ciclo. */
-  contractTotal?: number
-  /** Soma dos gastos realizados no ciclo. */
-  spendTotal?: number
 }
 
 export type ValeVpChartRow = {
@@ -35,7 +31,7 @@ export type ValeVpChartRow = {
   count: number
 }
 
-/** Overview do dashboard Vale — números reais + barras por VP. */
+/** Overview de visitas do dashboard Vale — números reais, barras por VP e distribuição. */
 export function ValeCostOverviewPanel({
   stats,
   vpRows = [],
@@ -54,6 +50,12 @@ export function ValeCostOverviewPanel({
   // Fundo saturado → tipografia clara; amarelo só como acento de destaque.
   const metrics = [
     {
+      value: String(stats.totalVisits),
+      label: 'Total de visitas do ciclo',
+      hint: 'Realizadas + a realizar (sem canceladas)',
+      color: VALE_BRAND.white,
+    },
+    {
       value: String(stats.realizedVisits),
       label: 'Visitas realizadas',
       hint: 'Status concluída',
@@ -71,182 +73,49 @@ export function ValeCostOverviewPanel({
       hint: 'Realizadas + a realizar',
       color: VALE_BRAND.white,
     },
-    {
-      value: String(stats.totalVisits),
-      label: 'Total operacional',
-      hint: 'Sem canceladas',
-      color: VALE_BRAND.white,
-    },
   ]
 
   const chartRows = useMemo(() => {
-    // TODO: remover mocks locais após validar o layout do gráfico.
-    const MOCK_VP_COUNTS: Record<string, number> = {
-      'VP - Sustentabilidade': 8,
-      'VP - Comercial Novos Neg.': 14,
-      'VP - Pessoas': 5,
-      'VP - Assuntos Jurídicos': 3,
-      'VP - Operações': 18,
-      'VP - Finanças e RI': 7,
-      'VP - Técnica': 11,
-    }
-    const useMock = import.meta.env.DEV
     const byLabel = new Map(vpRows.map((row) => [row.label, row.count]))
     return VALE_VPS.map((label) => ({
       label,
-      count: useMock ? (MOCK_VP_COUNTS[label] ?? 0) : (byLabel.get(label) ?? 0),
+      count: byLabel.get(label) ?? 0,
     }))
   }, [vpRows])
 
-  // TODO: remover mocks financeiros locais após validar o layout.
-  const financeValues = useMemo(() => {
-    if (import.meta.env.DEV) {
-      return {
-        contractTotal: 285_000,
-        spendTotal: 192_400,
-      }
-    }
-    return {
-      contractTotal: stats.contractTotal ?? 0,
-      spendTotal: stats.spendTotal ?? 0,
-    }
-  }, [stats.contractTotal, stats.spendTotal])
-
-  const moneyBarOption = useMemo<EChartsOption>(() => {
-    const rows = [
+  const statusDonutOption = useMemo<EChartsOption>(() => {
+    const data = [
       {
-        label: 'Valor do contrato',
-        value: financeValues.contractTotal,
-        color: VALE_BRAND.green,
+        name: 'Realizadas',
+        value: stats.realizedVisits,
+        itemStyle: { color: VALE_BRAND.green },
       },
       {
-        label: 'Gasto no ciclo',
-        value: financeValues.spendTotal,
-        color: VALE_BRAND.yellow,
+        name: 'A realizar',
+        value: stats.pendingVisits,
+        itemStyle: { color: VALE_BRAND.yellow },
       },
-    ].reverse()
+    ].filter((item) => item.value > 0)
 
     return {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params: unknown) => {
-          const row = Array.isArray(params) ? params[0] : null
-          if (!row || typeof row !== 'object') return ''
-          const item = row as { name?: string; value?: number }
-          return `${item.name ?? ''}<br/><b>${formatCurrency(item.value ?? 0)}</b>`
-        },
-      },
-      grid: { left: 120, right: 72, top: 8, bottom: 8 },
-      xAxis: {
-        type: 'value',
-        axisLabel: {
-          color: '#747678',
-          fontSize: 10,
-          formatter: (value: number) =>
-            value >= 1000 ? `${Math.round(value / 1000)}k` : String(value),
-        },
-        splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
-      },
-      yAxis: {
-        type: 'category',
-        data: rows.map((row) => row.label),
-        axisLabel: {
-          color: '#003D3A',
-          fontSize: 11,
-          width: 110,
-          overflow: 'truncate',
-          align: 'left',
-          margin: 112,
-        },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      legend: { bottom: 0, textStyle: { color: '#005F5B' } },
       series: [
         {
-          type: 'bar',
-          data: rows.map((row) => ({
-            value: row.value,
-            itemStyle: { color: row.color, borderRadius: [0, 8, 8, 0] },
-          })),
-          barMaxWidth: 28,
-          label: {
-            show: true,
-            position: 'right',
-            color: '#003D3A',
-            fontWeight: 600,
-            fontSize: 11,
-            formatter: (params: { value?: number }) =>
-              formatCurrency(Number(params.value ?? 0)),
-          },
+          type: 'pie',
+          radius: ['48%', '72%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: true,
+          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          label: { formatter: '{b}\n{c}', color: '#003D3A' },
+          data:
+            data.length > 0
+              ? data
+              : [{ name: 'Sem visitas', value: 1, itemStyle: { color: '#D4D4D4' } }],
         },
       ],
     }
-  }, [financeValues])
-
-  const contractGaugeOption = useMemo<EChartsOption>(() => {
-    const max = Math.max(financeValues.contractTotal, financeValues.spendTotal, 1)
-    return {
-      series: [
-        {
-          type: 'gauge',
-          startAngle: 180,
-          endAngle: 0,
-          min: 0,
-          max,
-          radius: '100%',
-          center: ['50%', '70%'],
-          progress: { show: true, width: 14, itemStyle: { color: VALE_BRAND.green } },
-          axisLine: { lineStyle: { width: 14, color: [[1, 'rgba(0,0,0,0.08)']] } },
-          pointer: { show: false },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { show: false },
-          detail: {
-            valueAnimation: true,
-            offsetCenter: [0, '-10%'],
-            fontSize: 18,
-            fontWeight: 700,
-            color: VALE_BRAND.greenDeep,
-            formatter: (value: number) => formatCurrency(value),
-          },
-          data: [{ value: financeValues.contractTotal }],
-        },
-      ],
-    }
-  }, [financeValues])
-
-  const spendGaugeOption = useMemo<EChartsOption>(() => {
-    const max = Math.max(financeValues.contractTotal, financeValues.spendTotal, 1)
-    return {
-      series: [
-        {
-          type: 'gauge',
-          startAngle: 180,
-          endAngle: 0,
-          min: 0,
-          max,
-          radius: '100%',
-          center: ['50%', '70%'],
-          progress: { show: true, width: 14, itemStyle: { color: VALE_BRAND.yellow } },
-          axisLine: { lineStyle: { width: 14, color: [[1, 'rgba(0,0,0,0.08)']] } },
-          pointer: { show: false },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { show: false },
-          detail: {
-            valueAnimation: true,
-            offsetCenter: [0, '-10%'],
-            fontSize: 18,
-            fontWeight: 700,
-            color: '#8A6500',
-            formatter: (value: number) => formatCurrency(value),
-          },
-          data: [{ value: financeValues.spendTotal }],
-        },
-      ],
-    }
-  }, [financeValues])
+  }, [stats.realizedVisits, stats.pendingVisits])
 
   const vpBarOption = useMemo<EChartsOption>(() => {
     const rows = [...chartRows].reverse()
@@ -324,14 +193,14 @@ export function ValeCostOverviewPanel({
     >
       <div className="min-w-0 max-w-2xl space-y-2">
         <p className="text-[11px] font-medium tracking-[0.14em] text-white/70 uppercase">
-          overview · ciclo {stats.cycleLabel}
+          visitas · ciclo {stats.cycleLabel}
         </p>
         <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-[1.85rem]">
           Operações do ciclo
         </h2>
         <p className="text-sm leading-relaxed text-white/80">
-          Indicadores reais das visitas do período — realizadas, a realizar e visitantes
-          vinculados.
+          Indicadores reais das visitas do período — realizadas, a realizar, visitantes
+          recebidos e áreas solicitantes.
         </p>
       </div>
 
@@ -350,16 +219,13 @@ export function ValeCostOverviewPanel({
         ))}
       </div>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-2">
-        <div className="relative min-w-0 rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:px-5">
-          <p className="text-sm font-semibold text-[#003D3A]">Visitas por VP</p>
+      <div className="mt-10 grid gap-6 lg:grid-cols-5">
+        <div className="relative min-w-0 rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:px-5 lg:col-span-3">
+          <p className="text-sm font-semibold text-[#003D3A]">Visitas por VP / demandante</p>
           <p className="mt-0.5 text-xs text-[#005F5B]/80">
-            Totais por vice-presidência no ciclo {stats.cycleLabel}
+            Quantas visitas cada área solicitou no ciclo {stats.cycleLabel}
           </p>
-          <div
-            className="relative"
-            onMouseLeave={() => setAxisTip(null)}
-          >
+          <div className="relative" onMouseLeave={() => setAxisTip(null)}>
             <ReactECharts
               option={vpBarOption}
               style={{ height: Math.max(260, chartRows.length * 34 + 24) }}
@@ -400,40 +266,16 @@ export function ValeCostOverviewPanel({
           </div>
         </div>
 
-        <div className="min-w-0 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-sm font-semibold text-[#003D3A]">
-                Total do valor do contrato
-              </p>
-              <p className="mt-0.5 text-xs text-[#005F5B]/80">Contratado no ciclo</p>
-              <ReactECharts
-                option={contractGaugeOption}
-                style={{ height: 140 }}
-                opts={{ renderer: 'svg' }}
-              />
-            </div>
-            <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-sm font-semibold text-[#003D3A]">Total gasto no ciclo</p>
-              <p className="mt-0.5 text-xs text-[#005F5B]/80">Realizado / pago</p>
-              <ReactECharts
-                option={spendGaugeOption}
-                style={{ height: 140 }}
-                opts={{ renderer: 'svg' }}
-              />
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <p className="text-sm font-semibold text-[#003D3A]">Contrato × gasto</p>
-            <p className="mt-0.5 text-xs text-[#005F5B]/80">
-              Comparativo financeiro do ciclo {stats.cycleLabel}
-            </p>
-            <ReactECharts
-              option={moneyBarOption}
-              style={{ height: 140 }}
-              opts={{ renderer: 'svg' }}
-            />
-          </div>
+        <div className="min-w-0 rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:px-5 lg:col-span-2">
+          <p className="text-sm font-semibold text-[#003D3A]">Realizadas × a realizar</p>
+          <p className="mt-0.5 text-xs text-[#005F5B]/80">
+            Distribuição operacional do ciclo {stats.cycleLabel}
+          </p>
+          <ReactECharts
+            option={statusDonutOption}
+            style={{ height: 300 }}
+            opts={{ renderer: 'svg' }}
+          />
         </div>
       </div>
     </section>

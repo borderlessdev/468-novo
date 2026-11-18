@@ -5,6 +5,7 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -60,6 +61,8 @@ function mapVisit(id: string, data: Record<string, unknown>): Visit {
     hasPlanting: data.hasPlanting === true,
     planterName: data.planterName ? String(data.planterName) : undefined,
     postVisitInfo: data.postVisitInfo ? String(data.postVisitInfo) : undefined,
+    requesterContact: data.requesterContact ? String(data.requesterContact) : undefined,
+    approverName: data.approverName ? String(data.approverName) : undefined,
     startDate: String(data.startDate ?? ''),
     endDate: String(data.endDate ?? ''),
     status: (data.status as VisitStatus) ?? 'planejamento',
@@ -152,10 +155,73 @@ export async function listOrgPvNumbers(orgId: string): Promise<string[]> {
   return collectDistinctPvNumbers(values)
 }
 
-/** Próximo número de PV sugerido para a organização. */
+const pvReservationsCol = collection(db, 'pvReservations')
+
+/** PVs já reservadas (inclui números reservados cuja visita ainda está sendo criada). */
+async function listOrgReservedPvNumbers(orgId: string): Promise<string[]> {
+  try {
+    const snap = await getDocs(query(pvReservationsCol, where('orgId', '==', orgId)))
+    return snap.docs.map((d) => String(d.data().pvNumber ?? '')).filter(Boolean)
+  } catch (error) {
+    console.warn('Não foi possível ler reservas de PV', error)
+    return []
+  }
+}
+
+/** Próximo número de PV sugerido para a organização (considera visitas e reservas). */
 export async function getSuggestedPvNumber(orgId: string): Promise<string> {
-  const existing = await listOrgPvNumbers(orgId)
-  return suggestNextPvNumber(existing)
+  const [existing, reserved] = await Promise.all([
+    listOrgPvNumbers(orgId),
+    listOrgReservedPvNumbers(orgId),
+  ])
+  return suggestNextPvNumber([...existing, ...reserved])
+}
+
+/**
+ * Reserva atomicamente um número de PV novo (transação no Firestore).
+ * Se o número desejado já foi usado/reservado (ex.: outro usuário criou ao mesmo tempo),
+ * avança para o próximo livre. Retorna o número efetivamente reservado.
+ */
+export async function reserveNewPvNumber(
+  orgId: string,
+  userId: string,
+  desired: string,
+): Promise<string> {
+  const taken = new Set(await listOrgPvNumbers(orgId))
+  let candidate = normalizePvNumber(desired)
+  if (!candidate) candidate = suggestNextPvNumber([...taken])
+
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (!taken.has(candidate)) {
+      const ref = doc(pvReservationsCol, `${orgId}__${candidate}`)
+      const reservedNow = candidate
+      try {
+        const ok = await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref)
+          if (snap.exists()) return false
+          tx.set(ref, {
+            orgId,
+            pvNumber: reservedNow,
+            createdBy: userId,
+            createdAt: serverTimestamp(),
+          })
+          return true
+        })
+        if (ok) return candidate
+      } catch (error) {
+        const code = (error as { code?: string }).code
+        if (code === 'permission-denied') {
+          // Regras ainda não publicadas: segue sem reserva em vez de bloquear a criação.
+          console.warn('Reserva de PV indisponível (regras do Firestore)', error)
+          return candidate
+        }
+        throw error
+      }
+    }
+    taken.add(candidate)
+    candidate = suggestNextPvNumber([...taken])
+  }
+  throw new Error('Não foi possível reservar um número de PV')
 }
 
 export async function listVisitTemplates(
@@ -217,6 +283,8 @@ export async function createVisit(
     hasPlanting: data.hasPlanting === true,
     planterName: data.hasPlanting ? (data.planterName ?? null) : null,
     postVisitInfo: data.postVisitInfo ?? null,
+    requesterContact: data.requesterContact ?? null,
+    approverName: data.approverName ?? null,
     startDate: data.startDate,
     endDate: data.endDate,
     status: data.status,
@@ -226,7 +294,7 @@ export async function createVisit(
     objective: data.objective ?? null,
     language: data.language ?? null,
     arrivalInstructions: data.arrivalInstructions ?? null,
-    pvNumber: normalizePvNumber(data.pvNumber) || null,
+    pvNumber: normalizePvNumber(data.pvNumber) || crypto.randomUUID(),
     progress: data.progress ?? 0,
     teamMemberIds: data.teamMemberIds ?? [],
     clientUserIds: data.clientUserIds ?? [],

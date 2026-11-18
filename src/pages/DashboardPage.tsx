@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { ValeCostOverviewPanel } from '@/components/vale/ValeCostOverviewPanel'
+import { ValeFinancePanel } from '@/components/vale/ValeFinancePanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
@@ -337,17 +338,6 @@ export function DashboardPage() {
       icon: Users,
       tone: 'bg-[#003D3A]/10 text-[#003D3A]',
     },
-    ...(!isClient
-      ? [
-          {
-            label: 'Total de gastos do ciclo',
-            value: formatCurrency(cycleSpend),
-            hint: `Ciclo ${cycleLabel}`,
-            icon: DollarSign,
-            tone: 'bg-[#007E7A]/15 text-[#005F5B]',
-          },
-        ]
-      : []),
   ]
 
   const defaultKpis = [
@@ -417,40 +407,6 @@ export function DashboardPage() {
   ]
 
   const kpis = isValeDash ? valeKpis : defaultKpis
-
-  const statusDonutOption = useMemo<EChartsOption>(() => {
-    const data = [
-      {
-        name: 'Realizadas',
-        value: realizedVisits.length,
-        itemStyle: { color: VALE_BRAND.green },
-      },
-      {
-        name: 'A realizar',
-        value: pendingVisits.length,
-        itemStyle: { color: VALE_BRAND.yellow },
-      },
-    ].filter((item) => item.value > 0)
-
-    return {
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: { bottom: 0, textStyle: { color: '#747678' } },
-      series: [
-        {
-          type: 'pie',
-          radius: ['48%', '72%'],
-          center: ['50%', '46%'],
-          avoidLabelOverlap: true,
-          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-          label: { formatter: '{b}\n{c}', color: '#003D3A' },
-          data:
-            data.length > 0
-              ? data
-              : [{ name: 'Sem visitas', value: 1, itemStyle: { color: '#D4D4D4' } }],
-        },
-      ],
-    }
-  }, [realizedVisits.length, pendingVisits.length])
 
   const stateBarOption = useMemo<EChartsOption>(() => {
     const rows = [...visitsByState].reverse()
@@ -580,8 +536,6 @@ export function DashboardPage() {
             realizedVisits: realizedVisits.length,
             pendingVisits: pendingVisits.length,
             visitorCount,
-            contractTotal: cycleContractTotal,
-            spendTotal: cycleSpend,
           }}
           vpRows={visitsByVp.map((row) => ({
             label: row.label,
@@ -591,7 +545,7 @@ export function DashboardPage() {
       ) : null}
 
       <PageHeader
-        className="sm:items-start"
+        className={isValeDash ? 'sm:items-start' : undefined}
         title={isValeDash ? 'Operações' : 'Dashboard'}
         description={`Visão geral das operações · Ciclo ${cycleLabel}`}
         actions={cycleActions}
@@ -600,7 +554,7 @@ export function DashboardPage() {
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({
-            length: isValeDash ? (isClient ? 3 : 4) : isClient ? 9 : 10,
+            length: isValeDash ? 3 : isClient ? 9 : 10,
           }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
@@ -642,28 +596,6 @@ export function DashboardPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Realizadas × a realizar</CardTitle>
-              <CardDescription>Distribuição operacional do ciclo {cycleLabel}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {operationalCycleVisits.length === 0 ? (
-                <EmptyState
-                  compact
-                  icon={CalendarDays}
-                  title="Nenhuma visita no ciclo"
-                  description="Cadastre ou ajuste o período para ver o gráfico."
-                />
-              ) : (
-                <ReactECharts
-                  option={statusDonutOption}
-                  style={{ height: 280 }}
-                  opts={{ renderer: 'svg' }}
-                />
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
               <CardTitle className="text-base">Total de visitas por estado</CardTitle>
               <CardDescription>
                 {visitsByState.reduce((sum, row) => sum + row.count, 0)} visita(s) · ciclo{' '}
@@ -695,7 +627,7 @@ export function DashboardPage() {
               )}
             </CardContent>
           </Card>
-          <Card className="lg:col-span-2">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Visitas por VP</CardTitle>
               <CardDescription>
@@ -720,6 +652,16 @@ export function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      ) : null}
+
+      {isValeDash && !isClient && !loading ? (
+        <ValeFinancePanel
+          stats={{
+            cycleLabel,
+            contractTotal: cycleContractTotal,
+            spendTotal: cycleSpend,
+          }}
+        />
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-5">

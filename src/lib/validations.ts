@@ -56,6 +56,8 @@ const visitBaseSchema = z.object({
   hasPlanting: z.boolean().optional(),
   planterName: z.string().optional(),
   postVisitInfo: z.string().optional(),
+  requesterContact: z.string().optional(),
+  approverName: z.string().optional(),
   objective: z.string().optional(),
   language: z.string().optional(),
   arrivalInstructions: z.string().optional(),

@@ -94,7 +94,14 @@ import {
   listVisitVisitors,
   unlinkVisitVisitor,
 } from '@/services/visitVisitors'
-import { deleteVisit, getVisit, syncVisitProgress, updateVisit } from '@/services/visits'
+import {
+  deleteVisit,
+  getSuggestedPvNumber,
+  getVisit,
+  reserveNewPvNumber,
+  syncVisitProgress,
+  updateVisit,
+} from '@/services/visits'
 import { writeActivityLog, listActivityLogsForVisit } from '@/services/activityLogs'
 import { duplicateVisit, saveVisitAsTemplate } from '@/services/visitClone'
 import { applyPlaybookToVisit, saveVisitAsPlaybook } from '@/services/playbookApply'
@@ -223,6 +230,8 @@ export function VisitDetailPage() {
   const [playbookOpen, setPlaybookOpen] = useState(false)
   const [selectedPlaybookId, setSelectedPlaybookId] = useState('')
   const [applyingPlaybook, setApplyingPlaybook] = useState(false)
+  const [duplicatePvOpen, setDuplicatePvOpen] = useState(false)
+  const [duplicatePvSuggested, setDuplicatePvSuggested] = useState('')
   const deleteVisitDialog = useConfirmDelete<{ id: string; name: string }>()
   const deleteDocDialog = useConfirmDelete<VisitDocument>()
 
@@ -253,6 +262,8 @@ export function VisitDetailPage() {
         hasPlanting: visitData.hasPlanting === true,
         planterName: visitData.planterName ?? '',
         postVisitInfo: visitData.postVisitInfo ?? '',
+        requesterContact: visitData.requesterContact ?? '',
+        approverName: visitData.approverName ?? '',
         startDate: visitData.startDate,
         endDate: visitData.endDate,
         status: visitData.status,
@@ -413,6 +424,8 @@ export function VisitDetailPage() {
         hasPlanting: values.hasPlanting === true,
         planterName: values.hasPlanting ? values.planterName || undefined : undefined,
         postVisitInfo: values.postVisitInfo || undefined,
+        requesterContact: values.requesterContact || undefined,
+        approverName: values.approverName || undefined,
         startDate: values.startDate,
         endDate: values.endDate,
         status: values.status,
@@ -467,6 +480,29 @@ export function VisitDetailPage() {
       setSaving(false)
     }
   })
+
+  const handleDuplicateWithPv = async (pvNumber: string | undefined, isNewPv: boolean) => {
+    if (!user || !id || !visit) return
+    setCloning(true)
+    setDuplicatePvOpen(false)
+    try {
+      let finalPv = pvNumber
+      if (isNewPv) {
+        finalPv = await reserveNewPvNumber(visit.orgId, user.uid, pvNumber ?? '')
+        if (pvNumber && finalPv !== pvNumber) {
+          toast.info(`A PV ${pvNumber} acabou de ser usada. A cópia recebeu a PV ${finalPv}.`)
+        }
+      }
+      const newId = await duplicateVisit(id, user.uid, { pvNumber: finalPv })
+      toast.success('Visita duplicada')
+      navigate(`/visitas/${newId}`)
+    } catch (error) {
+      console.error(error)
+      toast.error('Não foi possível duplicar')
+    } finally {
+      setCloning(false)
+    }
+  }
 
   const handleDeleteVisit = () => {
     if (!id || !visit || !user) return
@@ -1282,18 +1318,16 @@ export function VisitDetailPage() {
                   className="w-full sm:w-auto"
                   disabled={cloning || !user}
                   onClick={() => {
-                    if (!user || !id) return
-                    setCloning(true)
-                    void duplicateVisit(id, user.uid)
-                      .then((newId) => {
-                        toast.success('Visita duplicada')
-                        navigate(`/visitas/${newId}`)
-                      })
-                      .catch((error) => {
-                        console.error(error)
-                        toast.error('Não foi possível duplicar')
-                      })
-                      .finally(() => setCloning(false))
+                    if (!user || !id || !visit) return
+                    if (!isValeOrg) {
+                      // Demais organizações: duplicação direta, como antes.
+                      void handleDuplicateWithPv(undefined, false)
+                      return
+                    }
+                    void getSuggestedPvNumber(visit.orgId).then((suggested) => {
+                      setDuplicatePvSuggested(suggested)
+                      setDuplicatePvOpen(true)
+                    })
                   }}
                 >
                   <Copy className="h-4 w-4" />
@@ -1516,6 +1550,16 @@ export function VisitDetailPage() {
                 }
                 errors={form.formState.errors}
               />
+              {isValeOrg && form.watch('eventKind') === 'visita_vip' ? (
+                <div className="space-y-2 border-l-2 border-primary/30 pl-3">
+                  <Label htmlFor="vipAudience">Público</Label>
+                  <Input
+                    id="vipAudience"
+                    placeholder="Público a ser preenchido"
+                    {...form.register('vipAudience')}
+                  />
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label>Empresa</Label>
                 <Input {...form.register('company')} />
@@ -1547,16 +1591,6 @@ export function VisitDetailPage() {
                   <Input {...form.register('city')} />
                 </div>
               </div>
-              {isValeOrg && form.watch('eventKind') === 'visita_vip' ? (
-                <div className="space-y-2">
-                  <Label htmlFor="vipAudience">Público</Label>
-                  <Input
-                    id="vipAudience"
-                    placeholder="Público a ser preenchido"
-                    {...form.register('vipAudience')}
-                  />
-                </div>
-              ) : null}
               {isValeOrg ? (
                 <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
                   <div className="space-y-2">
@@ -1587,6 +1621,24 @@ export function VisitDetailPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="requesterContact">Ponto focal solicitante</Label>
+                      <Input
+                        id="requesterContact"
+                        placeholder="Nome do ponto focal"
+                        {...form.register('requesterContact')}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="approverName">Responsável pela aprovação</Label>
+                      <Input
+                        id="approverName"
+                        placeholder="Nome do aprovador"
+                        {...form.register('approverName')}
+                      />
+                    </div>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1695,6 +1747,8 @@ export function VisitDetailPage() {
                   <>
                     <div><dt className="text-muted-foreground">País do visitante</dt><dd>{visit.visitorCountry || '—'}</dd></div>
                     <div><dt className="text-muted-foreground">VP solicitante da visita</dt><dd>{valeVpLabel(visit.vp)}</dd></div>
+                    <div><dt className="text-muted-foreground">Ponto focal solicitante</dt><dd>{visit.requesterContact || '—'}</dd></div>
+                    <div><dt className="text-muted-foreground">Responsável pela aprovação</dt><dd>{visit.approverName || '—'}</dd></div>
                     <div><dt className="text-muted-foreground">Vai ter plantio?</dt><dd>{visit.hasPlanting ? 'Sim' : 'Não'}</dd></div>
                     {visit.hasPlanting ? (
                       <div><dt className="text-muted-foreground">Quem vai plantar?</dt><dd>{visit.planterName || '—'}</dd></div>
@@ -2590,6 +2644,36 @@ export function VisitDetailPage() {
         loading={deleteDocDialog.loading}
         onConfirm={handleDeleteDocConfirm}
       />
+
+      <Dialog open={duplicatePvOpen} onOpenChange={setDuplicatePvOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicar visita</DialogTitle>
+            <DialogDescription>
+              A PV atual é <span className="font-mono">{visit?.pvNumber || '—'}</span>. A cópia
+              deve usar um número de PV novo ou manter o mesmo número (visitas em vários estados
+              podem compartilhar a PV)?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              disabled={cloning}
+              onClick={() => void handleDuplicateWithPv(duplicatePvSuggested, true)}
+            >
+              Número novo ({duplicatePvSuggested})
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={cloning || !visit?.pvNumber}
+              onClick={() => void handleDuplicateWithPv(visit?.pvNumber, false)}
+            >
+              Manter o mesmo número ({visit?.pvNumber || '—'})
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

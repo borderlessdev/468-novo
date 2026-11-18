@@ -199,6 +199,10 @@ export interface Visit extends SoftDeletable {
   planterName?: string
   /** Informações essenciais pós visita. */
   postVisitInfo?: string
+  /** Ponto focal solicitante da visita. */
+  requesterContact?: string
+  /** Responsável pela aprovação da visita. */
+  approverName?: string
   objective?: string
   language?: string
   pvNumber?: string

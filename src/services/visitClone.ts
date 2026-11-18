@@ -78,6 +78,8 @@ export async function saveVisitAsTemplate(
     hasPlanting: source.hasPlanting === true,
     planterName: source.hasPlanting ? source.planterName : undefined,
     postVisitInfo: source.postVisitInfo,
+    requesterContact: source.requesterContact,
+    approverName: source.approverName,
     startDate: source.startDate,
     endDate: source.endDate,
     status: 'planejamento',
@@ -100,7 +102,7 @@ export async function saveVisitAsTemplate(
 export async function duplicateVisit(
   sourceId: string,
   ownerId: string,
-  overrides?: Partial<Pick<Visit, 'title' | 'startDate' | 'endDate'>>,
+  overrides?: Partial<Pick<Visit, 'title' | 'startDate' | 'endDate' | 'pvNumber'>>,
 ): Promise<string> {
   const source = await getVisit(sourceId)
   if (!source) throw new Error('Visita não encontrada')
@@ -114,11 +116,15 @@ export async function duplicateVisit(
     state: source.state,
     city: source.city,
     vp: source.vp,
+    // Só a Vale informa a PV ao duplicar; nas demais organizações segue o comportamento original.
+    pvNumber: overrides?.pvNumber,
     vipAudience: source.vipAudience,
     visitorCountry: source.visitorCountry,
     hasPlanting: source.hasPlanting === true,
     planterName: source.hasPlanting ? source.planterName : undefined,
     postVisitInfo: source.postVisitInfo,
+    requesterContact: source.requesterContact,
+    approverName: source.approverName,
     startDate,
     endDate,
     status: 'planejamento',
@@ -157,6 +163,8 @@ export async function createVisitFromTemplate(
         | 'hasPlanting'
         | 'planterName'
         | 'postVisitInfo'
+        | 'requesterContact'
+        | 'approverName'
         | 'objective'
         | 'language'
         | 'pvNumber'
@@ -187,6 +195,8 @@ export async function createVisitFromTemplate(
       ? (overrides.planterName ?? template.planterName)
       : undefined,
     postVisitInfo: overrides.postVisitInfo ?? template.postVisitInfo,
+    requesterContact: overrides.requesterContact ?? template.requesterContact,
+    approverName: overrides.approverName ?? template.approverName,
     startDate: overrides.startDate,
     endDate: overrides.endDate,
     status: 'planejamento',

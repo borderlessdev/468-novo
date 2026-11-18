@@ -352,6 +352,20 @@ service cloud.firestore {
         );
     }
 
+    // Reserva atômica do Número da PV (id = orgId__pvNumber). Imutável após criada.
+    match /pvReservations/{reservationId} {
+      allow read: if isSignedIn()
+        && !isClientUser()
+        && (resource == null || canAccessOrg(resource.data.orgId));
+      allow create: if isSignedIn()
+        && !isClientUser()
+        && request.resource.data.orgId is string
+        && request.resource.data.pvNumber is string
+        && canAccessOrg(request.resource.data.orgId)
+        && reservationId == request.resource.data.orgId + '__' + request.resource.data.pvNumber;
+      allow update, delete: if false;
+    }
+
     // get: autenticado (IDs vêm de visitVisitors já protegido).
     // list: só dono/admin (CRM). Trade-off MVP para equipe/cliente no detalhe.
     match /visitors/{visitorId} {
