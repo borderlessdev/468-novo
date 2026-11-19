@@ -66,6 +66,62 @@ function exportPdf(data: TableExportData) {
   doc.save(`${data.filenameBase}.pdf`)
 }
 
+export interface RecordsPdfBlock {
+  heading: string
+  lines: string[]
+}
+
+/** PDF em blocos (um por registro) com quebra de linha e de página — para relatórios com muitos campos. */
+export function exportRecordsPdf(options: {
+  filenameBase: string
+  title: string
+  subtitle?: string
+  blocks: RecordsPdfBlock[]
+}) {
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 14
+  const textWidth = pageWidth - margin * 2
+  let y = 20
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageHeight - margin) {
+      doc.addPage()
+      y = 20
+    }
+  }
+
+  doc.setFontSize(14)
+  doc.text(options.title, margin, y)
+  y += 8
+  if (options.subtitle) {
+    doc.setFontSize(10)
+    doc.text(options.subtitle, margin, y)
+    y += 8
+  }
+
+  for (const block of options.blocks) {
+    const headingLines = doc.splitTextToSize(block.heading, textWidth) as string[]
+    ensureSpace(headingLines.length * 5 + 6)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text(headingLines, margin, y)
+    y += headingLines.length * 5
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    for (const line of block.lines) {
+      const wrapped = doc.splitTextToSize(line, textWidth - 4) as string[]
+      ensureSpace(wrapped.length * 4.5)
+      doc.text(wrapped, margin + 4, y)
+      y += wrapped.length * 4.5
+    }
+    y += 4
+  }
+
+  doc.save(`${options.filenameBase}.pdf`)
+}
+
 function exportXlsx(data: TableExportData) {
   const worksheet = XLSX.utils.aoa_to_sheet([data.headers, ...data.rows])
   const workbook = XLSX.utils.book_new()

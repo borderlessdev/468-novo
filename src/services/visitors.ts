@@ -72,6 +72,7 @@ function mapVisitor(id: string, data: Record<string, unknown>): Visitor {
     cpf: data.cpf ? String(data.cpf) : undefined,
     company: data.company ? String(data.company) : undefined,
     role: data.role ? String(data.role) : undefined,
+    costCenter: data.costCenter ? String(data.costCenter) : undefined,
     country: data.country ? String(data.country) : undefined,
     nationality: data.nationality ? String(data.nationality) : undefined,
     sex: mapSex(data.sex),
@@ -182,6 +183,8 @@ function visitorWritePayload(
     cpf: data.cpf !== undefined ? data.cpf || null : undefined,
     company: data.company !== undefined ? data.company || null : undefined,
     role: data.role !== undefined ? data.role || null : undefined,
+    costCenter:
+      data.costCenter !== undefined ? data.costCenter || null : undefined,
     country: data.country !== undefined ? data.country || null : undefined,
     nationality:
       data.nationality !== undefined ? data.nationality || null : undefined,

@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import ReactECharts from 'echarts-for-react'
-import type { EChartsOption } from 'echarts'
 import {
   CalendarDays,
   Clock3,
@@ -16,18 +14,22 @@ import { CyclePeriodFields } from '@/components/shared/CyclePeriodFields'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { ListRowLink, SectionCardHeader } from '@/components/shared/ListRow'
 import { VisitStatusBadge, TaskStatusBadge } from '@/components/shared/StatusBadge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { ValeBreakdownCards } from '@/components/vale/ValeBreakdownCards'
 import { ValeCostOverviewPanel } from '@/components/vale/ValeCostOverviewPanel'
+import { ValeCycleSelect } from '@/components/vale/ValeCycleSelect'
 import { ValeFinancePanel } from '@/components/vale/ValeFinancePanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { useCyclePeriod } from '@/hooks/useCyclePeriod'
+import { BRAZILIAN_STATES } from '@/lib/constants'
+import { VALE_MONTH_MOCK } from '@/lib/valeDashboardMock'
 import { usesValeDashboard } from '@/lib/orgDashboard'
 import { sumContracted, sumRealized } from '@/lib/financeMetrics'
-import { VALE_BRAND } from '@/lib/valeBrand'
+import { visitsByMonth } from '@/lib/valeDashboardData'
 import { VALE_VPS, valeVpLabel } from '@/lib/valeVp'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
@@ -236,7 +238,10 @@ export function DashboardPage() {
   )
 
   const visitsByState = useMemo(() => {
-    const map = new Map<string, Visit[]>()
+    // Todas as UFs aparecem (mesmo com 0 visitas); "Sem estado" só quando houver visita sem UF.
+    const map = new Map<string, Visit[]>(
+      BRAZILIAN_STATES.map((uf): [string, Visit[]] => [uf, []]),
+    )
     for (const visit of operationalCycleVisits) {
       const key = visit.state?.trim() || 'Sem estado'
       const list = map.get(key) ?? []
@@ -314,35 +319,10 @@ export function DashboardPage() {
         evento: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
       }
 
-  const valeKpis = [
+  // Mesmos cards para todas as organizações (no Vale ficam abaixo do painel de gráficos).
+  const kpis = [
     {
-      label: 'Visitas realizadas do ciclo',
-      value: String(realizedVisits.length),
-      records: toKpiRecords(realizedVisits),
-      hint: `Status concluída · ciclo ${cycleLabel}`,
-      icon: CalendarDays,
-      tone: 'bg-[#007E7A]/15 text-[#005F5B]',
-    },
-    {
-      label: 'Visitas a realizar',
-      value: String(pendingVisits.length),
-      records: toKpiRecords(pendingVisits),
-      hint: `Planejamento + em andamento · ciclo ${cycleLabel}`,
-      icon: Clock3,
-      tone: 'bg-[#ECB11F]/15 text-[#8A6500]',
-    },
-    {
-      label: 'Visitantes do ciclo',
-      value: String(visitorCount),
-      hint: `Realizadas + a realizar · ciclo ${cycleLabel}`,
-      icon: Users,
-      tone: 'bg-[#003D3A]/10 text-[#003D3A]',
-    },
-  ]
-
-  const defaultKpis = [
-    {
-      label: 'Experiências do ciclo',
+      label: isValeDash ? 'Total de visitas do ciclo' : 'Experiências do ciclo',
       value: String(cycleVisits.length),
       records: toKpiRecords(cycleVisits),
       hint: `Todas as experiências · ciclo ${cycleLabel}`,
@@ -396,7 +376,7 @@ export function DashboardPage() {
     ...(!isClient
       ? [
           {
-            label: 'Gastos do ciclo',
+            label: isValeDash ? 'Total de gastos do ciclo' : 'Gastos do ciclo',
             value: formatCurrency(cycleSpend),
             hint: `Ciclo ${cycleLabel}`,
             icon: DollarSign,
@@ -406,113 +386,25 @@ export function DashboardPage() {
       : []),
   ]
 
-  const kpis = isValeDash ? valeKpis : defaultKpis
 
-  const stateBarOption = useMemo<EChartsOption>(() => {
-    const rows = [...visitsByState].reverse()
-    const total = visitsByState.reduce((sum, row) => sum + row.count, 0)
-    return {
-      title: {
-        text: 'Total de visitas por estado',
-        subtext: `${total} visita(s) no ciclo`,
-        left: 0,
-        textStyle: { color: '#003D3A', fontSize: 14, fontWeight: 600 },
-        subtextStyle: { color: '#747678', fontSize: 12 },
-      },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params: unknown) => {
-          const row = Array.isArray(params) ? params[0] : null
-          if (!row || typeof row !== 'object') return ''
-          const item = row as { name?: string; value?: number }
-          return `${item.name ?? ''}<br/>Visitas: <b>${item.value ?? 0}</b>`
-        },
-      },
-      grid: { left: 48, right: 36, top: 56, bottom: 28 },
-      xAxis: {
-        type: 'value',
-        minInterval: 1,
-        axisLabel: { color: '#747678' },
-        splitLine: { lineStyle: { color: '#E8E8E8' } },
-      },
-      yAxis: {
-        type: 'category',
-        data: rows.map((row) => row.label),
-        axisLabel: { color: '#003D3A' },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
-      series: [
-        {
-          name: 'Total de visitas por estado',
-          type: 'bar',
-          data: rows.map((row) => row.count),
-          barMaxWidth: 22,
-          itemStyle: {
-            color: VALE_BRAND.green,
-            borderRadius: [0, 6, 6, 0],
-          },
-          label: { show: true, position: 'right', color: '#005F5B' },
-        },
-      ],
+  const monthRows = useMemo(
+    () => visitsByMonth(operationalCycleVisits, range.startIso, range.endIso),
+    [operationalCycleVisits, range.startIso, range.endIso],
+  )
+  /** Filtra a lista "Visitas do ciclo" (clique em gráficos/KPIs do dashboard Vale) e rola até ela. */
+  const showVisits = useCallback((items: Visit[]) => {
+    if (items.length === 0) {
+      toast.info('Nenhuma visita nesta seleção')
+      return
     }
-  }, [visitsByState])
-
-  const vpBarOption = useMemo<EChartsOption>(() => {
-    const rows = [...visitsByVp].reverse()
-    const total = visitsByVp.reduce((sum, row) => sum + row.count, 0)
-    return {
-      title: {
-        text: 'Visitas por VP',
-        subtext: `${total} visita(s) no ciclo`,
-        left: 0,
-        textStyle: { color: '#003D3A', fontSize: 14, fontWeight: 600 },
-        subtextStyle: { color: '#747678', fontSize: 12 },
-      },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params: unknown) => {
-          const row = Array.isArray(params) ? params[0] : null
-          if (!row || typeof row !== 'object') return ''
-          const item = row as { name?: string; value?: number }
-          return `${item.name ?? ''}<br/>Visitas: <b>${item.value ?? 0}</b>`
-        },
-      },
-      grid: { left: 130, right: 36, top: 56, bottom: 28 },
-      xAxis: {
-        type: 'value',
-        minInterval: 1,
-        axisLabel: { color: '#747678' },
-        splitLine: { lineStyle: { color: '#E8E8E8' } },
-      },
-      yAxis: {
-        type: 'category',
-        data: rows.map((row) => row.label),
-        axisLabel: {
-          color: '#003D3A',
-          width: 118,
-          overflow: 'truncate',
-        },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
-      series: [
-        {
-          name: 'Visitas por VP',
-          type: 'bar',
-          data: rows.map((row) => row.count),
-          barMaxWidth: 22,
-          itemStyle: {
-            color: VALE_BRAND.yellow,
-            borderRadius: [0, 6, 6, 0],
-          },
-          label: { show: true, position: 'right', color: '#8A6500' },
-        },
-      ],
-    }
-  }, [visitsByVp])
+    const sorted = [...items].sort((a, b) => a.startDate.localeCompare(b.startDate))
+    setPreviewRecordIds([...new Set(sorted.map((visit) => visit.id))])
+    window.setTimeout(() => {
+      document
+        .getElementById('dashboard-visit-list')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+  }, [])
 
   const cycleActions = (
     <CyclePeriodFields
@@ -526,146 +418,48 @@ export function DashboardPage() {
     />
   )
 
-  return (
-    <div className="animate-fade-in space-y-6">
-      {isValeDash ? (
-        <ValeCostOverviewPanel
-          stats={{
-            totalVisits: operationalCycleVisits.length,
-            cycleLabel,
-            realizedVisits: realizedVisits.length,
-            pendingVisits: pendingVisits.length,
-            visitorCount,
-          }}
-          vpRows={visitsByVp.map((row) => ({
-            label: row.label,
-            count: row.count,
-          }))}
-        />
-      ) : null}
-
-      <PageHeader
-        className={isValeDash ? 'sm:items-start' : undefined}
-        title={isValeDash ? 'Operações' : 'Dashboard'}
-        description={`Visão geral das operações · Ciclo ${cycleLabel}`}
-        actions={cycleActions}
-      />
-
-      {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({
-            length: isValeDash ? 3 : isClient ? 9 : 10,
-          }).map((_, i) => (
-            <Skeleton key={i} className="h-28 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {kpis.map((kpi, index) => (
-            <Card
-              key={kpi.label}
-              className="relative animate-fade-in-up transition-shadow hover:shadow-[0_2px_8px_rgba(15,47,42,0.06)] hover:z-50 focus-within:z-50"
-              style={{ animationDelay: `${index * 40}ms` }}
+  const kpiCards = loading ? (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: isClient ? 9 : 10 }).map((_, i) => (
+        <Skeleton key={i} className="h-28 w-full rounded-xl" />
+      ))}
+    </div>
+  ) : (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {kpis.map((kpi, index) => (
+        <Card
+          key={kpi.label}
+          className="relative animate-fade-in-up transition-shadow hover:shadow-[0_2px_8px_rgba(15,47,42,0.06)] hover:z-50 focus-within:z-50"
+          style={{ animationDelay: `${index * 40}ms` }}
+        >
+          <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {kpi.label}
+            </CardTitle>
+            <div
+              className={`flex h-8 w-8 items-center justify-center rounded-lg ${kpi.tone}`}
             >
-              <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {kpi.label}
-                </CardTitle>
-                <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg ${kpi.tone}`}
-                >
-                  <kpi.icon className="h-4 w-4" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <KpiValue
-                  value={kpi.value}
-                  records={kpi.records}
-                  onPreview={(records) => setPreviewRecordIds(records.map((record) => record.id))}
-                />
-                {kpi.hint ? (
-                  <p className="mt-1.5 text-xs text-muted-foreground">{kpi.hint}</p>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              <kpi.icon className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <KpiValue
+              value={kpi.value}
+              records={'records' in kpi ? kpi.records : undefined}
+              onPreview={(records) => setPreviewRecordIds(records.map((record) => record.id))}
+            />
+            {kpi.hint ? (
+              <p className="mt-1.5 text-xs text-muted-foreground">{kpi.hint}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
 
-      {isValeDash && !loading ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Total de visitas por estado</CardTitle>
-              <CardDescription>
-                {visitsByState.reduce((sum, row) => sum + row.count, 0)} visita(s) · ciclo{' '}
-                {cycleLabel}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {visitsByState.length === 0 ? (
-                <EmptyState
-                  compact
-                  icon={MapPin}
-                  title="Nenhuma visita no ciclo"
-                  description="Cadastre visitas com UF para ver o total por estado."
-                />
-              ) : (
-                <ReactECharts
-                  option={stateBarOption}
-                  style={{
-                    height: Math.max(280, visitsByState.length * 36 + 72),
-                  }}
-                  opts={{ renderer: 'svg' }}
-                  onEvents={{
-                    click: (params: { name?: string }) => {
-                      const row = visitsByState.find((item) => item.label === params.name)
-                      if (row) setPreviewRecordIds(row.items.map((visit) => visit.id))
-                    },
-                  }}
-                />
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Visitas por VP</CardTitle>
-              <CardDescription>
-                {visitsByVp.reduce((sum, row) => sum + row.count, 0)} visita(s) por
-                vice-presidência · ciclo {cycleLabel}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ReactECharts
-                option={vpBarOption}
-                style={{
-                  height: Math.max(320, visitsByVp.length * 40 + 72),
-                }}
-                opts={{ renderer: 'svg' }}
-                onEvents={{
-                  click: (params: { name?: string }) => {
-                    const row = visitsByVp.find((item) => item.label === params.name)
-                    if (row) setPreviewRecordIds(row.items.map((visit) => visit.id))
-                  },
-                }}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
-
-      {isValeDash && !isClient && !loading ? (
-        <ValeFinancePanel
-          stats={{
-            cycleLabel,
-            contractTotal: cycleContractTotal,
-            spendTotal: cycleSpend,
-          }}
-        />
-      ) : null}
-
+  const eventsAndTasks = (
       <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+        <Card id="dashboard-visit-list" className="scroll-mt-4 lg:col-span-3">
           <SectionCardHeader
             title={
               previewRecordIds
@@ -677,12 +471,23 @@ export function DashboardPage() {
             icon={MapPin}
             count={loading ? undefined : displayedVisits.length}
             action={
-              <Link
-                to={periodHref}
-                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Ver todos
-              </Link>
+              <div className="flex items-center gap-3">
+                {isValeDash && previewRecordIds ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewRecordIds(null)}
+                    className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                  >
+                    Limpar filtro
+                  </button>
+                ) : null}
+                <Link
+                  to={periodHref}
+                  className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Ver todos
+                </Link>
+              </div>
             }
           />
           <CardContent className="space-y-2">
@@ -789,6 +594,108 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+  )
+
+  if (isValeDash) {
+    return (
+      <div className="animate-fade-in space-y-5">
+        <PageHeader
+          className="sm:items-start"
+          title="Dashboard"
+          description="Visão geral das visitas e do contrato"
+          actions={
+            <ValeCycleSelect
+              cycleStart={cycleStart}
+              cycleEnd={cycleEnd}
+              isDefaultCycle={isDefaultCycle}
+              onStartChange={setCycleStart}
+              onEndChange={setCycleEnd}
+              onReset={resetCycle}
+            />
+          }
+        />
+
+        {loading ? (
+          <div className="space-y-5">
+            <Skeleton className="h-[26rem] w-full rounded-2xl" />
+            <Skeleton className="h-72 w-full rounded-2xl" />
+          </div>
+        ) : (
+          <>
+            <ValeCostOverviewPanel
+              stats={{
+                totalVisits: operationalCycleVisits.length,
+                realizedVisits: realizedVisits.length,
+                pendingVisits: pendingVisits.length,
+                visitorCount,
+              }}
+              vpRows={visitsByVp.map((row) => ({ label: row.label, count: row.count }))}
+              onSelectVp={(label) =>
+                showVisits(visitsByVp.find((row) => row.label === label)?.items ?? [])
+              }
+              onSelectKpi={(kind) =>
+                showVisits(
+                  kind === 'total'
+                    ? operationalCycleVisits
+                    : kind === 'realized'
+                      ? realizedVisits
+                      : pendingVisits,
+                )
+              }
+            />
+
+            <ValeBreakdownCards
+              stateRows={visitsByState.map((row) => ({
+                key: row.label,
+                label: row.label,
+                count: row.count,
+              }))}
+              vpRows={visitsByVp.map((row) => ({
+                key: row.label,
+                label: row.label,
+                count: row.count,
+              }))}
+              monthRows={VALE_MONTH_MOCK ?? monthRows}
+              onSelectStates={(keys) =>
+                showVisits(
+                  visitsByState.filter((row) => keys.includes(row.label)).flatMap((row) => row.items),
+                )
+              }
+              onSelectVps={(keys) =>
+                showVisits(
+                  visitsByVp.filter((row) => keys.includes(row.label)).flatMap((row) => row.items),
+                )
+              }
+              onSelectMonth={(key) =>
+                showVisits(monthRows.find((row) => row.key === key)?.items ?? [])
+              }
+            />
+
+            {!isClient ? (
+              <ValeFinancePanel
+                stats={{ contractTotal: cycleContractTotal, spendTotal: cycleSpend }}
+              />
+            ) : null}
+
+            {kpiCards}
+          </>
+        )}
+
+        {eventsAndTasks}
+      </div>
+    )
+  }
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description={`Visão geral das operações · Ciclo ${cycleLabel}`}
+        actions={cycleActions}
+      />
+
+      {kpiCards}
+      {eventsAndTasks}
     </div>
   )
 }

@@ -22,8 +22,11 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /** Classes extras para o botão "X" de fechar (padrão: discreto). */
+    closeClassName?: string
+  }
+>(({ className, closeClassName, children, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -37,7 +40,12 @@ export const DialogContent = React.forwardRef<
       <div className="scrollbar-thin grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-6">
         {children}
       </div>
-      <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-md bg-card/80 p-1 opacity-70 backdrop-blur-sm transition hover:opacity-100">
+      <DialogPrimitive.Close
+        className={cn(
+          'absolute right-4 top-4 z-10 rounded-md bg-card/80 p-1 opacity-70 backdrop-blur-sm transition hover:opacity-100',
+          closeClassName,
+        )}
+      >
         <X className="h-4 w-4" />
         <span className="sr-only">Fechar</span>
       </DialogPrimitive.Close>

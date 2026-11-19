@@ -15,6 +15,7 @@ export interface VisitorProfileFormValues {
   cpf: string
   company: string
   role: string
+  costCenter: string
   country: string
   nationality: string
   sex: string
@@ -59,6 +60,7 @@ export const EMPTY_VISITOR_PROFILE: VisitorProfileFormValues = {
   cpf: '',
   company: '',
   role: '',
+  costCenter: '',
   country: 'Brasil',
   nationality: '',
   sex: '',
@@ -134,6 +136,7 @@ export function visitorToProfileForm(visitor: Visitor): VisitorProfileFormValues
     cpf: visitor.cpf ?? '',
     company: visitor.company ?? '',
     role: visitor.role ?? '',
+    costCenter: visitor.costCenter ?? '',
     country: visitor.country ?? 'Brasil',
     nationality: visitor.nationality ?? '',
     sex: visitor.sex ?? '',
@@ -261,6 +264,7 @@ export function profileFormToVisitorPayload(
     cpf: values.cpf.trim() || undefined,
     company: values.company.trim() || undefined,
     role: values.role.trim() || undefined,
+    costCenter: values.costCenter.trim(),
     country: values.country.trim() || undefined,
     nationality: values.nationality.trim() || undefined,
     sex: sexValue(values.sex),

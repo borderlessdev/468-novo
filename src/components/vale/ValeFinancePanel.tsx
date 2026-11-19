@@ -1,19 +1,17 @@
-import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
-import type { EChartsOption } from 'echarts'
-import { Landmark, PiggyBank, Wallet } from 'lucide-react'
+import { Coins, DollarSign, FileText, Wallet } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
-import { VALE_BRAND } from '@/lib/valeBrand'
+import { formatCurrencyCompact } from '@/lib/valeDashboardData'
 
 export type ValeFinanceStats = {
-  cycleLabel: string
-  /** Soma dos valores contratados (serviceValue) das visitas do ciclo. */
+  /** Soma dos valores contratados das visitas do ciclo. */
   contractTotal: number
   /** Soma dos gastos realizados das visitas do ciclo. */
   spendTotal: number
 }
 
-/** Área financeira do dashboard Vale — separada dos indicadores de visitas. */
+const YELLOW = '#F5B82E'
+
+/** Painel financeiro do dashboard Vale — separado dos indicadores de visitas. */
 export function ValeFinancePanel({
   stats,
   className,
@@ -22,190 +20,153 @@ export function ValeFinancePanel({
   className?: string
 }) {
   const balance = stats.contractTotal - stats.spendTotal
-  const consumedPct =
-    stats.contractTotal > 0 ? (stats.spendTotal / stats.contractTotal) * 100 : 0
   const overBudget = balance < 0
+  const consumedPct = stats.contractTotal > 0 ? (stats.spendTotal / stats.contractTotal) * 100 : 0
 
   const tiles = [
     {
       label: 'Valor total do contrato',
-      hint: 'Contratado nas visitas do ciclo',
       value: formatCurrency(stats.contractTotal),
-      icon: Landmark,
-      tone: 'bg-[#007E7A]/12 text-[#005F5B]',
-      valueClass: 'text-[#003D3A]',
+      icon: FileText,
+      iconClass: 'text-[#0E8F7C]',
+      valueClass: 'text-[#0F3D38]',
+      hint: undefined as string | undefined,
     },
     {
-      label: 'Total gasto no ciclo',
-      hint: 'Realizado / pago',
+      label: 'Total gasto',
       value: formatCurrency(stats.spendTotal),
-      icon: Wallet,
-      tone: 'bg-[#ECB11F]/20 text-[#8A6500]',
-      valueClass: 'text-[#8A6500]',
+      icon: Coins,
+      iconClass: 'text-[#D99A0B]',
+      valueClass: 'text-[#0F3D38]',
+      hint: undefined,
     },
     {
-      label: 'Saldo disponível do contrato',
-      hint: overBudget ? 'Gasto acima do contratado' : 'Contratado − gasto',
+      label: 'Saldo disponível',
       value: formatCurrency(balance),
-      icon: PiggyBank,
-      tone: overBudget ? 'bg-red-500/10 text-red-700' : 'bg-[#007E7A]/12 text-[#005F5B]',
-      valueClass: overBudget ? 'text-red-700' : 'text-[#005F5B]',
+      icon: Wallet,
+      iconClass: overBudget ? 'text-red-600' : 'text-[#0E8F7C]',
+      valueClass: overBudget ? 'text-red-600' : 'text-[#0E8F7C]',
+      hint: overBudget ? 'Gasto acima do contratado' : undefined,
     },
   ]
 
-  const barOption = useMemo<EChartsOption>(() => {
-    const rows = [
-      { label: 'Valor do contrato', value: stats.contractTotal, color: VALE_BRAND.green },
-      { label: 'Gasto no ciclo', value: stats.spendTotal, color: VALE_BRAND.yellow },
-      {
-        label: 'Saldo disponível',
-        value: balance,
-        color: overBudget ? '#C94C4C' : VALE_BRAND.greenDark,
-      },
-    ].reverse()
-
-    return {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params: unknown) => {
-          const row = Array.isArray(params) ? params[0] : null
-          if (!row || typeof row !== 'object') return ''
-          const item = row as { name?: string; value?: number }
-          return `${item.name ?? ''}<br/><b>${formatCurrency(item.value ?? 0)}</b>`
-        },
-      },
-      grid: { left: 130, right: 90, top: 8, bottom: 8 },
-      xAxis: {
-        type: 'value',
-        axisLabel: {
-          color: '#747678',
-          fontSize: 10,
-          formatter: (value: unknown) => {
-            const n = Number(value)
-            return Math.abs(n) >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-          },
-        },
-        splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
-      },
-      yAxis: {
-        type: 'category',
-        data: rows.map((row) => row.label),
-        axisLabel: {
-          color: '#003D3A',
-          fontSize: 11,
-          width: 120,
-          overflow: 'truncate',
-          align: 'left',
-          margin: 122,
-        },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
-      series: [
-        {
-          type: 'bar',
-          data: rows.map((row) => ({
-            value: row.value,
-            itemStyle: { color: row.color, borderRadius: [0, 8, 8, 0] },
-          })),
-          barMaxWidth: 26,
-          label: {
-            show: true,
-            position: 'right',
-            color: '#003D3A',
-            fontWeight: 600,
-            fontSize: 11,
-            formatter: (params: unknown) => {
-              const raw = (params as { value?: unknown } | null)?.value
-              return formatCurrency(Number(raw ?? 0))
-            },
-          },
-        },
-      ],
-    }
-  }, [stats.contractTotal, stats.spendTotal, balance, overBudget])
+  const comparison = [
+    // Cores claras: o painel tem fundo verde-escuro.
+    { label: 'Contrato', value: stats.contractTotal, color: '#2EC99A' },
+    { label: 'Gasto', value: stats.spendTotal, color: YELLOW },
+    {
+      label: 'Saldo',
+      value: balance,
+      color: overBudget ? '#F87171' : '#8FE9D6',
+    },
+  ]
+  const comparisonMax = Math.max(1, ...comparison.map((row) => Math.abs(row.value)))
 
   return (
     <section
       className={cn(
-        'rounded-2xl border border-[#007E7A]/20 bg-[#F4F8F7] px-5 py-6 sm:px-7 sm:py-8',
+        // @container: layout pela largura do painel (a tela inclui a sidebar).
+        // Mesmo fundo do painel "Operações do ciclo".
+        '@container overflow-hidden rounded-2xl bg-gradient-to-br from-[#003D3A] via-[#00443F] to-[#005249] px-5 py-6 text-white shadow-sm sm:px-7',
         className,
       )}
     >
-      <div className="min-w-0 max-w-2xl space-y-2">
-        <p className="text-[11px] font-medium tracking-[0.14em] text-[#005F5B] uppercase">
-          financeiro · ciclo {stats.cycleLabel}
-        </p>
-        <h2 className="text-2xl font-semibold tracking-tight text-[#003D3A] sm:text-[1.85rem]">
-          Contrato e gastos do ciclo
-        </h2>
-        <p className="text-sm leading-relaxed text-[#005F5B]/85">
-          Quanto do contrato já foi consumido e quanto ainda está disponível.
-        </p>
-      </div>
+      {/* O título fica só na coluna esquerda: a barra vertical sobe até a linha dele e os
+          blocos da direita começam no topo, sem aumentar a altura do painel. */}
+      <div className="grid gap-5 @min-[56rem]:grid-cols-[1.4fr_1px_1fr] @min-[56rem]:gap-0">
+        <div className="min-w-0 @min-[56rem]:pr-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2EC99A] text-[#00443F]">
+              <DollarSign className="h-5 w-5" aria-hidden />
+            </span>
+            <h2 className="text-xl font-semibold tracking-tight text-white">Painel financeiro</h2>
+          </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        {tiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-medium text-[#003D3A]">{tile.label}</p>
-              <span
-                className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                  tile.tone,
-                )}
+          <div className="mt-3 grid gap-3 @min-[34rem]:grid-cols-3">
+            {tiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="min-w-0 rounded-2xl bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
               >
-                <tile.icon className="h-4 w-4" />
-              </span>
-            </div>
-            <p
-              className={cn(
-                'mt-3 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl',
-                tile.valueClass,
-              )}
-            >
-              {tile.value}
-            </p>
-            <p className="mt-1 text-xs text-[#005F5B]/80">{tile.hint}</p>
+                <div className="flex items-center gap-2">
+                  <tile.icon className={cn('h-6 w-6 shrink-0', tile.iconClass)} aria-hidden />
+                  <p className="text-xs leading-tight text-[#4B5B58]">{tile.label}</p>
+                </div>
+                <p
+                  className={cn(
+                    'mt-2 whitespace-nowrap text-lg font-bold tracking-tight tabular-nums @min-[70rem]:text-xl',
+                    tile.valueClass,
+                  )}
+                >
+                  {tile.value}
+                </p>
+                {tile.hint ? (
+                  <p className="text-[11px] font-medium text-red-600">{tile.hint}</p>
+                ) : null}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-5">
-        <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] lg:col-span-2">
-          <p className="text-sm font-semibold text-[#003D3A]">Contrato consumido</p>
-          <p className="mt-0.5 text-xs text-[#005F5B]/80">Percentual do valor contratado já gasto</p>
-          <p
-            className={cn(
-              'mt-4 text-4xl font-semibold tabular-nums',
-              overBudget ? 'text-red-700' : 'text-[#003D3A]',
-            )}
-          >
-            {stats.contractTotal > 0 ? `${consumedPct.toFixed(1)}%` : '—'}
-          </p>
-          <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#007E7A]/12">
-            <div
-              className={cn('h-full rounded-full', overBudget ? 'bg-red-500' : 'bg-[#007E7A]')}
-              style={{ width: `${Math.min(consumedPct, 100)}%` }}
-            />
-          </div>
-          {stats.contractTotal === 0 ? (
-            <p className="mt-3 text-xs text-[#005F5B]/80">
-              Nenhum valor contratado lançado nas visitas do ciclo.
-            </p>
-          ) : null}
         </div>
 
-        <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] lg:col-span-3">
-          <p className="text-sm font-semibold text-[#003D3A]">Contrato × gasto × saldo</p>
-          <p className="mt-0.5 text-xs text-[#005F5B]/80">
-            Comparativo financeiro do ciclo {stats.cycleLabel}
-          </p>
-          <ReactECharts option={barOption} style={{ height: 170 }} opts={{ renderer: 'svg' }} />
+        {/* Barra vertical de 1px (horizontal quando empilhado). */}
+        <div
+          aria-hidden
+          className="h-px w-full bg-white/55 @min-[56rem]:h-auto @min-[56rem]:w-px"
+        />
+
+        <div className="space-y-5 @min-[56rem]:pl-6">
+          <div>
+            <p className="text-sm font-semibold text-white">Contrato consumido</p>
+            <div className="mt-2 flex items-center gap-4">
+              <div className="h-3 flex-1 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className={cn('h-full rounded-full', overBudget ? 'bg-red-400' : 'bg-[#2EC99A]')}
+                  style={{ width: `${Math.min(consumedPct, 100)}%` }}
+                />
+              </div>
+              <span
+                className={cn(
+                  'w-16 text-right text-2xl font-bold tabular-nums',
+                  overBudget ? 'text-red-300' : 'text-white',
+                )}
+              >
+                {stats.contractTotal > 0 ? `${Math.round(consumedPct)}%` : '—'}
+              </span>
+            </div>
+            {stats.contractTotal === 0 ? (
+              <p className="mt-1 text-xs text-white/70">
+                Nenhum valor contratado lançado nas visitas do ciclo.
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-white">Contrato × Gasto × Saldo</p>
+            <div className="mt-2 space-y-2">
+              {comparison.map((row) => (
+                <div key={row.label} className="flex items-center gap-3 text-xs">
+                  <span className="w-14 shrink-0 text-white">{row.label}</span>
+                  <div className="h-2.5 flex-1">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.max((Math.abs(row.value) / comparisonMax) * 100, row.value !== 0 ? 2 : 0)}%`,
+                        backgroundColor: row.color,
+                      }}
+                    />
+                  </div>
+                  <span
+                    className={cn(
+                      'w-20 shrink-0 text-right tabular-nums text-white',
+                      row.label === 'Saldo' && overBudget && 'font-semibold text-red-300',
+                    )}
+                  >
+                    {formatCurrencyCompact(row.value)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>

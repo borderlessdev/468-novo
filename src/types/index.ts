@@ -337,6 +337,8 @@ export interface Visitor extends SoftDeletable {
   cpf?: string
   company?: string
   role?: string
+  /** Centro de custos do visitante (uso interno do CRM). */
+  costCenter?: string
   country?: string
   nationality?: string
   sex?: VisitorSex

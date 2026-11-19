@@ -37,6 +37,7 @@ import {
   visitorToProfileForm,
   type VisitorProfileFormValues,
 } from '@/features/visitors/visitorProfileModel'
+import { usesValeDashboard } from '@/lib/orgDashboard'
 import { parseVisitorWorkbook } from '@/lib/visitorImport'
 import { visitorSchema, parseOptionalNumber } from '@/lib/validations'
 import { formatDateTime, formatWeightKgNumber } from '@/lib/utils'
@@ -50,7 +51,8 @@ type ViewMode = 'table' | 'cards' | 'company'
 
 export function VisitorsPage() {
   const { user, isAdmin, role, canWrite } = useAuth()
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, activeOrg } = useOrg()
+  const isValeOrg = usesValeDashboard(activeOrg)
   const [loading, setLoading] = useState(true)
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [visits, setVisits] = useState<Visit[]>([])
@@ -684,6 +686,7 @@ export function VisitorsPage() {
               variant={formVariant}
               locale="pt"
               showCountry
+              showCostCenter={isValeOrg}
               errors={fieldErrors}
             />
 

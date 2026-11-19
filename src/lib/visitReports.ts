@@ -1,3 +1,4 @@
+import { isGeneratedPvToken } from '@/lib/pvNumber'
 import { VALE_VPS, valeVpLabel } from '@/lib/valeVp'
 import { visitOverlapsPeriod } from '@/lib/visitEvent'
 import type { Visit } from '@/types'
@@ -12,11 +13,12 @@ export const VALE_EXPORT_HEADERS = [
   'Responsável pela aprovação',
   'Plantio',
   'Quem vai plantar',
+  'Informações pós-visita',
 ] as const
 
 export function valeExportColumns(visit: Visit): string[] {
   return [
-    visit.pvNumber ?? '',
+    visit.pvNumber && !isGeneratedPvToken(visit.pvNumber) ? visit.pvNumber : '',
     visit.vp ?? '',
     visit.vipAudience ?? '',
     visit.visitorCountry ?? '',
@@ -24,7 +26,16 @@ export function valeExportColumns(visit: Visit): string[] {
     visit.approverName ?? '',
     visit.hasPlanting ? 'Sim' : 'Não',
     visit.hasPlanting ? (visit.planterName ?? '') : '',
+    visit.postVisitInfo ?? '',
   ]
+}
+
+/** Linhas "Campo: valor" (só as preenchidas) para PDFs de relatórios da Vale. */
+export function valeDetailLines(visit: Visit): string[] {
+  const values = valeExportColumns(visit)
+  return VALE_EXPORT_HEADERS.map((header, index) => ({ header, value: values[index] }))
+    .filter((item) => item.value.trim() !== '')
+    .map((item) => `${item.header}: ${item.value}`)
 }
 
 /** Visitas do ciclo que contam na operação (mesma regra do dashboard: sem canceladas). */

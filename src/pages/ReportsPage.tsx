@@ -47,6 +47,7 @@ import {
 } from '@/lib/visitEvent'
 import { downloadCsv, formatCurrency, formatDate } from '@/lib/utils'
 import {
+  exportRecordsPdf,
   exportTable,
   getExportFormatLabel,
   type TableExportFormat,
@@ -55,6 +56,7 @@ import { usesValeDashboard } from '@/lib/orgDashboard'
 import {
   VALE_EXPORT_HEADERS,
   operationalVisitsInCycle,
+  valeDetailLines,
   valeExportColumns,
   visitsByState,
   visitsByVp,
@@ -64,6 +66,7 @@ import { listVisits } from '@/services/visits'
 import { listVisitors } from '@/services/visitors'
 import { listFinanceItemsByOwner } from '@/services/finance'
 import { BudgetComparisonReport } from '@/features/budgets/BudgetComparisonReport'
+import { PvHistoryImportCard } from '@/features/reports/PvHistoryImportCard'
 import {
   listVisitIdsForVisitor,
   listVisitVisitors,
@@ -84,7 +87,7 @@ function visitorCreatedIso(visitor: Visitor): string | null {
 }
 
 export function ReportsPage() {
-  const { user, isPlatformAdmin, role } = useAuth()
+  const { user, isPlatformAdmin, role, canWrite } = useAuth()
   const { activeOrgId, activeOrg } = useOrg()
   const isValeOrg = usesValeDashboard(activeOrg)
   const valeHeaders: string[] = isValeOrg ? [...VALE_EXPORT_HEADERS] : []
@@ -243,6 +246,7 @@ export function ReportsPage() {
         'Empresa',
         'E-mail',
         'Telefone',
+        ...(isValeOrg ? ['Centro de custos'] : []),
         'Visitas no ciclo',
         'Cadastrado em',
       ],
@@ -252,6 +256,7 @@ export function ReportsPage() {
         visitor.company ?? '',
         visitor.email ?? '',
         visitor.phone ?? visitor.whatsapp ?? '',
+        ...(isValeOrg ? [visitor.costCenter ?? ''] : []),
         visitorFilterId === 'todos' ? '—' : String(visitorHistory.length),
         visitorCreatedIso(visitor) ? formatDate(visitorCreatedIso(visitor)!) : '—',
       ]),
@@ -308,7 +313,20 @@ export function ReportsPage() {
     const rows = visits.filter(
       (v) => v.startDate >= range.startIso && v.startDate <= range.endIso,
     )
-    if (asPdf) {
+    if (asPdf && isValeOrg) {
+      exportRecordsPdf({
+        filenameBase: 'visitas-do-ciclo',
+        title: `Visitas do ciclo (${cycleLabel})`,
+        subtitle: `${rows.length} visita(s)`,
+        blocks: rows.map((visit) => ({
+          heading: visit.title,
+          lines: [
+            `${visitEventLabel(visit)} · ${formatDate(visit.startDate)} a ${formatDate(visit.endDate)} · ${[visit.city, visit.state].filter(Boolean).join('/') || '—'} · ${visit.status}`,
+            ...valeDetailLines(visit),
+          ],
+        })),
+      })
+    } else if (asPdf) {
       const doc = new jsPDF()
       doc.setFontSize(14)
       doc.text(`Visitas do ciclo (${cycleLabel})`, 14, 20)
@@ -383,7 +401,20 @@ export function ReportsPage() {
           ? visitEventScopeLabel(v.eventScope)
           : visitEventKindLabel(v.eventKind)
 
-    if (asPdf) {
+    if (asPdf && isValeOrg) {
+      exportRecordsPdf({
+        filenameBase,
+        title,
+        subtitle: `${rows.length} experiência(s)`,
+        blocks: rows.map((visit) => ({
+          heading: visit.title,
+          lines: [
+            `${extraHeader}: ${extraValue(visit)} · ${formatDate(visit.startDate)} a ${formatDate(visit.endDate)} · ${[visit.city, visit.state].filter(Boolean).join('/') || '—'} · ${visit.status}`,
+            ...valeDetailLines(visit),
+          ],
+        })),
+      })
+    } else if (asPdf) {
       const doc = new jsPDF()
       doc.setFontSize(14)
       doc.text(title, 14, 20)
@@ -482,19 +513,19 @@ export function ReportsPage() {
       const totalVisitors = rows.reduce((sum, row) => sum + row.count, 0)
 
       if (asPdf) {
-        const doc = new jsPDF()
-        doc.setFontSize(14)
-        doc.text(`Visitantes por visita (${cycleLabel})`, 14, 20)
-        doc.setFontSize(10)
-        doc.text(`${rows.length} visita(s) · ${totalVisitors} vínculo(s) de visitante`, 14, 28)
-        rows.forEach((row, index) => {
-          doc.text(
-            `${row.visit.title} | ${formatDate(row.visit.startDate)} | ${row.count} visitante(s)`,
-            14,
-            38 + index * 8,
-          )
+        exportRecordsPdf({
+          filenameBase: 'visitantes-por-visita',
+          title: `Visitantes por visita (${cycleLabel})`,
+          subtitle: `${rows.length} visita(s) · ${totalVisitors} vínculo(s) de visitante`,
+          blocks: rows.map((row) => ({
+            heading: `${row.visit.title} — ${row.count} visitante(s)`,
+            lines: [
+              `${formatDate(row.visit.startDate)} a ${formatDate(row.visit.endDate)} · ${row.visit.state ?? '—'} · ${row.visit.status}`,
+              ...valeDetailLines(row.visit),
+              ...(row.names.length > 0 ? [`Visitantes: ${row.names.join('; ')}`] : []),
+            ],
+          })),
         })
-        doc.save('visitantes-por-visita.pdf')
       } else {
         downloadCsv('visitantes-por-visita.csv', [
           [
@@ -633,6 +664,10 @@ export function ReportsPage() {
 
       {activeOrgId ? (
         <BudgetComparisonReport orgId={activeOrgId} visits={visits} financeItems={financeItems} />
+      ) : null}
+
+      {isValeOrg && canWrite && activeOrgId && user ? (
+        <PvHistoryImportCard orgId={activeOrgId} userId={user.uid} />
       ) : null}
 
       <Card className="mb-6">

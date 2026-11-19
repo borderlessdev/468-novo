@@ -32,6 +32,8 @@ interface VisitorProfileFieldsProps {
   showLgpd?: boolean
   /** CRM mostra país; portal pode omitir. */
   showCountry?: boolean
+  /** Centro de custos (uso interno do CRM da Vale). */
+  showCostCenter?: boolean
   errors?: Partial<Record<'name' | 'document', string>>
 }
 
@@ -134,6 +136,7 @@ export function VisitorProfileFields({
   locale = 'pt',
   showLgpd = false,
   showCountry = true,
+  showCostCenter = false,
   errors,
 }: VisitorProfileFieldsProps) {
   const vip = showVipLogistics(variant)
@@ -191,6 +194,16 @@ export function VisitorProfileFields({
             />
           </div>
         </>
+      ) : null}
+
+      {showCostCenter ? (
+        <div className="space-y-2">
+          <Label>Centro de custos</Label>
+          <Input
+            value={values.costCenter}
+            onChange={(e) => onChange({ costCenter: e.target.value })}
+          />
+        </div>
       ) : null}
 
       {comunidade ? (

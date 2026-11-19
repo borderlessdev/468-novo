@@ -37,6 +37,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
 import { canEditVisitModule } from '@/lib/access'
+import { usesValeDashboard } from '@/lib/orgDashboard'
 import { planScheduleCascade } from '@/lib/activitySchedule'
 import { activitySchema, type ActivityInput } from '@/lib/validations'
 import { activitiesOverlap, formatDate } from '@/lib/utils'
@@ -62,7 +63,7 @@ import type { Activity, Visit } from '@/types'
 
 export function AgendaPage() {
   const { user, isAdmin, role, canWrite: canWriteOrg } = useAuth()
-  const { activeOrgId, isOrgAdmin } = useOrg()
+  const { activeOrgId, activeOrg, isOrgAdmin } = useOrg()
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
@@ -70,7 +71,14 @@ export function AgendaPage() {
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [dayFilter, setDayFilter] = useState('')
   const [eventSearch, setEventSearch] = useState('')
-  const [viewMode, setViewMode] = useState<'list' | 'week'>('week')
+  const isValeOrg = usesValeDashboard(activeOrg)
+  const [viewMode, setViewMode] = useState<'list' | 'week'>(isValeOrg ? 'list' : 'week')
+  const viewModeTouchedRef = useRef(false)
+
+  // Vale organiza a programação em lista por padrão (a org pode carregar depois da página).
+  useEffect(() => {
+    if (isValeOrg && !viewModeTouchedRef.current) setViewMode('list')
+  }, [isValeOrg])
   const [weekStart, setWeekStart] = useState(() => getWeekStart())
   const weekSyncedVisitRef = useRef<string | null>(null)
   const weekSyncedWithActivitiesRef = useRef(false)
@@ -637,7 +645,10 @@ export function AgendaPage() {
             type="button"
             size="sm"
             variant={viewMode === 'week' ? 'default' : 'ghost'}
-            onClick={() => setViewMode('week')}
+            onClick={() => {
+              viewModeTouchedRef.current = true
+              setViewMode('week')
+            }}
           >
             Semana
           </Button>
@@ -645,7 +656,10 @@ export function AgendaPage() {
             type="button"
             size="sm"
             variant={viewMode === 'list' ? 'default' : 'ghost'}
-            onClick={() => setViewMode('list')}
+            onClick={() => {
+              viewModeTouchedRef.current = true
+              setViewMode('list')
+            }}
           >
             Lista
           </Button>

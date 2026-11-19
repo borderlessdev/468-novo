@@ -4,6 +4,7 @@ export const VALE_VPS = [
   'VP - Comercial Novos Neg.',
   'VP - Pessoas',
   'VP - Assuntos Jurídicos',
+  'VP - Assuntos Institucionais',
   'VP - Operações',
   'VP - Finanças e RI',
   'VP - Técnica',

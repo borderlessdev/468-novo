@@ -9,6 +9,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import {
@@ -142,20 +143,75 @@ export async function listVisits(
     .sort((a, b) => b.startDate.localeCompare(a.startDate))
 }
 
-/** PVs distintas já usadas na organização (visitas ativas, sem templates). */
+const pvReservationsCol = collection(db, 'pvReservations')
+
+/** PVs do histórico importado (planilha 2023–2026), gravadas como reservas com source = 'import'. */
+async function listOrgImportedPvNumbers(orgId: string): Promise<string[]> {
+  try {
+    const snap = await getDocs(query(pvReservationsCol, where('orgId', '==', orgId)))
+    return snap.docs
+      .filter((d) => d.data().source === 'import')
+      .map((d) => String(d.data().pvNumber ?? ''))
+      .filter(Boolean)
+  } catch (error) {
+    console.warn('Não foi possível ler o histórico de PVs importado', error)
+    return []
+  }
+}
+
+/** PVs distintas já usadas na organização (visitas ativas, sem templates + histórico importado). */
 export async function listOrgPvNumbers(orgId: string): Promise<string[]> {
   if (!orgId) return []
-  const snap = await getDocs(query(visitsCol, where('orgId', '==', orgId)))
+  const [snap, imported] = await Promise.all([
+    getDocs(query(visitsCol, where('orgId', '==', orgId))),
+    listOrgImportedPvNumbers(orgId),
+  ])
   const values = snap.docs
     .filter((d) => isActiveRecord(d.data()) && d.data().isTemplate !== true)
     .map((d) => {
       const raw = d.data().pvNumber
       return raw == null ? undefined : String(raw)
     })
-  return collectDistinctPvNumbers(values)
+  return collectDistinctPvNumbers([...values, ...imported])
 }
 
-const pvReservationsCol = collection(db, 'pvReservations')
+export type PvHistoryImportResult = { created: number; skipped: number }
+
+/**
+ * Grava o histórico de PVs como reservas "importadas" (somente criação; as que já existem são puladas).
+ * Elas passam a aparecer no dropdown, no aviso de duplicidade e na sugestão do próximo número.
+ */
+export async function importPvHistory(
+  orgId: string,
+  userId: string,
+  rows: { pvNumber: string; year?: string; state?: string; note?: string }[],
+): Promise<PvHistoryImportResult> {
+  const alreadyThere = new Set([
+    ...(await listOrgPvNumbers(orgId)),
+    ...(await listOrgReservedPvNumbers(orgId)),
+  ])
+  const pending = rows.filter((row) => !alreadyThere.has(normalizePvNumber(row.pvNumber)))
+
+  const CHUNK = 400
+  for (let i = 0; i < pending.length; i += CHUNK) {
+    const batch = writeBatch(db)
+    for (const row of pending.slice(i, i + CHUNK)) {
+      const pvNumber = normalizePvNumber(row.pvNumber)
+      batch.set(doc(pvReservationsCol, `${orgId}__${pvNumber}`), {
+        orgId,
+        pvNumber,
+        source: 'import',
+        year: row.year ?? null,
+        state: row.state ?? null,
+        note: row.note ?? null,
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+      })
+    }
+    await batch.commit()
+  }
+  return { created: pending.length, skipped: rows.length - pending.length }
+}
 
 /** PVs já reservadas (inclui números reservados cuja visita ainda está sendo criada). */
 async function listOrgReservedPvNumbers(orgId: string): Promise<string[]> {
