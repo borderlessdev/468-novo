@@ -26,7 +26,10 @@ function readOrgId(value: unknown): string {
  * Altera o tipo de qualquer usuário. Somente administrador master.
  * Não apaga a conta, o vínculo com a empresa nem os demais dados do perfil.
  */
-export const changeUserAccountType = onCall(async (request) => {
+export const changeUserAccountType = onCall(
+  // cors + invoker public: o preflight do browser (localhost e produção) precisa chegar na função.
+  { cors: true, invoker: 'public' },
+  async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'Faça login.')
   }

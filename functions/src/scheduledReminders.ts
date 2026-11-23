@@ -25,7 +25,9 @@ function enabled(profile: FirebaseFirestore.DocumentData, type: string, channel:
   return prefs?.[preferenceByType[type]] !== false
 }
 
-async function recipientsFor(visit: FirebaseFirestore.DocumentData, includeAdmins = true) {
+type ReminderRecipient = { uid: string; orgRole: string; profile: FirebaseFirestore.DocumentData }
+
+async function recipientsFor(visit: FirebaseFirestore.DocumentData, includeAdmins = true): Promise<ReminderRecipient[]> {
   const orgId = String(visit.orgId ?? '')
   const memberSnap = await db.collection('organizationMembers').where('orgId', '==', orgId).get()
   const eligible = memberSnap.docs.filter((member) => ['org_admin', 'team', 'user'].includes(String(member.get('orgRole'))))
@@ -35,7 +37,22 @@ async function recipientsFor(visit: FirebaseFirestore.DocumentData, includeAdmin
     return profile.exists ? { uid, orgRole: String(member.get('orgRole')), profile: profile.data()! } : null
   }))
   const involved = new Set<string>([String(visit.ownerId ?? ''), ...(Array.isArray(visit.teamMemberIds) ? visit.teamMemberIds : [])])
-  return profiles.filter((item): item is NonNullable<typeof item> => Boolean(item) && (includeAdmins ? involved.has(item!.uid) || item!.orgRole === 'org_admin' : involved.has(item!.uid)))
+  return profiles.filter((item): item is ReminderRecipient => Boolean(item) && (includeAdmins ? involved.has(item!.uid) || item!.orgRole === 'org_admin' : involved.has(item!.uid)))
+}
+
+/** Destinatário único: só quem está atribuído na tarefa (não a equipe / admins da visita). */
+async function recipientForAssignee(
+  orgId: string,
+  assigneeId: string | undefined | null,
+): Promise<ReminderRecipient | null> {
+  const uid = String(assigneeId ?? '').trim()
+  if (!uid || !orgId) return null
+  const member = await db.collection('organizationMembers').doc(`${orgId}_${uid}`).get()
+  const role = String(member.get('orgRole') ?? '')
+  if (!member.exists || !['org_admin', 'team', 'user'].includes(role)) return null
+  const profile = await db.collection('users').doc(uid).get()
+  if (!profile.exists) return null
+  return { uid, orgRole: role, profile: profile.data()! }
 }
 
 async function deliver(input: {
@@ -100,9 +117,32 @@ export const sendDailyOperationalReminders = onSchedule(
       for (const task of tasks.docs) {
         const item = task.data(); const due = String(item.dueDate ?? '')
         if (item.isDeleted === true || item.status === 'completed' || !due) continue
+        // E-mail / sino de prazo só para o responsável da tarefa — não para equipe/admins.
+        const assignee = await recipientForAssignee(String(visit.orgId ?? ''), item.assigneeId)
+        if (!assignee) continue
         const days = daysUntil(due, today)
-        if (days < 0) await sendTo('task_overdue', task.id, 'Tarefa atrasada', `“${String(item.title ?? 'Tarefa')}” em ${title} venceu em ${due}.`, `/planejamento?visita=${visitId}`, `task-overdue:${task.id}:${due}`)
-        else if (days <= 3) await sendTo('task_due_soon', task.id, 'Tarefa com prazo próximo', `“${String(item.title ?? 'Tarefa')}” em ${title} vence em ${days} dia(s).`, `/planejamento?visita=${visitId}`, `task-due:${task.id}:${due}`)
+        const taskRecipients = [assignee]
+        if (days < 0) {
+          await sendTo(
+            'task_overdue',
+            task.id,
+            'Tarefa atrasada',
+            `“${String(item.title ?? 'Tarefa')}” em ${title} venceu em ${due}.`,
+            `/planejamento?visita=${visitId}`,
+            `task-overdue:${task.id}:${due}`,
+            taskRecipients,
+          )
+        } else if (days <= 3) {
+          await sendTo(
+            'task_due_soon',
+            task.id,
+            'Tarefa com prazo próximo',
+            `“${String(item.title ?? 'Tarefa')}” em ${title} vence em ${days} dia(s).`,
+            `/planejamento?visita=${visitId}`,
+            `task-due:${task.id}:${due}`,
+            taskRecipients,
+          )
+        }
       }
       const financeRecipients = await recipientsFor(visit, true)
       for (const itemDoc of finance.docs) {
