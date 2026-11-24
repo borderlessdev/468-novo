@@ -83,16 +83,31 @@ async function loadCommunityIntake(token: string) {
   return { ref, data }
 }
 
+function visitPeriodSet(visit: FirebaseFirestore.DocumentData): Set<string> {
+  const startDate = string(visit.startDate)
+  const endDate = string(visit.endDate)
+  if (!startDate || !endDate || endDate < startDate) return new Set()
+  const dates = new Set<string>()
+  const cursor = new Date(`${startDate}T12:00:00`)
+  const end = new Date(`${endDate}T12:00:00`)
+  while (cursor <= end) {
+    dates.add(cursor.toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
 function availableDates(visit: FirebaseFirestore.DocumentData) {
   const capacity = (visit.communityDailyCapacity ?? {}) as Record<string, unknown>
   const occupancy = (visit.communityDailyOccupancy ?? {}) as Record<string, unknown>
+  const period = visitPeriodSet(visit)
   return Object.entries(capacity)
     .map(([date, raw]) => ({
       date,
       capacity: Number(raw ?? 0),
       occupied: Number(occupancy[date] ?? 0),
     }))
-    .filter((item) => item.capacity > item.occupied)
+    .filter((item) => period.has(item.date) && item.capacity > item.occupied)
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
@@ -131,6 +146,9 @@ export const submitCommunityRegistration = onCall(async (request) => {
     }
     if (existingSnap.exists) {
       return { registrationLinkId: existingSnap.id, alreadyRegistered: true }
+    }
+    if (!visitPeriodSet(visit).has(registrationDate)) {
+      throw new HttpsError('invalid-argument', 'Data de inscrição fora do período da experiência.')
     }
     const capacity = Number((visit.communityDailyCapacity ?? {})[registrationDate] ?? 0)
     const occupied = Number((visit.communityDailyOccupancy ?? {})[registrationDate] ?? 0)

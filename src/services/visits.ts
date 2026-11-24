@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -14,6 +15,7 @@ import {
 import { db } from '@/lib/firebase'
 import {
   collectDistinctPvNumbers,
+  isGeneratedPvToken,
   normalizePvNumber,
   suggestNextPvNumber,
 } from '@/lib/pvNumber'
@@ -370,7 +372,11 @@ export async function createVisit(
 
 export async function updateVisit(
   id: string,
-  data: Partial<Omit<Visit, 'id' | 'ownerId' | 'orgId' | 'createdAt'>>,
+  data: Partial<{
+    [K in keyof Omit<Visit, 'id' | 'ownerId' | 'orgId' | 'createdAt'>]:
+      | Omit<Visit, 'id' | 'ownerId' | 'orgId' | 'createdAt'>[K]
+      | null
+  }>,
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     ...data,
@@ -393,8 +399,60 @@ export async function updateVisit(
   await updateDoc(doc(visitsCol, id), payload)
 }
 
+/**
+ * Libera reserva de PV (não toca histórico importado).
+ * Usado ao excluir visita ou quando a criação falha após reservar.
+ */
+export async function releasePvReservation(
+  orgId: string,
+  pvNumber: string,
+): Promise<void> {
+  const normalized = normalizePvNumber(pvNumber)
+  if (!orgId || !normalized || isGeneratedPvToken(normalized)) return
+  const ref = doc(pvReservationsCol, `${orgId}__${normalized}`)
+  try {
+    const snap = await getDoc(ref)
+    if (!snap.exists()) return
+    if (snap.data().source === 'import') return
+    await deleteDoc(ref)
+  } catch (error) {
+    console.warn('Não foi possível liberar reserva de PV', error)
+  }
+}
+
+/** Recria reserva exata ao restaurar visita da lixeira (sem avançar para o próximo). */
+export async function ensurePvReservation(
+  orgId: string,
+  userId: string,
+  pvNumber: string,
+): Promise<boolean> {
+  const normalized = normalizePvNumber(pvNumber)
+  if (!orgId || !normalized || isGeneratedPvToken(normalized)) return false
+  const ref = doc(pvReservationsCol, `${orgId}__${normalized}`)
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref)
+      if (snap.exists()) return true
+      tx.set(ref, {
+        orgId,
+        pvNumber: normalized,
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+      })
+      return true
+    })
+  } catch (error) {
+    console.warn('Não foi possível recriar reserva de PV', error)
+    return false
+  }
+}
+
 export async function deleteVisit(id: string, deletedBy: string): Promise<void> {
+  const visit = await getVisit(id)
   await softDeleteEntity('visit', id, deletedBy)
+  if (visit?.orgId && visit.pvNumber) {
+    await releasePvReservation(visit.orgId, visit.pvNumber)
+  }
 }
 
 export async function syncVisitProgress(visitId: string, progress: number): Promise<void> {

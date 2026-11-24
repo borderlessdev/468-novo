@@ -20,7 +20,7 @@ import {
   isActiveRecord,
   TRASH_ENTITY_COLLECTIONS,
 } from '@/lib/trash'
-import { listVisits } from '@/services/visits'
+import { ensurePvReservation, listVisits } from '@/services/visits'
 import type { TrashEntityType, TrashItem, UserRole } from '@/types'
 
 const CHILD_ENTITY_TYPES: TrashEntityType[] = [
@@ -86,6 +86,8 @@ export async function restoreEntity(
   id: string,
 ): Promise<void> {
   const col = collections[entityType]
+  const ref = doc(col, id)
+  const existing = entityType === 'visit' ? await getDoc(ref) : null
   const payload: Record<string, unknown> = {
     isDeleted: false,
     deletedAt: deleteField(),
@@ -95,7 +97,17 @@ export async function restoreEntity(
   if (entityType !== 'document') {
     payload.updatedAt = serverTimestamp()
   }
-  await updateDoc(doc(col, id), payload)
+  await updateDoc(ref, payload)
+
+  if (entityType === 'visit' && existing?.exists()) {
+    const data = existing.data()
+    const orgId = String(data.orgId ?? '')
+    const pvNumber = data.pvNumber != null ? String(data.pvNumber) : ''
+    const ownerId = String(data.ownerId ?? '')
+    if (orgId && pvNumber && ownerId) {
+      await ensurePvReservation(orgId, ownerId, pvNumber)
+    }
+  }
 }
 
 export async function permanentDeleteEntity(

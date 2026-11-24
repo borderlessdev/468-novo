@@ -40,6 +40,7 @@ import {
   getVisit,
   listOrgPvNumbers,
   listVisitTemplates,
+  releasePvReservation,
   reserveNewPvNumber,
 } from '@/services/visits'
 import { createVisitFromTemplate } from '@/services/visitClone'
@@ -57,19 +58,10 @@ import {
   PvNumberField,
 } from '@/features/visits/PvNumberField'
 import { kindsForExperienceTab } from '@/lib/visitEvent'
+import { datesBetween, pruneCommunityDailyCapacity } from '@/lib/date'
 import { normalizePvNumber, pvNumberExists } from '@/lib/pvNumber'
 
-function datesBetween(startDate: string, endDate: string): string[] {
-  if (!startDate || !endDate || endDate < startDate) return []
-  const dates: string[] = []
-  const cursor = new Date(`${startDate}T12:00:00`)
-  const end = new Date(`${endDate}T12:00:00`)
-  while (cursor <= end) {
-    dates.push(cursor.toISOString().slice(0, 10))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
-}
+const COMMUNITY_KINDS = new Set(['visita_comunidade', 'comunidade_prioritaria'])
 
 interface NewVisitDialogProps {
   onCreated?: () => void
@@ -238,17 +230,29 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
   const createVisitWithValues = async (values: VisitInput, reservePv: boolean) => {
     if (!user || !activeOrgId) return
     setSaving(true)
+    let reservedPv: string | null = null
+    let created = false
     try {
       let pvNumber = normalizePvNumber(values.pvNumber)
       if (reservePv) {
         const reserved = await reserveNewPvNumber(activeOrgId, user.uid, pvNumber)
+        reservedPv = reserved
         if (reserved !== pvNumber) {
           toast.info(
             `A PV ${pvNumber} acabou de ser usada por outro usuário. Esta visita foi criada com a PV ${reserved}.`,
           )
           pvNumber = reserved
+        } else {
+          pvNumber = reserved
         }
       }
+      const communityDailyCapacity = COMMUNITY_KINDS.has(values.eventKind ?? '')
+        ? pruneCommunityDailyCapacity(
+            values.communityDailyCapacity,
+            values.startDate,
+            values.endDate,
+          )
+        : undefined
       let visitId: string
       if (values.templateId) {
         visitId = await createVisitFromTemplate(values.templateId, user.uid, {
@@ -266,12 +270,15 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           approverName: values.approverName,
           startDate: values.startDate,
           endDate: values.endDate,
+          status: values.status,
           objective: values.objective,
           language: values.language,
           pvNumber,
           eventKind: values.eventKind,
           vipSubtype: values.vipSubtype,
           eventScope: values.eventScope,
+          hasTicketSales: values.hasTicketSales === true,
+          communityDailyCapacity,
         })
       } else {
         visitId = await createVisit(user.uid, activeOrgId, {
@@ -296,11 +303,8 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           objective: values.objective,
           language: values.language,
           pvNumber,
-           hasTicketSales: values.hasTicketSales === true,
-           communityDailyCapacity:
-             values.eventKind === 'visita_comunidade' || values.eventKind === 'comunidade_prioritaria'
-               ? values.communityDailyCapacity
-               : undefined,
+          hasTicketSales: values.hasTicketSales === true,
+          communityDailyCapacity,
           progress: 0,
           teamMemberIds: [],
         })
@@ -308,6 +312,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
           await createTasksBatch(user.uid, visitId, DEFAULT_CHECKLIST)
         }
       }
+      created = true
 
       if (values.playbookId) {
         await applyPlaybookToVisit({
@@ -355,6 +360,9 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
       onCreated?.()
     } catch (error) {
       console.error(error)
+      if (!created && reservedPv && activeOrgId) {
+        await releasePvReservation(activeOrgId, reservedPv)
+      }
       const code = (error as { code?: string }).code
       toast.error(
         code === 'permission-denied'
@@ -639,7 +647,7 @@ export function NewVisitDialog({ onCreated }: NewVisitDialogProps) {
                 </div>
               </div>
             ) : null}
-            {['visita_comunidade', 'comunidade_prioritaria'].includes(form.watch('eventKind') ?? '') ? (
+            {COMMUNITY_KINDS.has(form.watch('eventKind') ?? '') ? (
               <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
                 <Label>Vagas por dia *</Label>
                 {datesBetween(form.watch('startDate'), form.watch('endDate')).length > 0 ? (

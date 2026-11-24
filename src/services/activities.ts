@@ -56,7 +56,10 @@ export async function listActivities(
   )
   return activities
     .filter((activity) => !activity.isDeleted)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+    )
 }
 
 export async function createActivity(

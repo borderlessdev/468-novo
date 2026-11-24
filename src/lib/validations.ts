@@ -1,4 +1,19 @@
 import { z } from 'zod'
+import { pruneCommunityDailyCapacity } from '@/lib/date'
+
+function hasCommunityCapacityInPeriod(data: {
+  eventKind?: string
+  startDate?: string
+  endDate?: string
+  communityDailyCapacity?: Record<string, number>
+}): boolean {
+  const pruned = pruneCommunityDailyCapacity(
+    data.communityDailyCapacity,
+    data.startDate ?? '',
+    data.endDate ?? '',
+  )
+  return Boolean(pruned && Object.keys(pruned).length > 0)
+}
 
 export const loginSchema = z.object({
   email: z.email('E-mail inválido'),
@@ -94,7 +109,7 @@ export const visitSchema = visitBaseSchema
   .refine(
     (data) =>
       !['visita_comunidade', 'comunidade_prioritaria'].includes(data.eventKind) ||
-      Object.keys(data.communityDailyCapacity ?? {}).length > 0,
+      hasCommunityCapacityInPeriod(data),
     {
       message: 'Informe as vagas disponíveis para cada dia da Comunidade',
       path: ['communityDailyCapacity'],
@@ -130,6 +145,15 @@ export const visitEditSchema = visitBaseSchema
     {
       message: 'Selecione se o evento é interno ou externo',
       path: ['eventScope'],
+    },
+  )
+  .refine(
+    (data) =>
+      !['visita_comunidade', 'comunidade_prioritaria'].includes(data.eventKind) ||
+      hasCommunityCapacityInPeriod(data),
+    {
+      message: 'Informe as vagas disponíveis para cada dia da Comunidade',
+      path: ['communityDailyCapacity'],
     },
   )
 

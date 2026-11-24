@@ -72,6 +72,7 @@ import { visitEventLabel } from '@/lib/visitEvent'
 import { visitEditSchema, type VisitEditInput } from '@/lib/validations'
 import { VisitEventFields } from '@/features/visits/VisitEventFields'
 import { usesCommunityRegistration, usesConfirmationLink, usesCrmIntake } from '@/features/visitors/visitorFormConfig'
+import { datesBetween, pruneCommunityDailyCapacity } from '@/lib/date'
 import {
   calculateVisitProgress,
   formatCurrency,
@@ -155,18 +156,6 @@ const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
 
 function documentCategoryLabel(category: DocumentCategory) {
   return DOCUMENT_CATEGORIES.find((item) => item.value === category)?.label ?? category
-}
-
-function datesBetween(startDate: string, endDate: string): string[] {
-  if (!startDate || !endDate || endDate < startDate) return []
-  const dates: string[] = []
-  const cursor = new Date(`${startDate}T12:00:00`)
-  const end = new Date(`${endDate}T12:00:00`)
-  while (cursor <= end) {
-    dates.push(cursor.toISOString().slice(0, 10))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
 }
 
 function GuestStatusBadge({ link }: { link: VisitGuestLink }) {
@@ -274,6 +263,7 @@ export function VisitDetailPage() {
         language: visitData.language ?? '',
         arrivalInstructions: visitData.arrivalInstructions ?? '',
         hasTicketSales: visitData.hasTicketSales === true,
+        communityDailyCapacity: visitData.communityDailyCapacity ?? {},
       })
 
       const ownerIdForQuery = visitData.ownerId
@@ -412,6 +402,13 @@ export function VisitDetailPage() {
     }
     setSaving(true)
     try {
+      const communityDailyCapacity = usesCommunityRegistration(values.eventKind)
+        ? pruneCommunityDailyCapacity(
+            values.communityDailyCapacity ?? visit.communityDailyCapacity,
+            values.startDate,
+            values.endDate,
+          )
+        : undefined
       const payload: Parameters<typeof updateVisit>[1] = {
         title: values.title,
         company: values.company || undefined,
@@ -436,8 +433,10 @@ export function VisitDetailPage() {
         language: values.language || undefined,
         arrivalInstructions: values.arrivalInstructions || undefined,
         hasTicketSales: values.hasTicketSales === true,
+        communityDailyCapacity: communityDailyCapacity ?? null,
       }
       await updateVisit(id, payload)
+      form.setValue('communityDailyCapacity', communityDailyCapacity ?? {})
       try {
         await writeActivityLog({
           entityType: 'visit',
@@ -456,7 +455,34 @@ export function VisitDetailPage() {
         prev
           ? {
               ...prev,
-              ...payload,
+              title: values.title,
+              company: values.company || undefined,
+              state: values.state || undefined,
+              city: values.city || undefined,
+              vp: values.vp || undefined,
+              vipAudience:
+                values.eventKind === 'visita_vip'
+                  ? values.vipAudience || undefined
+                  : undefined,
+              visitorCountry: values.visitorCountry || undefined,
+              hasPlanting: values.hasPlanting === true,
+              planterName: values.hasPlanting
+                ? values.planterName || undefined
+                : undefined,
+              postVisitInfo: values.postVisitInfo || undefined,
+              requesterContact: values.requesterContact || undefined,
+              approverName: values.approverName || undefined,
+              startDate: values.startDate,
+              endDate: values.endDate,
+              status: values.status,
+              eventKind: values.eventKind,
+              vipSubtype: values.vipSubtype,
+              eventScope: values.eventScope,
+              objective: values.objective || undefined,
+              language: values.language || undefined,
+              arrivalInstructions: values.arrivalInstructions || undefined,
+              hasTicketSales: values.hasTicketSales === true,
+              communityDailyCapacity,
             }
           : prev,
       )
@@ -795,9 +821,18 @@ export function VisitDetailPage() {
       return
     }
     try {
-      const next = { ...(visit.communityDailyCapacity ?? {}), [date]: capacity }
-      await updateVisit(visit.id, { communityDailyCapacity: next })
-      setVisit((current) => current ? { ...current, communityDailyCapacity: next } : current)
+      const startDate = form.getValues('startDate') || visit.startDate
+      const endDate = form.getValues('endDate') || visit.endDate
+      const next = pruneCommunityDailyCapacity(
+        { ...(visit.communityDailyCapacity ?? {}), [date]: capacity },
+        startDate,
+        endDate,
+      )
+      await updateVisit(visit.id, { communityDailyCapacity: next ?? null })
+      setVisit((current) =>
+        current ? { ...current, communityDailyCapacity: next } : current,
+      )
+      form.setValue('communityDailyCapacity', next ?? {}, { shouldValidate: true })
       toast.success('Vagas atualizadas')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível atualizar as vagas')
@@ -2122,19 +2157,28 @@ export function VisitDetailPage() {
             </div>
             )}
 
-            {usesCommunityRegistration(visit.eventKind) ? (
+            {usesCommunityRegistration(form.watch('eventKind') ?? visit.eventKind) ? (
               <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
                 <div>
                   <p className="text-sm font-semibold">Vagas por dia</p>
                   <p className="text-xs text-muted-foreground">A ocupação é reservada no envio da inscrição.</p>
+                  {typeof form.formState.errors.communityDailyCapacity?.message === 'string' ? (
+                    <p className="text-xs text-destructive">
+                      {form.formState.errors.communityDailyCapacity.message}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {datesBetween(visit.startDate, visit.endDate).map((date) => (
+                  {datesBetween(
+                    form.watch('startDate') || visit.startDate,
+                    form.watch('endDate') || visit.endDate,
+                  ).map((date) => (
                     <label key={date} className="flex items-center justify-between gap-2 text-sm">
                       <span>{formatDate(date)} · {visit.communityDailyOccupancy?.[date] ?? 0} inscrito(s)</span>
                       <Input
                         type="number"
                         min="1"
+                        key={`${date}-${visit.communityDailyCapacity?.[date] ?? ''}`}
                         defaultValue={visit.communityDailyCapacity?.[date] ?? ''}
                         className="h-8 w-20"
                         disabled={!canEditVisitorsModule}

@@ -8,12 +8,15 @@ import {
   linkVisitorToVisit,
   listVisitVisitors,
 } from '@/services/visitVisitors'
-import { addDays, diffDays } from '@/lib/date'
+import { addDays, diffDays, pruneCommunityDailyCapacity } from '@/lib/date'
 import type { Visit } from '@/types'
+
+const COMMUNITY_KINDS = new Set(['visita_comunidade', 'comunidade_prioritaria'])
 
 async function cloneVisitChildren(
   sourceId: string,
   sourceOwnerId: string,
+  sourceStartDate: string,
   newVisitId: string,
   ownerId: string,
   options?: { shiftDates?: { startDate: string; endDate: string } },
@@ -24,10 +27,9 @@ async function cloneVisitChildren(
     listTasks(sourceId, sourceOwnerId, false),
   ])
 
-  const dateOffsetDays =
-    options?.shiftDates && activities[0]
-      ? diffDays(activities[0].date, options.shiftDates.startDate)
-      : 0
+  const dateOffsetDays = options?.shiftDates
+    ? diffDays(sourceStartDate, options.shiftDates.startDate)
+    : 0
 
   await Promise.all([
     ...links.map((link) => linkVisitorToVisit(ownerId, newVisitId, link.visitorId)),
@@ -44,6 +46,7 @@ async function cloneVisitChildren(
         endTime: activity.endTime,
         responsibleNames: activity.responsibleNames,
         visitorNames: activity.visitorNames,
+        phase: activity.phase,
       }),
     ),
     ...tasks.map((task, index) =>
@@ -55,9 +58,20 @@ async function cloneVisitChildren(
         dueDate: undefined,
         assigneeName: task.assigneeName,
         assigneeId: task.assigneeId,
+        phase: task.phase,
       }),
     ),
   ])
+}
+
+function communityCapacityForClone(
+  eventKind: Visit['eventKind'],
+  capacity: Visit['communityDailyCapacity'],
+  startDate: string,
+  endDate: string,
+): Record<string, number> | undefined {
+  if (!eventKind || !COMMUNITY_KINDS.has(eventKind)) return undefined
+  return pruneCommunityDailyCapacity(capacity, startDate, endDate)
 }
 
 export async function saveVisitAsTemplate(
@@ -89,13 +103,26 @@ export async function saveVisitAsTemplate(
     objective: source.objective,
     language: source.language,
     arrivalInstructions: source.arrivalInstructions,
+    hasTicketSales: source.hasTicketSales === true,
+    communityDailyCapacity: communityCapacityForClone(
+      source.eventKind,
+      source.communityDailyCapacity,
+      source.startDate,
+      source.endDate,
+    ),
     progress: 0,
     teamMemberIds: [],
     clientUserIds: [],
     isTemplate: true,
   })
 
-  await cloneVisitChildren(sourceId, source.ownerId, templateId, ownerId)
+  await cloneVisitChildren(
+    sourceId,
+    source.ownerId,
+    source.startDate,
+    templateId,
+    ownerId,
+  )
   return templateId
 }
 
@@ -134,13 +161,20 @@ export async function duplicateVisit(
     objective: source.objective,
     language: source.language,
     arrivalInstructions: source.arrivalInstructions,
+    hasTicketSales: source.hasTicketSales === true,
+    communityDailyCapacity: communityCapacityForClone(
+      source.eventKind,
+      source.communityDailyCapacity,
+      startDate,
+      endDate,
+    ),
     progress: 0,
     teamMemberIds: [...source.teamMemberIds],
     clientUserIds: [...source.clientUserIds],
     isTemplate: false,
   })
 
-  await cloneVisitChildren(sourceId, source.ownerId, newId, ownerId, {
+  await cloneVisitChildren(sourceId, source.ownerId, source.startDate, newId, ownerId, {
     shiftDates: { startDate, endDate },
   })
 
@@ -171,6 +205,9 @@ export async function createVisitFromTemplate(
         | 'eventKind'
         | 'vipSubtype'
         | 'eventScope'
+        | 'status'
+        | 'hasTicketSales'
+        | 'communityDailyCapacity'
       >
     >,
 ): Promise<string> {
@@ -179,6 +216,20 @@ export async function createVisitFromTemplate(
 
   const eventKind = overrides.eventKind ?? template.eventKind
   const hasPlanting = overrides.hasPlanting ?? template.hasPlanting === true
+  const startDate = overrides.startDate
+  const endDate = overrides.endDate
+  const hasTicketSales =
+    overrides.hasTicketSales ?? template.hasTicketSales === true
+  const communityDailyCapacity =
+    overrides.communityDailyCapacity !== undefined
+      ? communityCapacityForClone(eventKind, overrides.communityDailyCapacity, startDate, endDate)
+      : communityCapacityForClone(
+          eventKind,
+          template.communityDailyCapacity,
+          startDate,
+          endDate,
+        )
+
   const newId = await createVisit(ownerId, template.orgId, {
     title: overrides.title,
     company: overrides.company ?? template.company,
@@ -197,9 +248,9 @@ export async function createVisitFromTemplate(
     postVisitInfo: overrides.postVisitInfo ?? template.postVisitInfo,
     requesterContact: overrides.requesterContact ?? template.requesterContact,
     approverName: overrides.approverName ?? template.approverName,
-    startDate: overrides.startDate,
-    endDate: overrides.endDate,
-    status: 'planejamento',
+    startDate,
+    endDate,
+    status: overrides.status ?? 'planejamento',
     eventKind,
     vipSubtype:
       eventKind === 'visita_vip'
@@ -213,13 +264,15 @@ export async function createVisitFromTemplate(
     language: overrides.language ?? template.language,
     arrivalInstructions: template.arrivalInstructions,
     pvNumber: overrides.pvNumber,
+    hasTicketSales: hasTicketSales === true,
+    communityDailyCapacity,
     progress: 0,
     teamMemberIds: [],
     clientUserIds: [],
     isTemplate: false,
   })
 
-  await cloneVisitChildren(templateId, template.ownerId, newId, ownerId, {
+  await cloneVisitChildren(templateId, template.ownerId, template.startDate, newId, ownerId, {
     shiftDates: {
       startDate: overrides.startDate,
       endDate: overrides.endDate,

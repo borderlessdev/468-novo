@@ -352,7 +352,9 @@ service cloud.firestore {
         );
     }
 
-    // Reserva atômica do Número da PV (id = orgId__pvNumber). Imutável após criada.
+    // Reserva atômica do Número da PV (id = orgId__pvNumber).
+    // Histórico importado (source == 'import') é imutável; reservas operacionais
+    // podem ser apagadas para liberar o número após exclusão/falha de criação.
     match /pvReservations/{reservationId} {
       allow read: if isSignedIn()
         && !isClientUser()
@@ -363,7 +365,11 @@ service cloud.firestore {
         && request.resource.data.pvNumber is string
         && canAccessOrg(request.resource.data.orgId)
         && reservationId == request.resource.data.orgId + '__' + request.resource.data.pvNumber;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isSignedIn()
+        && !isClientUser()
+        && canAccessOrg(resource.data.orgId)
+        && (!('source' in resource.data) || resource.data.source != 'import');
     }
 
     // get: autenticado (IDs vêm de visitVisitors já protegido).
