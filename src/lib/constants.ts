@@ -73,22 +73,51 @@ export const DEFAULT_CHECKLIST = [
 ] as const
 
 /** Navegação exclusiva do perfil cliente. Ícones já usados na sidebar. */
-export const CLIENT_NAV_ITEMS = [
-  { to: '/orcamento', label: 'Orçamento', icon: 'DollarSign' },
-  { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
+export const CLIENT_NAV_GROUPS = [
+  {
+    label: null,
+    items: [
+      { to: '/orcamento', label: 'Orçamento', icon: 'DollarSign' },
+      { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
+    ],
+  },
 ] as const
 
-export const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: 'LayoutDashboard' },
-  { to: '/operacoes', label: 'Operações', icon: 'ClipboardList' },
-  { to: '/visitas', label: 'Experiências', icon: 'MapPin' },
-  { to: '/programacao', label: 'Programação', icon: 'Calendar' },
-  { to: '/crm', label: 'CRM', icon: 'Users' },
-  { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
-  { to: '/orcamento', label: 'Orçamento', icon: 'Receipt' },
-  { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },
-  { to: '/receitas', label: 'Receitas', icon: 'Wallet' },
-  { to: '/relatorios', label: 'Relatórios', icon: 'BarChart3' },
-  { to: '/assistente', label: 'Assistente', icon: 'CircleHelp' },
-  { to: '/configuracoes', label: 'Configurações', icon: 'Settings' },
+export const NAV_GROUPS = [
+  {
+    label: 'Geral',
+    items: [
+      { to: '/', label: 'Dashboard', icon: 'LayoutDashboard' },
+      { to: '/operacoes', label: 'Operações', icon: 'ClipboardList' },
+    ],
+  },
+  {
+    label: 'Experiências',
+    items: [
+      { to: '/visitas', label: 'Experiências', icon: 'MapPin' },
+      { to: '/programacao', label: 'Programação', icon: 'Calendar' },
+      { to: '/crm', label: 'CRM', icon: 'Users' },
+      { to: '/planejamento', label: 'Planejamento', icon: 'ListTodo' },
+    ],
+  },
+  {
+    label: 'Financeiro',
+    items: [
+      { to: '/orcamento', label: 'Orçamento', icon: 'Receipt' },
+      { to: '/financeiro', label: 'Financeiro', icon: 'DollarSign' },
+      { to: '/receitas', label: 'Receitas', icon: 'Wallet' },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { to: '/relatorios', label: 'Relatórios', icon: 'BarChart3' },
+      { to: '/assistente', label: 'Assistente', icon: 'CircleHelp' },
+      { to: '/configuracoes', label: 'Configurações', icon: 'Settings' },
+    ],
+  },
 ] as const
+
+/** Lista plana (compat / filtros). */
+export const NAV_ITEMS = NAV_GROUPS.flatMap((group) => [...group.items])
+export const CLIENT_NAV_ITEMS = CLIENT_NAV_GROUPS.flatMap((group) => [...group.items])

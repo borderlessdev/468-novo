@@ -301,6 +301,16 @@ export async function listPendingInvitesByOrg(orgId: string): Promise<Invite[]> 
     .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
 }
 
+/** Convites pendentes de Admin da empresa (todas as pastas). Uso do console Master. */
+export async function listPendingOrgAdminInvites(): Promise<Invite[]> {
+  const snap = await getDocs(
+    query(col, where('status', '==', 'pending'), where('role', '==', 'org_admin')),
+  )
+  return snap.docs
+    .map((d) => mapInvite(d.id, d.data()))
+    .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt))
+}
+
 export function subscribePendingInvitesByOrg(
   orgId: string,
   onChange: (invites: Invite[]) => void,

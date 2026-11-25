@@ -31,6 +31,7 @@ import ProfilePage from '@/pages/ProfilePage'
 import { TrashPage } from '@/pages/TrashPage'
 import { HelpPage } from '@/pages/HelpPage'
 import { OrganizationsPage } from '@/pages/OrganizationsPage'
+import { OrganizationsPastasPage } from '@/pages/OrganizationsPastasPage'
 import { OrganizationDetailPage } from '@/pages/OrganizationDetailPage'
 import { MasterUsersPage } from '@/pages/MasterUsersPage'
 import { UsersPage } from '@/pages/UsersPage'
@@ -70,7 +71,12 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<MasterShell />}>
               <Route path="/empresas" element={<OrganizationsPage />} />
-              <Route path="/empresas/usuarios" element={<MasterUsersPage />} />
+              <Route path="/empresas/pastas" element={<OrganizationsPastasPage />} />
+              <Route path="/empresas/administradores" element={<MasterUsersPage />} />
+              <Route
+                path="/empresas/usuarios"
+                element={<Navigate to="/empresas/administradores" replace />}
+              />
               <Route path="/empresas/:orgId" element={<OrganizationDetailPage />} />
             </Route>
             <Route element={<AppShell />}>

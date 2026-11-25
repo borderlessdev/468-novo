@@ -136,7 +136,7 @@ function mockHelpAnswer(
       q.includes('usuário') ||
       q.includes('equipe')
     ) {
-      return 'Convidar ou remover **funcionários/usuários da empresa** é só do **Admin da empresa** no menu **Usuários** (ou do Admin Master em Usuários no console). Você não tem essa permissão. Isso não é o cadastro de Visitantes.'
+      return 'Convidar ou remover **funcionários/usuários da empresa** é só do **Admin da empresa** no menu **Usuários** (ou do Admin Master em Administradores no console). Você não tem essa permissão. Isso não é o cadastro de Visitantes.'
     }
     if (
       (q.includes('pasta') || q.includes('empresa')) &&
@@ -154,7 +154,7 @@ function mockHelpAnswer(
     if (roleLabel.includes('Master') || roleLabel.includes('plataforma')) {
       return [
         'Para convidar um **Admin da empresa**:',
-        '1. No console Master, abra **Usuários**.',
+        '1. No console Master, abra **Administradores**.',
         '2. Escolha a pasta do cliente, informe o e-mail e clique em **Enviar convite**.',
         '3. Copie o link se quiser enviar por outro canal.',
         'Funcionários (equipe) são convidados depois pelo Admin da empresa no menu **Usuários** da pasta — não use Visitantes.',

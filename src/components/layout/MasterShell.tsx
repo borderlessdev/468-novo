@@ -18,19 +18,22 @@ import { Badge } from '@/components/ui/badge'
 
 const MASTER_NAV = [
   { to: '/empresas', label: 'Visão geral', icon: LayoutDashboard, kind: 'overview' },
-  { to: '/empresas#pastas', label: 'Pastas de clientes', icon: FolderKanban, kind: 'pastas' },
-  { to: '/empresas/usuarios', label: 'Usuários', icon: Users, kind: 'usuarios' },
+  { to: '/empresas/pastas', label: 'Pastas de clientes', icon: FolderKanban, kind: 'pastas' },
+  {
+    to: '/empresas/administradores',
+    label: 'Administradores',
+    icon: Users,
+    kind: 'administradores',
+  },
 ] as const
 
 export function MasterShell() {
   const { profile } = useAuth()
   const location = useLocation()
-  const onEmpresasRoot =
+  const pastasSelected = location.pathname === '/empresas/pastas'
+  const administradoresSelected = location.pathname === '/empresas/administradores'
+  const overviewSelected =
     location.pathname === '/empresas' || location.pathname === '/empresas/'
-  const onUsuarios = location.pathname === '/empresas/usuarios'
-  const pastasSelected = onEmpresasRoot && location.hash === '#pastas'
-  const overviewSelected = onEmpresasRoot && location.hash !== '#pastas' && !onUsuarios
-  const usuariosSelected = onUsuarios
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
@@ -148,31 +151,18 @@ export function MasterShell() {
             const selected =
               item.kind === 'pastas'
                 ? pastasSelected
-                : item.kind === 'usuarios'
-                  ? usuariosSelected
+                : item.kind === 'administradores'
+                  ? administradoresSelected
                   : overviewSelected
             return (
               <Link
                 key={item.label}
-                to={
-                  item.kind === 'pastas'
-                    ? { pathname: '/empresas', hash: 'pastas' }
-                    : item.kind === 'usuarios'
-                      ? { pathname: '/empresas/usuarios' }
-                      : { pathname: '/empresas', hash: '' }
-                }
+                to={item.to}
                 aria-current={selected ? 'page' : undefined}
                 onClick={() => {
                   if (collapsed) setCollapsed(false)
                   setMobileOpen(false)
                   window.requestAnimationFrame(() => {
-                    if (item.kind === 'pastas') {
-                      document.getElementById('pastas')?.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start',
-                      })
-                      return
-                    }
                     window.scrollTo({ top: 0, behavior: 'smooth' })
                   })
                 }}

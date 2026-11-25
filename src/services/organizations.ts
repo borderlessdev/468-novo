@@ -105,6 +105,14 @@ export async function listOrganizationMembers(orgId: string): Promise<Organizati
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
+/** Todos os admins de empresa (todas as pastas). Uso do console Master. */
+export async function listOrganizationAdmins(): Promise<OrganizationMember[]> {
+  const snap = await getDocs(query(membersCol, where('orgRole', '==', 'org_admin')))
+  return snap.docs
+    .map((item) => mapMember(item.id, item.data()))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+}
+
 export function subscribeOrganizationMembers(
   orgId: string,
   onChange: (members: OrganizationMember[]) => void,
@@ -151,17 +159,35 @@ export async function countPendingInvitesByRole(orgId: string, role: InviteRole)
   return snap.size
 }
 
-export async function canAddOrganizationMember(orgId: string): Promise<boolean> {
-  const org = await getOrganization(orgId)
-  if (!org || org.status !== 'active') return false
-  let pending: number
+/** Membros + convites pendentes (com fallback se a query composta falhar). */
+export async function getOrganizationSeatUsage(orgId: string): Promise<{
+  seats: number
+  pending: number
+}> {
+  let seats = 0
+  let pending = 0
+  try {
+    seats = await countOrganizationSeats(orgId)
+  } catch (error) {
+    console.error('Falha ao contar membros da pasta', orgId, error)
+  }
   try {
     pending = await countPendingInvites(orgId)
   } catch {
-    pending = await countPendingInvitesByRole(orgId, 'client')
+    try {
+      pending = await countPendingInvitesByRole(orgId, 'client')
+    } catch (error) {
+      console.error('Falha ao contar convites pendentes', orgId, error)
+    }
   }
-  const members = await countOrganizationSeats(orgId)
-  return members + pending < org.maxUsers
+  return { seats, pending }
+}
+
+export async function canAddOrganizationMember(orgId: string): Promise<boolean> {
+  const org = await getOrganization(orgId)
+  if (!org || org.status !== 'active') return false
+  const { seats, pending } = await getOrganizationSeatUsage(orgId)
+  return seats + pending < org.maxUsers
 }
 
 export async function addOrganizationMember(input: {

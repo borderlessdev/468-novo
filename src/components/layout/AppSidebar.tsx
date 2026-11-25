@@ -23,7 +23,7 @@ import { canManageOrgUsers, clientHomePath, isNavAllowed } from '@/lib/access'
 import { SafeLogo } from '@/components/SafeLogo'
 import { useOrg } from '@/contexts/OrgContext'
 import { VALE_BRAND } from '@/lib/valeBrand'
-import { CLIENT_NAV_ITEMS, NAV_ITEMS } from '@/lib/constants'
+import { CLIENT_NAV_GROUPS, NAV_GROUPS } from '@/lib/constants'
 import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import type { ModulePermissions, UserRole } from '@/types'
 
@@ -68,7 +68,7 @@ export function AppSidebar({
   const { activeOrg } = useOrg()
   const isClientNav = !isAdmin && role === 'client'
   const showUsersNav = canManageOrgUsers(isAdmin, isOrgAdmin)
-  const navItems = isClientNav ? CLIENT_NAV_ITEMS : NAV_ITEMS
+  const navGroups = isClientNav ? CLIENT_NAV_GROUPS : NAV_GROUPS
   const [logoutOpen, setLogoutOpen] = useState(false)
   const sairButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
@@ -184,108 +184,134 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav className="scrollbar-thin space-y-1 overflow-y-auto px-2.5 py-4">
+        <nav className="scrollbar-thin space-y-4 overflow-y-auto px-2.5 py-4">
           {isAdmin && !isClientNav ? (
-            <NavLink
-              to="/empresas"
-              onClick={() => {
-                if (collapsed) onExpand()
-                onClose()
-              }}
-              className={({ isActive }) =>
-                cn(
-                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                  collapsed && 'justify-center px-2',
-                  isActive
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
-                )
-              }
-              title="Pastas de clientes"
-            >
-              <Building2 className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span className="truncate">Pastas de clientes</span> : null}
-            </NavLink>
+            <div className="space-y-1">
+              {!collapsed ? (
+                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
+                  Admin
+                </p>
+              ) : null}
+              <NavLink
+                to="/empresas/pastas"
+                onClick={() => {
+                  if (collapsed) onExpand()
+                  onClose()
+                }}
+                className={({ isActive }) =>
+                  cn(
+                    'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                    collapsed && 'justify-center px-2',
+                    isActive
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                  )
+                }
+                title="Pastas de clientes"
+              >
+                <Building2 className="h-4 w-4 shrink-0" />
+                {!collapsed ? <span className="truncate">Pastas de clientes</span> : null}
+              </NavLink>
+            </div>
           ) : null}
-          {navItems
-            .filter((item) =>
-              isClientNav ||
-              isNavAllowed(item.to, role, isAdmin, modulePermissions, isOrgAdmin),
+          {navGroups.map((group, groupIndex) => {
+            const visibleItems = group.items.filter(
+              (item) =>
+                isClientNav ||
+                isNavAllowed(item.to, role, isAdmin, modulePermissions, isOrgAdmin),
             )
-            .map((item) => {
-              const Icon = icons[item.icon]
-              return (
-                <div key={item.to} className="contents">
-                  <NavLink
-                    to={item.to}
-                    end={item.to === '/'}
-                    onClick={() => {
-                      if (collapsed) onExpand()
-                      onClose()
-                    }}
-                    className={({ isActive }) =>
-                      cn(
-                        'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                        collapsed && 'justify-center px-2',
-                        isActive
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
-                      )
-                    }
-                    title={item.label}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive ? (
-                          <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
-                        ) : null}
-                        <Icon
-                          className={cn(
-                            'h-4 w-4 shrink-0 transition-colors',
-                            isActive ? 'text-brand' : 'group-hover:text-white/90',
+            if (visibleItems.length === 0) return null
+
+            return (
+              <div
+                key={group.label ?? `group-${groupIndex}`}
+                className={cn(
+                  'space-y-1',
+                  collapsed && groupIndex > 0 && 'border-t border-white/8 pt-3',
+                )}
+              >
+                {!collapsed && group.label ? (
+                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
+                    {group.label}
+                  </p>
+                ) : null}
+                {visibleItems.map((item) => {
+                  const Icon = icons[item.icon]
+                  return (
+                    <div key={item.to} className="contents">
+                      <NavLink
+                        to={item.to}
+                        end={item.to === '/'}
+                        onClick={() => {
+                          if (collapsed) onExpand()
+                          onClose()
+                        }}
+                        className={({ isActive }) =>
+                          cn(
+                            'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                            collapsed && 'justify-center px-2',
+                            isActive
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                          )
+                        }
+                        title={item.label}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive ? (
+                              <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                            ) : null}
+                            <Icon
+                              className={cn(
+                                'h-4 w-4 shrink-0 transition-colors',
+                                isActive ? 'text-brand' : 'group-hover:text-white/90',
+                              )}
+                            />
+                            {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                          </>
+                        )}
+                      </NavLink>
+                      {item.to === '/' && showUsersNav && !isClientNav ? (
+                        <NavLink
+                          to="/usuarios"
+                          onClick={() => {
+                            if (collapsed) onExpand()
+                            onClose()
+                          }}
+                          className={({ isActive }) =>
+                            cn(
+                              'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                              collapsed && 'justify-center px-2',
+                              isActive
+                                ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                            )
+                          }
+                          title="Usuários"
+                        >
+                          {({ isActive }) => (
+                            <>
+                              {isActive ? (
+                                <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                              ) : null}
+                              <Users
+                                className={cn(
+                                  'h-4 w-4 shrink-0 transition-colors',
+                                  isActive ? 'text-brand' : 'group-hover:text-white/90',
+                                )}
+                              />
+                              {!collapsed ? <span className="truncate">Usuários</span> : null}
+                            </>
                           )}
-                        />
-                        {!collapsed ? <span className="truncate">{item.label}</span> : null}
-                      </>
-                    )}
-                  </NavLink>
-                  {item.to === '/' && showUsersNav && !isClientNav ? (
-                    <NavLink
-                      to="/usuarios"
-                      onClick={() => {
-                        if (collapsed) onExpand()
-                        onClose()
-                      }}
-                      className={({ isActive }) =>
-                        cn(
-                          'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                          collapsed && 'justify-center px-2',
-                          isActive
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
-                        )
-                      }
-                      title="Usuários"
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive ? (
-                            <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
-                          ) : null}
-                          <Users
-                            className={cn(
-                              'h-4 w-4 shrink-0 transition-colors',
-                              isActive ? 'text-brand' : 'group-hover:text-white/90',
-                            )}
-                          />
-                          {!collapsed ? <span className="truncate">Usuários</span> : null}
-                        </>
-                      )}
-                    </NavLink>
-                  ) : null}
-                </div>
-              )
-            })}
+                        </NavLink>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
         </nav>
 
         <div className="shrink-0">

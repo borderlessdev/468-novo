@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
-  ArrowLeft,
   Check,
   Copy,
   FolderOpen,
@@ -75,11 +75,15 @@ const ROLE_LABEL: Record<OrganizationMember['orgRole'], string> = {
 
 export function OrganizationDetailPage() {
   const { orgId = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const { user, isPlatformAdmin } = useAuth()
   const { setActiveOrgId, activeOrgId, refreshOrg } = useOrg()
   const navigate = useNavigate()
+  const adminSectionRef = useRef<HTMLDivElement>(null)
+  const focusedAdminOnce = useRef(false)
 
   const [loading, setLoading] = useState(true)
+  const [highlightAdmin, setHighlightAdmin] = useState(false)
   const [saving, setSaving] = useState(false)
   const [org, setOrg] = useState<Organization | null>(null)
   const [members, setMembers] = useState<OrganizationMember[]>([])
@@ -168,6 +172,25 @@ export function OrganizationDetailPage() {
       unsubscribeInvites()
     }
   }, [isPlatformAdmin, orgId])
+
+  useEffect(() => {
+    focusedAdminOnce.current = false
+  }, [orgId])
+
+  useEffect(() => {
+    if (loading || !org || focusedAdminOnce.current) return
+    if (searchParams.get('focus') !== 'admin') return
+    focusedAdminOnce.current = true
+    setHighlightAdmin(true)
+    const scrollTimer = window.setTimeout(() => {
+      adminSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+    const clearTimer = window.setTimeout(() => setHighlightAdmin(false), 2400)
+    return () => {
+      window.clearTimeout(scrollTimer)
+      window.clearTimeout(clearTimer)
+    }
+  }, [loading, org, searchParams])
 
   const orgAdmins = useMemo(
     () => members.filter((member) => member.orgRole === 'org_admin'),
@@ -467,15 +490,6 @@ export function OrganizationDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/empresas">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar às pastas
-          </Link>
-        </Button>
-      </div>
-
       <PageHeader
         title={org.name}
         description="Configure a pasta do cliente, crie o admin da empresa e entre no sistema de visitas e eventos."
@@ -493,11 +507,13 @@ export function OrganizationDetailPage() {
             <Button
               type="button"
               variant="outline"
+              size="icon"
               className="text-destructive hover:text-destructive"
               onClick={() => deleteOrgDialog.requestDelete(org)}
+              aria-label="Excluir cliente"
+              title="Excluir cliente"
             >
               <Trash2 className="h-4 w-4" />
-              Excluir cliente
             </Button>
           </div>
         }
@@ -689,6 +705,14 @@ export function OrganizationDetailPage() {
         </CardContent>
       </Card>
 
+      <div
+        ref={adminSectionRef}
+        id="org-admin-section"
+        className={cn(
+          'scroll-mt-6 rounded-xl transition-[box-shadow] duration-500',
+          highlightAdmin && 'shadow-[0_0_0_3px] shadow-primary/25',
+        )}
+      >
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -698,8 +722,8 @@ export function OrganizationDetailPage() {
             <div>
               <CardTitle className="text-base">Administrador da empresa</CardTitle>
               <CardDescription>
-                O Master convida o admin (gera o link e envia). Depois o admin da empresa
-                convida os funcionários no menu **Usuários**.
+                Convidar o admin aqui (link por e-mail). Depois o admin convida os
+                funcionários no menu Usuários.
               </CardDescription>
             </div>
           </div>
@@ -960,6 +984,7 @@ export function OrganizationDetailPage() {
           ) : null}
         </CardContent>
       </Card>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-2">
