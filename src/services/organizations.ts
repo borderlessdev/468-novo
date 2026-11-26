@@ -16,6 +16,7 @@ import {
 import { db } from '@/lib/firebase'
 import { organizationMemberId } from '@/lib/org'
 import { isCargoRegion, isEmployeeCargo } from '@/lib/cargo'
+import { getTrashExpiresAt } from '@/lib/trash'
 import type { InviteRole, Organization, OrganizationMember, OrgRole } from '@/types'
 
 const organizationsCol = collection(db, 'organizations')
@@ -31,6 +32,10 @@ function mapOrganization(id: string, data: Record<string, unknown>): Organizatio
     logoUrl: data.logoUrl ? String(data.logoUrl) : undefined,
     logoStoragePath: data.logoStoragePath ? String(data.logoStoragePath) : undefined,
     dashboardVariant: data.dashboardVariant === 'vale' ? 'vale' : 'default',
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
@@ -58,6 +63,7 @@ export async function listOrganizations(): Promise<Organization[]> {
   const snap = await getDocs(query(organizationsCol))
   return snap.docs
     .map((item) => mapOrganization(item.id, item.data()))
+    .filter((org) => !org.isDeleted)
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
@@ -276,8 +282,119 @@ export async function removeOrganizationMember(
   }
 }
 
+export async function updateOrganizationMember(
+  orgId: string,
+  uid: string,
+  data: Partial<Pick<OrganizationMember, 'name' | 'orgRole'>>,
+): Promise<void> {
+  const payload: Record<string, unknown> = {}
+  if (data.name !== undefined) payload.name = data.name.trim()
+  if (data.orgRole !== undefined) payload.orgRole = data.orgRole
+  if (Object.keys(payload).length === 0) return
+  await updateDoc(doc(membersCol, organizationMemberId(orgId, uid)), payload)
+}
+
 /**
- * Exclui a pasta do cliente (Master): remove membros, convites e o documento da organização.
+ * Move o vínculo de uma pasta para outra. Não apaga a conta Auth.
+ * Libera a vaga na origem e ocupa na destino.
+ */
+export async function moveOrganizationMember(input: {
+  fromOrgId: string
+  toOrgId: string
+  uid: string
+  email: string
+  name: string
+  orgRole: OrgRole
+}): Promise<void> {
+  if (input.fromOrgId === input.toOrgId) return
+
+  const target = await getOrganization(input.toOrgId)
+  if (!target || target.isDeleted || target.status !== 'active') {
+    throw new Error('Pasta de destino indisponível')
+  }
+
+  const existing = await getOrganizationMember(input.toOrgId, input.uid)
+  if (existing) {
+    throw new Error('Esta pessoa já tem acesso à pasta de destino')
+  }
+
+  const canAdd = await canAddOrganizationMember(input.toOrgId)
+  if (!canAdd) {
+    throw new Error('A pasta de destino está sem vagas')
+  }
+
+  await removeOrganizationMember(input.fromOrgId, input.uid)
+  await addOrganizationMember({
+    orgId: input.toOrgId,
+    uid: input.uid,
+    email: input.email,
+    name: input.name,
+    orgRole: input.orgRole,
+  })
+
+  await updateDoc(doc(db, 'users', input.uid), {
+    orgId: input.toOrgId,
+    name: input.name.trim(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Move a pasta para a lixeira (soft delete). Convites pendentes são cancelados.
+ * Membros e dados operacionais permanecem para eventual restauração.
+ */
+export async function softDeleteOrganization(
+  orgId: string,
+  deletedBy: string,
+): Promise<void> {
+  const org = await getOrganization(orgId)
+  if (!org) {
+    throw new Error('Cliente não encontrado')
+  }
+  if (org.isDeleted) return
+
+  const inviteSnap = await getDocs(
+    query(collection(db, 'invites'), where('orgId', '==', orgId)),
+  )
+  await Promise.all(inviteSnap.docs.map((inviteDoc) => deleteDoc(inviteDoc.ref)))
+
+  await updateDoc(doc(organizationsCol, orgId), {
+    isDeleted: true,
+    deletedAt: serverTimestamp(),
+    deletedBy,
+    expiresAt: getTrashExpiresAt(),
+    status: 'suspended',
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function listDeletedOrganizations(): Promise<Organization[]> {
+  const snap = await getDocs(query(organizationsCol))
+  return snap.docs
+    .map((item) => mapOrganization(item.id, item.data()))
+    .filter((org) => org.isDeleted === true)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+}
+
+export async function restoreOrganization(orgId: string): Promise<void> {
+  const org = await getOrganization(orgId)
+  if (!org) {
+    throw new Error('Cliente não encontrado')
+  }
+  if (!org.isDeleted) return
+
+  await updateDoc(doc(organizationsCol, orgId), {
+    isDeleted: false,
+    deletedAt: deleteField(),
+    deletedBy: deleteField(),
+    expiresAt: deleteField(),
+    status: 'active',
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Exclui a pasta do cliente de forma permanente: remove membros, convites e o documento.
  * Não apaga contas Auth nem dados operacionais (visitas etc.).
  */
 export async function deleteOrganization(orgId: string): Promise<void> {

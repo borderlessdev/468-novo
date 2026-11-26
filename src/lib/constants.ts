@@ -113,7 +113,6 @@ export const NAV_GROUPS = [
     items: [
       { to: '/relatorios', label: 'Relatórios', icon: 'BarChart3' },
       { to: '/assistente', label: 'Assistente', icon: 'CircleHelp' },
-      { to: '/configuracoes', label: 'Configurações', icon: 'Settings' },
     ],
   },
 ] as const

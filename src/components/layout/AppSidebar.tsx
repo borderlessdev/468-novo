@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import {
   BarChart3,
@@ -9,7 +9,6 @@ import {
   DollarSign,
   LayoutDashboard,
   ListTodo,
-  LogOut,
   MapPin,
   PanelLeft,
   Receipt,
@@ -24,7 +23,6 @@ import { SafeLogo } from '@/components/SafeLogo'
 import { useOrg } from '@/contexts/OrgContext'
 import { VALE_BRAND } from '@/lib/valeBrand'
 import { CLIENT_NAV_GROUPS, NAV_GROUPS } from '@/lib/constants'
-import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import type { ModulePermissions, UserRole } from '@/types'
 
 const icons = {
@@ -68,9 +66,12 @@ export function AppSidebar({
   const { activeOrg } = useOrg()
   const isClientNav = !isAdmin && role === 'client'
   const showUsersNav = canManageOrgUsers(isAdmin, isOrgAdmin)
+  const showSettingsNav =
+    !isClientNav &&
+    (isAdmin ||
+      isOrgAdmin ||
+      isNavAllowed('/configuracoes', role, isAdmin, modulePermissions, isOrgAdmin))
   const navGroups = isClientNav ? CLIENT_NAV_GROUPS : NAV_GROUPS
-  const [logoutOpen, setLogoutOpen] = useState(false)
-  const sairButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   // Collapsed: mark Vale (quadrado). Expandido: logo da pasta (whitelabel) ou Vale.
@@ -158,18 +159,6 @@ export function AppSidebar({
               )}
             />
           </Link>
-          <button
-            type="button"
-            className="hidden shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
-            onClick={(event) => {
-              event.stopPropagation()
-              onToggleCollapse()
-            }}
-            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          >
-            <PanelLeft className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} />
-          </button>
           <button
             ref={closeButtonRef}
             type="button"
@@ -315,30 +304,62 @@ export function AppSidebar({
         </nav>
 
         <div className="shrink-0">
-          <LogoutConfirmCard
-            open={logoutOpen}
-            onOpenChange={setLogoutOpen}
-            collapsed={collapsed}
-            triggerRef={sairButtonRef}
-          />
+          {showSettingsNav ? (
+            <div className="px-2.5 pb-1">
+              <NavLink
+                to="/configuracoes"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  if (collapsed) onExpand()
+                  onClose()
+                }}
+                className={({ isActive }) =>
+                  cn(
+                    'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                    collapsed && 'justify-center px-2',
+                    isActive
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                  )
+                }
+                title="Configurações"
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive ? (
+                      <span className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
+                    ) : null}
+                    <Settings
+                      className={cn(
+                        'h-4 w-4 shrink-0 transition-colors',
+                        isActive ? 'text-brand' : 'group-hover:text-white/90',
+                      )}
+                    />
+                    {!collapsed ? <span className="truncate">Configurações</span> : null}
+                  </>
+                )}
+              </NavLink>
+            </div>
+          ) : null}
           <div className="border-t border-white/8 p-2.5">
             <button
-              ref={sairButtonRef}
               type="button"
+              className={cn(
+                'hidden w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:flex',
+                'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                collapsed && 'px-2',
+              )}
               onClick={(event) => {
                 event.stopPropagation()
-                if (collapsed) onExpand()
-                setLogoutOpen(true)
+                onToggleCollapse()
               }}
-              className={cn(
-                'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                'text-red-300/80 hover:bg-red-400/10 hover:text-red-200',
-                collapsed && 'justify-center px-2',
-              )}
-              title="Sair da conta"
+              aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+              title={collapsed ? 'Expandir menu' : 'Recolher menu'}
             >
-              <LogOut className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span>Sair</span> : null}
+              <PanelLeft
+                className={cn('h-4 w-4 shrink-0 transition-transform', collapsed && 'rotate-180')}
+              />
+              {!collapsed ? <span>Recolher menu</span> : null}
             </button>
           </div>
         </div>

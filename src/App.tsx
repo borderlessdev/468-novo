@@ -34,6 +34,7 @@ import { OrganizationsPage } from '@/pages/OrganizationsPage'
 import { OrganizationsPastasPage } from '@/pages/OrganizationsPastasPage'
 import { OrganizationDetailPage } from '@/pages/OrganizationDetailPage'
 import { MasterUsersPage } from '@/pages/MasterUsersPage'
+import { MasterTrashPage } from '@/pages/MasterTrashPage'
 import { UsersPage } from '@/pages/UsersPage'
 import { MasterShell } from '@/components/layout/MasterShell'
 
@@ -69,15 +70,15 @@ export default function App() {
           />
 
           <Route element={<ProtectedRoute />}>
-            <Route element={<MasterShell />}>
-              <Route path="/empresas" element={<OrganizationsPage />} />
-              <Route path="/empresas/pastas" element={<OrganizationsPastasPage />} />
-              <Route path="/empresas/administradores" element={<MasterUsersPage />} />
-              <Route
-                path="/empresas/usuarios"
-                element={<Navigate to="/empresas/administradores" replace />}
-              />
-              <Route path="/empresas/:orgId" element={<OrganizationDetailPage />} />
+            <Route path="/empresas" element={<MasterShell />}>
+              <Route index element={<OrganizationsPage />} />
+              <Route path="pastas" element={<OrganizationsPastasPage />} />
+              <Route path="administradores" element={<MasterUsersPage />} />
+              <Route path="usuarios" element={<Navigate to="/empresas/administradores" replace />} />
+              <Route path="perfil" element={<ProfilePage />} />
+              <Route path="lixeira" element={<MasterTrashPage />} />
+              <Route path="configuracoes" element={<SettingsPage />} />
+              <Route path=":orgId" element={<OrganizationDetailPage />} />
             </Route>
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />

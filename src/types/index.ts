@@ -49,7 +49,7 @@ export type EmployeeCargo =
 /** Região dos analistas no organograma. */
 export type CargoRegion = 'ma_pa' | 'mg' | 'rs'
 
-export interface Organization {
+export interface Organization extends SoftDeletable {
   id: string
   name: string
   maxUsers: number
@@ -131,7 +131,7 @@ export type DocumentCategory =
   | 'programacao'
   | 'outro'
 
-export interface UserProfile {
+export interface UserProfile extends SoftDeletable {
   uid: string
   name: string
   email: string

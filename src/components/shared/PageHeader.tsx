@@ -4,11 +4,19 @@ import { cn } from '@/lib/utils'
 interface PageHeaderProps {
   title: string
   description?: string
+  /** Conteúdo à esquerda do título (ex.: logo / ícone). */
+  leading?: React.ReactNode
   actions?: React.ReactNode
   className?: string
 }
 
-export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  description,
+  leading,
+  actions,
+  className,
+}: PageHeaderProps) {
   return (
     <div
       className={cn(
@@ -16,15 +24,18 @@ export function PageHeader({ title, description, actions, className }: PageHeade
         className,
       )}
     >
-      <div className="min-w-0 space-y-1.5">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-[1.65rem]">
-          {title}
-        </h1>
-        {description ? (
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
-        ) : null}
+      <div className="flex min-w-0 items-center gap-3">
+        {leading ? <div className="shrink-0">{leading}</div> : null}
+        <div className="min-w-0 space-y-1.5">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-[1.65rem]">
+            {title}
+          </h1>
+          {description ? (
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
       </div>
       {actions ? (
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">

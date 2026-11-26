@@ -60,6 +60,36 @@ export function mergeModulePermissions(
   return { ...DEFAULT_MODULE_PERMISSIONS, ...partial }
 }
 
+/** Pacote completo de módulos aplicado ao definir/trocar o tipo de conta. */
+export function modulePermissionsForAccountType(
+  type:
+    | 'admin_master'
+    | 'org_admin'
+    | 'team'
+    | 'user'
+    | 'client',
+): ModulePermissions {
+  if (type === 'admin_master') {
+    return {
+      visitors: true,
+      planning: true,
+      finance: true,
+      reports: true,
+      revenue: true,
+    }
+  }
+  if (type === 'client') {
+    return {
+      visitors: false,
+      planning: false,
+      finance: false,
+      reports: false,
+      revenue: false,
+    }
+  }
+  return { ...DEFAULT_MODULE_PERMISSIONS }
+}
+
 export function canWriteOperations(role: UserRole, isPlatformAdmin: boolean): boolean {
   if (isPlatformAdmin) return true
   return role !== 'client'

@@ -24,7 +24,8 @@ function readOrgId(value: unknown): string {
 
 /**
  * Altera o tipo de qualquer usuário. Somente administrador master.
- * Não apaga a conta, o vínculo com a empresa nem os demais dados do perfil.
+ * Aplica role, orgRole, claims (master) e modulePermissions padrão do tipo.
+ * Não apaga a conta nem o vínculo com a empresa.
  */
 export const changeUserAccountType = onCall(
   // cors + invoker public: o preflight do browser (localhost e produção) precisa chegar na função.
@@ -137,6 +138,7 @@ export const changeUserAccountType = onCall(
 
     const userPatch: Record<string, unknown> = {
       role: decision.profileRole,
+      modulePermissions: decision.modulePermissions,
       updatedAt: FieldValue.serverTimestamp(),
     }
     if (!lockedOrgId && orgId && memberSnap?.exists) {

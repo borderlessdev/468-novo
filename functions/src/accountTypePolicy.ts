@@ -29,6 +29,44 @@ export function orgRoleForAccountType(type: AccountType): OrgRole | null {
   return type
 }
 
+export type ModulePermissions = {
+  visitors: boolean
+  planning: boolean
+  finance: boolean
+  reports: boolean
+  revenue: boolean
+}
+
+/** Permissões de módulo padrão aplicadas ao trocar o tipo. */
+export function modulePermissionsForAccountType(type: AccountType): ModulePermissions {
+  if (type === 'admin_master') {
+    return {
+      visitors: true,
+      planning: true,
+      finance: true,
+      reports: true,
+      revenue: true,
+    }
+  }
+  if (type === 'client') {
+    return {
+      visitors: false,
+      planning: false,
+      finance: false,
+      reports: false,
+      revenue: false,
+    }
+  }
+  // org_admin, team, user — pacote operacional padrão (receitas continua opt-in)
+  return {
+    visitors: true,
+    planning: true,
+    finance: true,
+    reports: true,
+    revenue: false,
+  }
+}
+
 export interface ChangeDecisionInput {
   callerIsMaster: boolean
   targetExists: boolean
@@ -45,6 +83,7 @@ export type ChangeDecision =
       unchanged: boolean
       profileRole: ProfileRole
       orgRole: OrgRole | null
+      modulePermissions: ModulePermissions
       claims: 'grant' | 'revoke' | 'keep'
     }
   | {
@@ -78,6 +117,7 @@ export function decideAccountTypeChange(input: ChangeDecisionInput): ChangeDecis
       unchanged: true,
       profileRole: profileRoleForAccountType(input.currentType),
       orgRole: null,
+      modulePermissions: modulePermissionsForAccountType(input.currentType),
       claims: 'keep',
     }
   }
@@ -104,6 +144,7 @@ export function decideAccountTypeChange(input: ChangeDecisionInput): ChangeDecis
     unchanged: false,
     profileRole: profileRoleForAccountType(input.nextType),
     orgRole: orgRoleForAccountType(input.nextType),
+    modulePermissions: modulePermissionsForAccountType(input.nextType),
     claims: becomingMaster ? 'grant' : leavingMaster ? 'revoke' : 'keep',
   }
 }

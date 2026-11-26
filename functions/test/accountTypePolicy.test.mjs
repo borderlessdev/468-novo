@@ -31,17 +31,38 @@ assert.equal(promoteEmployee.ok, true)
 assert.equal(promoteEmployee.profileRole, 'user')
 assert.equal(promoteEmployee.orgRole, 'org_admin')
 assert.equal(promoteEmployee.claims, 'keep')
+assert.deepEqual(promoteEmployee.modulePermissions, {
+  visitors: true,
+  planning: true,
+  finance: true,
+  reports: true,
+  revenue: false,
+})
 
 const toClient = decide({ currentType: 'org_admin', nextType: 'client' })
 assert.equal(toClient.ok, true)
 assert.equal(toClient.profileRole, 'client')
 assert.equal(toClient.orgRole, 'client')
+assert.deepEqual(toClient.modulePermissions, {
+  visitors: false,
+  planning: false,
+  finance: false,
+  reports: false,
+  revenue: false,
+})
 
 const toMaster = decide({ currentType: 'team', nextType: 'admin_master' })
 assert.equal(toMaster.ok, true)
 assert.equal(toMaster.profileRole, 'admin')
 assert.equal(toMaster.orgRole, null)
 assert.equal(toMaster.claims, 'grant')
+assert.deepEqual(toMaster.modulePermissions, {
+  visitors: true,
+  planning: true,
+  finance: true,
+  reports: true,
+  revenue: true,
+})
 
 const demoteMaster = decide({
   targetIsMaster: true,

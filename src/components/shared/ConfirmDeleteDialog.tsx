@@ -57,7 +57,7 @@ export function ConfirmDeleteDialog({
             disabled={loading}
             onClick={() => void onConfirm()}
           >
-            {loading ? 'Excluindo...' : confirmLabel}
+            {loading ? 'Aguarde...' : confirmLabel}
           </Button>
         </div>
       </DialogContent>

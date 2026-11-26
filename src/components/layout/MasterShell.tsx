@@ -3,14 +3,13 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   FolderKanban,
   LayoutDashboard,
-  LogOut,
   PanelLeft,
+  Settings,
   Shield,
   Users,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { LogoutConfirmCard } from '@/components/layout/LogoutConfirmCard'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -32,12 +31,11 @@ export function MasterShell() {
   const location = useLocation()
   const pastasSelected = location.pathname === '/empresas/pastas'
   const administradoresSelected = location.pathname === '/empresas/administradores'
+  const settingsSelected = location.pathname === '/empresas/configuracoes'
   const overviewSelected =
     location.pathname === '/empresas' || location.pathname === '/empresas/'
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [logoutOpen, setLogoutOpen] = useState(false)
-  const sairButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -112,15 +110,6 @@ export function MasterShell() {
             />
           </Link>
           <button
-            type="button"
-            className="hidden shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-white lg:inline-flex"
-            onClick={() => setCollapsed((prev) => !prev)}
-            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          >
-            <PanelLeft className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} />
-          </button>
-          <button
             ref={closeButtonRef}
             type="button"
             className="cursor-pointer rounded-md p-1 text-sidebar-foreground/80 lg:hidden"
@@ -183,29 +172,43 @@ export function MasterShell() {
         </nav>
 
         <div className="mt-auto shrink-0">
-          <LogoutConfirmCard
-            open={logoutOpen}
-            onOpenChange={setLogoutOpen}
-            collapsed={collapsed}
-            triggerRef={sairButtonRef}
-          />
-          <div className="border-t border-white/8 p-2.5">
-            <button
-              ref={sairButtonRef}
-              type="button"
+          <div className="px-2.5 pb-1">
+            <Link
+              to="/empresas/configuracoes"
+              aria-current={settingsSelected ? 'page' : undefined}
               onClick={() => {
                 if (collapsed) setCollapsed(false)
-                setLogoutOpen(true)
+                setMobileOpen(false)
               }}
               className={cn(
-                'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                'text-red-300/80 hover:bg-red-400/10 hover:text-red-200',
+                'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 collapsed && 'justify-center px-2',
+                settingsSelected
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
               )}
-              title="Sair da conta"
+              title="Configurações"
             >
-              <LogOut className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span>Sair</span> : null}
+              <Settings className="h-4 w-4 shrink-0 text-inherit" />
+              {!collapsed ? <span className="truncate">Configurações</span> : null}
+            </Link>
+          </div>
+          <div className="border-t border-white/8 p-2.5">
+            <button
+              type="button"
+              className={cn(
+                'hidden w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:flex',
+                'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white',
+                collapsed && 'px-2',
+              )}
+              onClick={() => setCollapsed((prev) => !prev)}
+              aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+              title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            >
+              <PanelLeft
+                className={cn('h-4 w-4 shrink-0 transition-transform', collapsed && 'rotate-180')}
+              />
+              {!collapsed ? <span>Recolher menu</span> : null}
             </button>
           </div>
         </div>
@@ -242,7 +245,7 @@ export function MasterShell() {
                 Master
               </Badge>
               <Link
-                to="/perfil"
+                to="/empresas/perfil"
                 className="flex items-center gap-2.5 rounded-full border border-border/60 bg-muted/30 py-1 pr-3 pl-1 transition-colors hover:bg-muted/55"
               >
                 <Avatar className="h-8 w-8 ring-2 ring-brand/20">

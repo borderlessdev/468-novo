@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Camera, Trash2 } from 'lucide-react'
+import { Camera, LogOut, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash'
 import { profileSchema, type ProfileInput } from '@/lib/validations'
 
 function getRoleLabel(
@@ -28,12 +31,22 @@ function getRoleLabel(
 }
 
 export function ProfilePage() {
-  const { profile, isPlatformAdmin, updateProfileData, uploadAvatar, removeAvatar, resetPassword } =
-    useAuth()
-  const { isOrgAdmin } = useOrg()
+  const {
+    profile,
+    isPlatformAdmin,
+    updateProfileData,
+    uploadAvatar,
+    removeAvatar,
+    resetPassword,
+    logout,
+  } = useAuth()
+  const { isOrgAdmin, activeOrgId } = useOrg()
+  const location = useLocation()
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
+  const [logoutOpen, setLogoutOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const roleLabel = getRoleLabel(isPlatformAdmin, isOrgAdmin, profile?.role)
 
@@ -107,9 +120,40 @@ export function ProfilePage() {
     }
   }
 
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    try {
+      await logout()
+      toast.success('Sessão encerrada')
+      setLogoutOpen(false)
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
+  // Master fora de pasta de cliente: perfil no console Master, não no AppShell.
+  const isMaster = isPlatformAdmin || profile?.role === 'admin'
+  if (isMaster && location.pathname === '/perfil' && !activeOrgId) {
+    return <Navigate to="/empresas/perfil" replace />
+  }
+
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader title="Perfil" description="Visualize e edite os dados da sua conta." />
+      <PageHeader
+        title="Perfil"
+        description="Visualize e edite os dados da sua conta."
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setLogoutOpen(true)}
+          >
+            <LogOut className="h-4 w-4" />
+            Sair
+          </Button>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -218,7 +262,47 @@ export function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        {profile?.role !== 'client' ? (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5" />
+                Lixeira
+              </CardTitle>
+              <CardDescription>
+                Itens excluídos ficam disponíveis por {TRASH_RETENTION_DAYS} dias.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {isMaster
+                  ? 'Pastas de clientes excluídas podem ser restauradas ou apagadas permanentemente.'
+                  : 'Visitas, visitantes, agenda, tarefas, financeiro e documentos excluídos podem ser restaurados ou apagados permanentemente.'}
+              </p>
+              <Button
+                asChild
+                className="bg-red-300 text-red-900 hover:bg-red-200"
+              >
+                <Link to={isMaster ? '/empresas/lixeira' : '/configuracoes/lixeira'}>
+                  <Trash2 className="h-4 w-4" />
+                  Abrir lixeira
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
+
+      <ConfirmDeleteDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+        title="Sair da conta?"
+        description="Tem certeza que deseja encerrar sua sessão?"
+        confirmLabel="Sair"
+        loading={loggingOut}
+        onConfirm={() => void handleLogout()}
+      />
     </div>
   )
 }

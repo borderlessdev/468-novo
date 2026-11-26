@@ -49,7 +49,7 @@ function OrgCardLogo({ logoUrl, name }: { logoUrl?: string; name: string }) {
     <img
       src={src}
       alt={`Logo ${name}`}
-      className={cn('h-full w-full object-contain p-1')}
+      className={cn('h-full w-full rounded-xl object-cover')}
       onError={() => setFailed(true)}
     />
   )

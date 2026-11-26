@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   Bell,
@@ -105,11 +105,15 @@ export function SettingsPage() {
     resetPassword,
     isClient,
     isAdmin,
+    isPlatformAdmin,
     user,
   } = useAuth()
   const { activeOrgId, activeOrg, isOrgAdmin, refreshOrg } = useOrg()
   const { theme, setTheme } = useTheme()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const isMasterConsole = location.pathname.startsWith('/empresas')
+  const isMaster = isPlatformAdmin || profile?.role === 'admin'
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([])
   const [sendingReset, setSendingReset] = useState(false)
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(
@@ -285,6 +289,11 @@ export function SettingsPage() {
     }
   }
 
+  // Master fora de pasta: configurações no console Master, não no AppShell.
+  if (isMaster && location.pathname === '/configuracoes' && !activeOrgId) {
+    return <Navigate to="/empresas/configuracoes" replace />
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -358,7 +367,7 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {!isClient ? (
+        {!isClient && !isMasterConsole ? (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -397,14 +406,15 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Visitas, visitantes, agenda, tarefas, financeiro e documentos excluídos
-                podem ser restaurados ou apagados permanentemente.
+                {isMasterConsole
+                  ? 'Pastas de clientes excluídas podem ser restauradas ou apagadas permanentemente.'
+                  : 'Visitas, visitantes, agenda, tarefas, financeiro e documentos excluídos podem ser restaurados ou apagados permanentemente.'}
               </p>
               <Button
                 asChild
                 className="bg-red-300 text-red-900 hover:bg-red-200"
               >
-                <Link to="/configuracoes/lixeira">
+                <Link to={isMasterConsole ? '/empresas/lixeira' : '/configuracoes/lixeira'}>
                   <Trash2 className="h-4 w-4" />
                   Abrir lixeira
                 </Link>

@@ -122,16 +122,30 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
       if (member) {
         const org = await getOrganization(member.orgId)
-        setMembership(member)
-        setActiveOrgIdState(member.orgId)
-        setActiveOrg(org)
-        setOrganizations(org ? [org] : [])
+        if (org && !org.isDeleted) {
+          setMembership(member)
+          setActiveOrgIdState(member.orgId)
+          setActiveOrg(org)
+          setOrganizations([org])
+        } else {
+          setMembership(null)
+          setActiveOrgIdState(null)
+          setActiveOrg(null)
+          setOrganizations([])
+        }
       } else if (profile?.orgId) {
         const org = await getOrganization(profile.orgId)
-        setMembership(null)
-        setActiveOrgIdState(profile.orgId)
-        setActiveOrg(org)
-        setOrganizations(org ? [org] : [])
+        if (org && !org.isDeleted) {
+          setMembership(null)
+          setActiveOrgIdState(profile.orgId)
+          setActiveOrg(org)
+          setOrganizations([org])
+        } else {
+          setMembership(null)
+          setActiveOrgIdState(null)
+          setActiveOrg(null)
+          setOrganizations([])
+        }
       } else {
         setMembership(null)
         setActiveOrgIdState(null)
@@ -145,11 +159,13 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         const fallback = await getMemberByUid(user.uid)
         if (fallback) {
           const org = await getOrganization(fallback.orgId)
-          setMembership(fallback)
-          setActiveOrgIdState(fallback.orgId)
-          setActiveOrg(org)
-          setOrganizations(org ? [org] : [])
-          return
+          if (org && !org.isDeleted) {
+            setMembership(fallback)
+            setActiveOrgIdState(fallback.orgId)
+            setActiveOrg(org)
+            setOrganizations([org])
+            return
+          }
         }
       } catch (fallbackError) {
         console.error('Fallback de membership falhou', fallbackError)

@@ -1,5 +1,7 @@
 import {
   collection,
+  deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -15,6 +17,7 @@ import {
   type NotificationPreferences,
 } from '@/lib/notificationPreferences'
 import { mergeModulePermissions } from '@/lib/access'
+import { getTrashExpiresAt } from '@/lib/trash'
 import type { ModulePermissions, UserProfile, UserRole } from '@/types'
 
 const usersCol = collection(db, 'users')
@@ -22,7 +25,7 @@ const usersCol = collection(db, 'users')
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(usersCol, uid))
   if (!snap.exists()) return null
-  return snap.data() as UserProfile
+  return mapUserProfile(snap.data() as Record<string, unknown>)
 }
 
 export async function getUsersByIds(uids: string[]): Promise<UserProfile[]> {
@@ -31,10 +34,62 @@ export async function getUsersByIds(uids: string[]): Promise<UserProfile[]> {
   return results.filter((u): u is UserProfile => u != null)
 }
 
+function mapUserProfile(data: Record<string, unknown>): UserProfile {
+  return {
+    ...(data as UserProfile),
+    isDeleted: data.isDeleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: data.deletedBy ? String(data.deletedBy) : undefined,
+    expiresAt: data.expiresAt,
+  }
+}
+
 export async function listUsers(isAdmin: boolean): Promise<UserProfile[]> {
   if (!isAdmin) return []
   const snap = await getDocs(usersCol)
-  return snap.docs.map((d) => d.data() as UserProfile)
+  return snap.docs
+    .map((d) => mapUserProfile(d.data()))
+    .filter((user) => !user.isDeleted)
+}
+
+export async function listDeletedUsers(isAdmin: boolean): Promise<UserProfile[]> {
+  if (!isAdmin) return []
+  const snap = await getDocs(usersCol)
+  return snap.docs
+    .map((d) => mapUserProfile(d.data()))
+    .filter((user) => user.isDeleted === true)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+}
+
+export async function softDeleteUser(uid: string, deletedBy: string): Promise<void> {
+  const profile = await getUserProfile(uid)
+  if (!profile) throw new Error('Usuário não encontrado')
+  if (profile.isDeleted) return
+  await updateDoc(doc(usersCol, uid), {
+    isDeleted: true,
+    deletedAt: serverTimestamp(),
+    deletedBy,
+    expiresAt: getTrashExpiresAt(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function restoreUser(uid: string): Promise<void> {
+  const profile = await getUserProfile(uid)
+  if (!profile) throw new Error('Usuário não encontrado')
+  if (!profile.isDeleted) return
+  await updateDoc(doc(usersCol, uid), {
+    isDeleted: false,
+    deletedAt: deleteField(),
+    deletedBy: deleteField(),
+    expiresAt: deleteField(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/** Remove o documento do perfil. Não apaga a conta Auth. */
+export async function permanentDeleteUserProfile(uid: string): Promise<void> {
+  await deleteDoc(doc(usersCol, uid))
 }
 
 export async function createUserProfile(input: {
